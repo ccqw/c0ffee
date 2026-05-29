@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mirror — c0ffee Playground</title>
+  <meta name="description" content="Play with a color across RGB and HSV, see it as light. Share any color by its link.">
+  <link rel="stylesheet" href="../tokens.css">
+  <style>
+    html, body { margin: 0; min-height: 100vh; }
+    body {
+      background: var(--c0ffee-bg);
+      color: var(--c0ffee-fg);
+      font-family: var(--c0ffee-font);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 20px; padding: 40px 16px;
+    }
+    h1 { font-size: 16px; font-weight: 600; color: #888; letter-spacing: .5px; }
+    h1 .hex { color: var(--c0ffee-accent); }
+    .share { color: #666; font-size: 13px; }
+    .share code { color: #9aa; }
+  </style>
+</head>
+<body>
+  <h1>#<span class="hex">C0FFEE</span> · mirror playground</h1>
+
+  <c0ffee-mirror id="mirror"></c0ffee-mirror>
+
+  <p class="share">Your color lives in this page's URL — copy the address to share it.
+     <br>Try <code>?hex=FF6600</code> or <code>#E91E63</code>.</p>
+
+  <script type="module">
+    import '../toys/mirror.js';
+
+    const mirror = document.getElementById('mirror');
+
+    // --- seed once from the URL (Hex color link), bad/missing -> mirror's default ---
+    const fromQuery = new URLSearchParams(location.search).get('hex');
+    const fromHash = location.hash.slice(1);
+    const seed = (fromQuery || fromHash || '').replace(/^#/, '').trim();
+    if (seed) mirror.setAttribute('hex', seed); // mirror tolerates junk & falls back
+
+    // --- reflect live state to the URL hash (write-only; no hashchange listener,
+    //     so there's no seed/echo loop). Playground-only concern, not in the element. ---
+    mirror.addEventListener('colorchange', (e) => {
+      const next = '#' + e.detail.hex;
+      if (location.hash !== next) history.replaceState(null, '', next);
+    });
+  </script>
+</body>
+</html>

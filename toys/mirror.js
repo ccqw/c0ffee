@@ -222,6 +222,17 @@ class C0ffeeMirror extends HTMLElement {
       if (activeHexKey !== c.key) $(`hex-${c.key}`).value = hexPair(v);
     }
     this._renderHsv();
+    this._emitChange();
+  }
+
+  // Notify-out half of the Toy interface (ADR-0001). composed:true so the event
+  // escapes the Shadow DOM; a Playground listens to reflect state to the URL.
+  _emitChange() {
+    this.dispatchEvent(new CustomEvent('colorchange', {
+      bubbles: true,
+      composed: true,
+      detail: { ...this.value, hex: formatHex(this.value) },
+    }));
   }
 
   // HSV sliders + self-coloring tracks (sat/val previewed at the current hue).
