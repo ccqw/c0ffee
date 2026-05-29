@@ -14,7 +14,7 @@
 
 import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv } from '../lib/color.js';
 
-const DEFAULT = { r: 58, g: 123, b: 213 }; // a calm blue when no/invalid hex given
+const DEFAULT = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake mint, when no/invalid hex given
 
 const CHANNELS = [
   { key: 'r', label: 'R', token: '--c0ffee-r', pure: (v) => `rgb(${v},0,0)` },
