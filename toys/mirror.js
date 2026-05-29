@@ -53,6 +53,31 @@ class C0ffeeMirror extends HTMLElement {
     return formatHex(this.value);
   }
 
+  // animateTo({r,g,b}) — tween the Color value from current to target (~300ms)
+  // so a click-to-load shows the journey (channels climbing), not just the
+  // destination. Each frame writes value + hsv (stickily) and re-renders, so
+  // every view animates together. Used by the Lesson runtime.
+  animateTo(target, ms = 320) {
+    if (this._anim) cancelAnimationFrame(this._anim);
+    const from = { ...this.value };
+    const start = performance.now();
+    const ease = (t) => 1 - (1 - t) * (1 - t); // easeOutQuad
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / ms);
+      const k = ease(t);
+      this.value = {
+        r: Math.round(from.r + (target.r - from.r) * k),
+        g: Math.round(from.g + (target.g - from.g) * k),
+        b: Math.round(from.b + (target.b - from.b) * k),
+      };
+      this.hsv = stickyHsv(this.value, this.hsv);
+      this._render();
+      if (t < 1) this._anim = requestAnimationFrame(step);
+      else this._anim = null;
+    };
+    this._anim = requestAnimationFrame(step);
+  }
+
   // --- seed (attribute in; graceful fallback so a toy never breaks) ---
   _seedFromAttribute() {
     const parsed = parseHex(this.getAttribute('hex') || '');
