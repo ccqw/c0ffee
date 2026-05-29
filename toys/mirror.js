@@ -4,11 +4,15 @@
 // mutates `this.value` then calls `_render()`, which redraws every view from
 // that value. Views never update each other directly — they all read the value.
 //
-// This slice (C0FFEE-2): Swatch + RGB panel (sliders, hex boxes, Channel
-// swatches). The Venn palette (C0FFEE-3) and HSV panel (C0FFEE-4) are added
-// later as additional views/handlers over the same value.
+// Swatch + RGB panel (C0FFEE-2), Venn palette (C0FFEE-3), HSV panel (C0FFEE-4).
+//
+// RGB (`this.value`) is the canonical Color value. The HSV panel adds one bit
+// of legitimately-stateful caching (`this.hsv`): RGB->HSV is lossy at grays
+// (no hue) and black (no hue/sat), so we keep the last meaningful hue/sat via
+// stickyHsv. Editing RGB recomputes hsv stickily; editing HSV is authoritative
+// and writes value = hsvToRgb(hsv) directly, which is what stops hue jitter.
 
-import { parseHex, formatHex } from '../lib/color.js';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv } from '../lib/color.js';
 
 const DEFAULT = { r: 58, g: 123, b: 213 }; // a calm blue when no/invalid hex given
 
@@ -28,6 +32,7 @@ class C0ffeeMirror extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     // Source of truth. Seeded from the `hex` attribute in connectedCallback.
     this.value = { ...DEFAULT };
+    this.hsv = rgbToHsv(this.value); // cached HSV view, kept stable via stickyHsv
   }
 
   connectedCallback() {
@@ -52,6 +57,7 @@ class C0ffeeMirror extends HTMLElement {
   _seedFromAttribute() {
     const parsed = parseHex(this.getAttribute('hex') || '');
     this.value = parsed || { ...DEFAULT };
+    this.hsv = rgbToHsv(this.value);
   }
 
   // --- one-time DOM construction ---
@@ -109,7 +115,9 @@ class C0ffeeMirror extends HTMLElement {
           -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
           background: #fff; border: 2px solid #222; cursor: pointer;
         }
-        .dec { width: 30px; text-align: right; color: #999; font-size: 13px; }
+        .dec { width: 40px; text-align: right; color: #999; font-size: 13px; }
+        .divider { text-align: center; color: #555; font-size: 12px; padding: 2px 0 8px; }
+        .lbl.hsv { color: var(--c0ffee-accent, #C0FFEE); }
       </style>
       <div class="card">
         <div class="stage">
@@ -140,6 +148,25 @@ class C0ffeeMirror extends HTMLElement {
               <code class="dec" id="dec-${c.key}"></code>
             </label>`).join('')}
         </div>
+        <div class="divider">↕ same color ↕</div>
+        <div class="sliders">
+          <label class="row">
+            <span class="lbl hsv">H</span>
+            <input type="range" min="0" max="360" id="sl-h"
+                   style="background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);">
+            <code class="dec" id="dec-h"></code>
+          </label>
+          <label class="row">
+            <span class="lbl hsv">S</span>
+            <input type="range" min="0" max="100" id="sl-s">
+            <code class="dec" id="dec-s"></code>
+          </label>
+          <label class="row">
+            <span class="lbl hsv">V</span>
+            <input type="range" min="0" max="100" id="sl-v">
+            <code class="dec" id="dec-v"></code>
+          </label>
+        </div>
       </div>`;
 
     // Wire inputs. Each handler does the same two steps: write value, re-render.
@@ -149,10 +176,19 @@ class C0ffeeMirror extends HTMLElement {
       this.shadowRoot.getElementById(`hex-${c.key}`)
         .addEventListener('input', (e) => this._setChannelHex(c.key, e.target.value));
     }
+    // HSV sliders: HSV is authoritative for these edits (no lossy round-trip).
+    this.shadowRoot.getElementById('sl-h')
+      .addEventListener('input', (e) => this._setHsv('h', +e.target.value));
+    this.shadowRoot.getElementById('sl-s')
+      .addEventListener('input', (e) => this._setHsv('s', +e.target.value / 100));
+    this.shadowRoot.getElementById('sl-v')
+      .addEventListener('input', (e) => this._setHsv('v', +e.target.value / 100));
   }
 
+  // RGB edits: value is authoritative; re-derive hsv stickily so hue holds at edges.
   _setChannel(key, n) {
     this.value[key] = Math.max(0, Math.min(255, n));
+    this.hsv = stickyHsv(this.value, this.hsv);
     this._render();
   }
 
@@ -160,8 +196,16 @@ class C0ffeeMirror extends HTMLElement {
     const n = parseInt(str, 16);
     if (!Number.isNaN(n) && n >= 0 && n <= 255) {
       this.value[key] = n;
+      this.hsv = stickyHsv(this.value, this.hsv);
       this._render(key); // don't stomp the box the user is typing in
     }
+  }
+
+  // HSV edits: hsv is authoritative; value follows directly.
+  _setHsv(key, n) {
+    this.hsv = { ...this.hsv, [key]: n };
+    this.value = hsvToRgb(this.hsv);
+    this._render();
   }
 
   // --- redraw every view from the single value ---
@@ -177,6 +221,23 @@ class C0ffeeMirror extends HTMLElement {
       $(`dec-${c.key}`).textContent = v;
       if (activeHexKey !== c.key) $(`hex-${c.key}`).value = hexPair(v);
     }
+    this._renderHsv();
+  }
+
+  // HSV sliders + self-coloring tracks (sat/val previewed at the current hue).
+  _renderHsv() {
+    const $ = (id) => this.shadowRoot.getElementById(id);
+    const { h, s, v } = this.hsv;
+    $('sl-h').value = Math.round(h);
+    $('sl-s').value = Math.round(s * 100);
+    $('sl-v').value = Math.round(v * 100);
+    $('dec-h').textContent = Math.round(h) + '°';
+    $('dec-s').textContent = Math.round(s * 100) + '%';
+    $('dec-v').textContent = Math.round(v * 100) + '%';
+    // tracks: sat goes gray->pure-hue; val goes black->pure-hue.
+    const pureHue = '#' + formatHex(hsvToRgb({ h, s: 1, v: 1 }));
+    $('sl-s').style.background = `linear-gradient(to right, #888, ${pureHue})`;
+    $('sl-v').style.background = `linear-gradient(to right, #000, ${pureHue})`;
   }
 }
 
