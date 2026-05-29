@@ -70,7 +70,22 @@ class C0ffeeMirror extends HTMLElement {
           border-radius: var(--radius);
           overflow: hidden;
         }
-        .swatch { height: 150px; transition: background .08s; }
+        .stage { display: flex; }
+        .swatch { flex: 1; min-height: 160px; transition: background .08s; }
+        .venn {
+          flex: 1; background: #0b0b0b;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .venn-box { position: relative; width: 150px; height: 150px; }
+        /* Each circle is one Channel's light; screen-blend adds them, so overlaps
+           compute their own secondaries and the center equals the Color value. */
+        .circle {
+          position: absolute; width: 95px; height: 95px; border-radius: 50%;
+          mix-blend-mode: screen;
+        }
+        #c-r { left: 28px; top: 5px; }
+        #c-g { left: 5px;  top: 50px; }
+        #c-b { left: 50px; top: 50px; }
         .boxes {
           display: flex; gap: 10px; justify-content: center;
           align-items: flex-end; padding: 16px 16px 4px;
@@ -97,7 +112,16 @@ class C0ffeeMirror extends HTMLElement {
         .dec { width: 30px; text-align: right; color: #999; font-size: 13px; }
       </style>
       <div class="card">
-        <div class="swatch" id="swatch"></div>
+        <div class="stage">
+          <div class="swatch" id="swatch"></div>
+          <div class="venn">
+            <div class="venn-box">
+              <div class="circle" id="c-r"></div>
+              <div class="circle" id="c-g"></div>
+              <div class="circle" id="c-b"></div>
+            </div>
+          </div>
+        </div>
         <div class="boxes">
           <span class="hash">#</span>
           ${CHANNELS.map((c) => `
@@ -147,6 +171,8 @@ class C0ffeeMirror extends HTMLElement {
     for (const c of CHANNELS) {
       const v = this.value[c.key];
       $(`mini-${c.key}`).style.background = c.pure(v);
+      // Venn circle = this channel in isolation; screen-blend does the addition.
+      $(`c-${c.key}`).style.background = c.pure(v);
       $(`sl-${c.key}`).value = v;
       $(`dec-${c.key}`).textContent = v;
       if (activeHexKey !== c.key) $(`hex-${c.key}`).value = hexPair(v);
