@@ -1,0 +1,10 @@
+# Brainstorm/visual-companion scratch (not part of the site)
+.superpowers/
+
+# macOS
+.DS_Store
+
+# Editor noise
+*.swp
+.idea/
+.vscode/

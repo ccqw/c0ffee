@@ -1,0 +1,20 @@
+/* tokens.css — the single source of design truth (ADR-0002).
+   These custom properties cross the Shadow DOM boundary, so both pages
+   and Toys read them. Change a value here to restyle the whole site. */
+
+:root {
+  /* Type */
+  --c0ffee-font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Brand */
+  --c0ffee-accent: #C0FFEE;   /* the name, as a color */
+  --c0ffee-bg: #0b0b0b;       /* deep near-black (lets the Venn palette glow) */
+
+  /* Shape */
+  --c0ffee-radius: 10px;
+
+  /* Channel colors — used to label R/G/B consistently everywhere */
+  --c0ffee-r: #c0392b;
+  --c0ffee-g: #1e8449;
+  --c0ffee-b: #2471a3;
+}

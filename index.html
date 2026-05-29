@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>c0ffee — a color toybox</title>
+  <meta name="description" content="Interactive toys and lessons for how color works in computer graphics, with a love for hex.">
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--c0ffee-bg);
+      color: #fff;
+      font-family: var(--c0ffee-font);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 1rem;
+      text-align: center;
+      padding: 2rem;
+    }
+    .wordmark {
+      font-size: clamp(2.5rem, 10vw, 5rem);
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+    .wordmark .hex { color: var(--c0ffee-accent); }
+    .tagline { color: #9aa; max-width: 28ch; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <!-- Toybox landing — placeholder until the toy grid is built. -->
+  <div class="wordmark">#<span class="hex">C0FFEE</span></div>
+  <p class="tagline">A color toybox. Tools and lessons for how color works in computer graphics — coming soon.</p>
+</body>
+</html>
