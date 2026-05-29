@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Colors are made of light — c0ffee</title>
+  <meta name="description" content="An interactive lesson: how screens build color by adding red, green, and blue light.">
+  <link rel="stylesheet" href="../tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--c0ffee-bg);
+      color: var(--c0ffee-fg);
+      font-family: var(--c0ffee-font);
+      line-height: 1.7;
+    }
+
+    /* Flipped-Codecademy split: pinned mirror left, scrolling prose right. */
+    .lesson { display: flex; align-items: flex-start; }
+    .stage {
+      position: sticky; top: 0;
+      height: 100vh; width: 42%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      background: #070707;
+      border-right: 1px solid #1c1c1c;
+    }
+    .stage .kicker {
+      font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #666;
+    }
+    .prose { width: 58%; padding: 0 7vw; }
+
+    /* Title block */
+    .hero { min-height: 80vh; display: flex; flex-direction: column; justify-content: center; }
+    .hero .eyebrow { color: var(--c0ffee-accent); font-size: 13px; letter-spacing: 3px; text-transform: uppercase; }
+    .hero h1 { font-size: clamp(28px, 4vw, 44px); line-height: 1.15; margin: .3em 0; }
+    .hero p { color: #9aa; max-width: 34ch; }
+
+    /* Beats: dim by default, full when active (set by lesson-runtime). */
+    .beat {
+      min-height: 72vh;
+      display: flex; flex-direction: column; justify-content: center;
+      opacity: .32; transition: opacity .4s ease;
+      font-size: 19px;
+    }
+    .beat.active { opacity: 1; }
+    .beat h2 { font-size: 22px; color: var(--c0ffee-accent); font-weight: 600; margin: 0 0 .4em; }
+    .beat p { margin: .6em 0; }
+
+    .tryit {
+      margin-top: 1.2em; padding: 14px 16px;
+      border-left: 3px solid var(--c0ffee-accent);
+      background: #111; border-radius: 0 8px 8px 0;
+      font-size: 16px; color: #cfd8d4;
+    }
+    .tryit strong { color: var(--c0ffee-accent); }
+
+    .footer { min-height: 60vh; display: flex; flex-direction: column; justify-content: center; color: #777; }
+    .footer a { color: var(--c0ffee-accent); }
+
+    /* Mobile: stack — mirror docks to the top, prose flows beneath. */
+    @media (max-width: 720px) {
+      .lesson { flex-direction: column; }
+      .stage {
+        position: sticky; top: 0; width: 100%; height: 44vh;
+        border-right: none; border-bottom: 1px solid #1c1c1c; z-index: 5;
+      }
+      .prose { width: 100%; padding: 0 8vw; }
+      .stage c0ffee-mirror { transform: scale(.78); }
+    }
+  </style>
+</head>
+<body>
+  <div class="lesson">
+    <!-- Pinned Companion mirror (data-companion marks it for the runtime). -->
+    <aside class="stage">
+      <span class="kicker">the canvas</span>
+      <c0ffee-mirror data-companion hex="000000"></c0ffee-mirror>
+    </aside>
+
+    <main class="prose">
+      <header class="hero">
+        <span class="eyebrow">a c0ffee lesson</span>
+        <h1>Colors are made of light</h1>
+        <p>Scroll slowly. The panel on the left is your canvas — the words on the
+           right will paint on it. Click any <em>colored word</em> to load it.</p>
+      </header>
+
+      <section class="beat">
+        <h2>Three lights</h2>
+        <p>A screen makes color by shining three lights at every dot: red, green,
+           and blue. You control how brightly each one shines with a number —
+           a <em>color channel</em> — from 0 (off) up to 255 (full).</p>
+        <p>Turn the red channel all the way up and the others all the way down,
+           and you get a pure, simple
+           <c0ffee-swatch hex="FF0000" label="red"></c0ffee-swatch>.</p>
+      </section>
+
+      <section class="beat">
+        <h2>One for each</h2>
+        <p>The same goes for the others — full green alone is
+           <c0ffee-swatch hex="00FF00" label="green"></c0ffee-swatch>, and full
+           blue alone is <c0ffee-swatch hex="0000FF" label="blue"></c0ffee-swatch>.</p>
+        <p>Watch the left panel as you click each one: only that single channel
+           climbs to full, and the others stay dark.</p>
+      </section>
+
+      <section class="beat">
+        <h2>Adding light up</h2>
+        <p>Here's the surprise. What if we turn <em>everything</em> all the way up
+           at once? We're adding all the colors of light together — and just like
+           sunlight through a prism in reverse, all the light combined makes
+           <c0ffee-swatch hex="FFFFFF" label="white"></c0ffee-swatch>.</p>
+        <p>This is why it's called <em>additive</em> color: light <em>adds</em>.
+           That's the opposite of mixing paint, where more colors make things
+           darker and muddier.</p>
+      </section>
+
+      <section class="beat">
+        <h2>And all the way off</h2>
+        <p>So what happens when we turn every channel all the way <em>off</em>?
+           No light at all — which your screen shows as
+           <c0ffee-swatch hex="000000" label="black"></c0ffee-swatch>.</p>
+        <p>Black isn't a color being added; it's the absence of light. White is
+           all three lights at full; black is all three at zero. Every other color
+           lives somewhere in between.</p>
+      </section>
+
+      <section class="beat">
+        <h2>Now you try</h2>
+        <p>You've watched the canvas follow along — now take the wheel.</p>
+        <div class="tryit">
+          <strong>Try this:</strong> on the left panel, drag the
+          <strong>red</strong> slider down to 0, then nudge <strong>green</strong>
+          and <strong>blue</strong> up and down. Notice how every color you can
+          make is just a recipe of three numbers — three lights, added together.
+        </div>
+        <p>That recipe has a shorthand: the hex code. A color like
+           <c0ffee-swatch hex="3A7BD5"></c0ffee-swatch> is just those three
+           channel numbers written in a compact form — but that's a lesson for
+           another cup. ☕</p>
+      </section>
+
+      <footer class="footer">
+        <p>← <a href="../index.html">back to the toybox</a> &nbsp;·&nbsp;
+           <a href="../play/mirror.html">open the mirror on its own</a></p>
+      </footer>
+    </main>
+  </div>
+
+  <script type="module">
+    import '../toys/mirror.js';
+    import '../toys/swatch.js';
+    import { initLesson } from './lesson-runtime.js';
+    initLesson();
+  </script>
+</body>
+</html>
