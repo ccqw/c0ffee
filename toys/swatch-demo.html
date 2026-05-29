@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>c0ffee-swatch — demo</title>
+  <link rel="stylesheet" href="../tokens.css">
+  <style>
+    body {
+      margin: 0; min-height: 100vh; background: var(--c0ffee-bg);
+      color: var(--c0ffee-fg); font-family: var(--c0ffee-font);
+      display: flex; flex-direction: column; align-items: center; gap: 28px;
+      padding: 40px 16px;
+    }
+    .prose { max-width: 46ch; line-height: 2; font-size: 17px; }
+    h1 { font-size: 16px; color: #888; font-weight: 600; }
+    .hint { color: #777; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>&lt;c0ffee-swatch&gt; — C0FFEE-6 demo</h1>
+
+  <div class="prose">
+    <p>Mode C (painted words): turn the red channel all the way up for a pure
+       <c0ffee-swatch hex="FF0000" label="red"></c0ffee-swatch>. Same for
+       <c0ffee-swatch hex="00FF00" label="green"></c0ffee-swatch> and
+       <c0ffee-swatch hex="0000FF" label="blue"></c0ffee-swatch>. All the way up
+       gives <c0ffee-swatch hex="FFFFFF" label="white"></c0ffee-swatch>; all the
+       way off, <c0ffee-swatch hex="000000" label="black"></c0ffee-swatch>.
+       And the namesake: <c0ffee-swatch hex="C0FFEE" label="c0ffee"></c0ffee-swatch>.</p>
+
+    <p>Mode A (box + hex): a calm blue <c0ffee-swatch hex="3A7BD5"></c0ffee-swatch>,
+       a warm <c0ffee-swatch hex="FF6600"></c0ffee-swatch>, a hexword
+       <c0ffee-swatch hex="FACADE"></c0ffee-swatch>.</p>
+  </div>
+
+  <p class="hint">Click any swatch → it loads into the mirror below (the lesson mechanic).</p>
+  <c0ffee-mirror id="mirror" hex="3A7BD5"></c0ffee-mirror>
+
+  <script type="module">
+    import '../toys/swatch.js';
+    import '../toys/mirror.js';
+    // Lesson-style routing: any swatch click seeds the (companion) mirror.
+    const mirror = document.getElementById('mirror');
+    document.addEventListener('colorchange', (e) => {
+      if (e.target.tagName === 'C0FFEE-SWATCH') mirror.setAttribute('hex', e.detail.hex);
+    });
+  </script>
+</body>
+</html>
