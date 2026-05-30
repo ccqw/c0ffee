@@ -8,9 +8,9 @@ A front-end-only, zero-build website of small color interactives (and, later, le
 A self-contained interactive element on the site (the console, a swatch, a future game or palette). Used **only in planning/specs** when a collective word is genuinely needed; users never see it, and it is **not a real category** — its members share only that they're interactive elements. When you mean the *contract* (one Color value, hex in, `.value`/`.hex` out, `colorchange` event), name *that* instead — the **ADR-0001 Color value interface** — which only the single-color ones satisfy.
 _Avoid_: Toy, widget, gadget, component (component is a color-model axis)
 
-**Playground**:
-A page showing a single interactive full-bleed with no prose — the "just let me mess with it" view.
-_Avoid_: sandbox, bench, demo
+**solo interactive** (a page type — internal, not user-facing):
+A page that frames exactly one interactive, full-bleed, with no prose — the "just let me mess with it" view. The **thinnest page type**: the interactive owns the whole page. The site root (`/`) is the flagship console shown solo. One of the site's **page types** alongside **Lesson** and **Menu** (game/puzzle page types likely to follow). Like lowercase **interactive**, this is a planning/spec word users never see — they refer to the bare page by *the interactive's own name* ("the Color console"), never by the category, because you don't name an absence-of-prose. (Of the page types, **Menu** and **Lesson** are user-facing labels; **solo interactive** is not.) Whether such a page round-trips a Color link in the URL is a property of *the interactive's* ADR-0001 Color value interface — **not of the page type**: a console reflects its hex address, a guess game has no single hex address to reflect.
+_Avoid_: playground, sandbox, bench, demo
 
 **Lesson**:
 A page of prose interleaved with one or more interactives — teaching woven around them. Default layout: a pinned **Companion console** as the shared canvas, lesson prose scrolling alongside it.
@@ -32,18 +32,22 @@ _Avoid_: current step, focus
 A word-sized, read-only Swatch designed to sit inside prose (a "sparkline swatch"), rendered as a rounded **chip**. The `hex` is always its identity. Has two render modes: **mode A** (no `label`) shows a tiny swatch box + the hex; **mode C** (`label` present) paints the author-supplied word and hides the hex at rest. Hover/tap shows a uniform tooltip `{hex} · click to load`; clicking loads its Color value into the Lesson's Companion console.
 _Avoid_: chip (that's the visual style of an inline swatch), sample, sparkline (informal)
 
+**Site banner**:
+The site's chrome strip at the **top of the document** on every page — a wordmark (`c0ffee`) with a small coffee logo and a touch of `#C0FFEE`, kept minimal so it reads as **brand/nav, not as a Swatch**. It exists specifically to never be mistaken for the console's displayed color: the Swatch is the only large painted patch on a page; the banner is quiet chrome that blends into the neutral/dark background. **Brand-only for now:** the wordmark acts as the home link and there is no nav; a nav affordance (dropdown/menu, language TBD) is deferred until the **Menu** is worth surfacing — the same "more than one thing to show" trigger that un-hides the Menu. (Accepted consequence: until then, home has no in-page path to the Lesson/Menu — they're reached by direct URL.) **Not sticky:** it scrolls away as the page scrolls (so the top-pinned Companion console, ADR-0005, owns the top while reading); on a short page with nothing to scroll, it simply stays visible.
+_Avoid_: header bar, masthead, top swatch, the color bar, sticky header
+
 **Menu**:
-The page that lists everything playable — a grid linking to Playgrounds and Lessons. **Not** the landing page: the flagship console's Playground is served at the site root (`/`), and the Menu lives at its own address, unlinked from home until there's more than one thing worth showing.
+The page that lists everything playable — a grid linking to solo interactives and Lessons. **Not** the landing page: the flagship console is served solo at the site root (`/`), and the Menu lives at its own address, unlinked from home until there's more than one thing worth showing.
 _Avoid_: toybox, home, landing page, index, gallery
 
 ### Flagship anatomy — the Color console
 
 **Color console** (the flagship):
-The flagship interactive (`<c0ffee-console>`): one Color value shown every way at once — the **Swatch**, three **Channel swatches**, the **Venn palette** — and editable from any representation via the **RGB panel** and **HSV panel**, all kept in sync. The site root (`/`) is its Playground; a Lesson pins one as its **Companion console**. Renders in a chosen **presentation**.
+The flagship interactive (`<c0ffee-console>`): one Color value shown every way at once — the **Swatch**, three **Channel swatches**, the **Venn palette** — and editable from any representation via the **RGB panel** and **HSV panel**, all kept in sync. The site root (`/`) shows it solo; a Lesson pins one as its **Companion console**. Renders in a chosen **presentation**.
 _Avoid_: mirror, swatch panel, color picker, editor (informally)
 
 **Presentation**:
-A named preset of the Color console: which parts it renders and how they're laid out (spacing, what sits in a pull-up drawer, what stays sticky). One console, many presentations — e.g. a compact **companion presentation** (Swatch + the beat-relevant view in a sticky band, controls in a drawer) vs. a fuller **playground presentation**. Because parts live inside the shadow root (ADR-0002), only the console can show or hide its own parts, so a presentation is an attribute on the console — never a separate element.
+A named preset of the Color console: which parts it renders and how they're laid out (spacing, what sits in a pull-up drawer, what stays sticky). One console, many presentations — e.g. a compact **companion presentation** (Swatch + the beat-relevant view in a sticky band, controls in a drawer) vs. a **full presentation** (all parts visible) used when the console is shown solo. Because parts live inside the shadow root (ADR-0002), only the console can show or hide its own parts, so a presentation is an attribute on the console — never a separate element.
 _Avoid_: mode, variant, layout (informally), skin
 
 **Channel**:
@@ -113,18 +117,18 @@ The CSS color keyword for a Color value (`dodgerblue`), when one exists. A **par
 _Avoid_: color name, css name (informally), label
 
 **Color link**:
-A Color address carried in a URL **hash** or an HTML attribute (`#3A7BD5` in the URL; `hex="3A7BD5"` on an element). The **Hex color link** ships first; RGB and HSV links are future notations of the same mechanism. This is the backbone that lets a Lesson deep-link into an interactive at a precise Color.
+A Color address carried in a URL **hash** or an HTML attribute (`#3A7BD5` in the URL; `hex="3A7BD5"` on an element). The **Hex color link** ships first; RGB, HSV, and **Named** (`#dodgerblue`) links are future notations of the same mechanism. The leading `#` is the **URL fragment delimiter**, not a hex sigil — it only *coincides* with CSS's hex `#` for hex addresses (which is why `#C0FFEE` reads so cleanly); the fragment carries a **bare address** the parser sniffs by shape (all hex digits → hex; a CSS keyword → name — the two are character-disjoint, so no extra prefix is needed). A Named link spends a little of the hash-only simplicity (a second notation in the one fragment) and is **deferred** until a real use case wants it. This is the backbone that lets a Lesson deep-link into an interactive at a precise Color.
 
-On a **Playground** the link round-trips **live**: the **hash is the only URL form** — emitted as the canonical address *and* the only one read back, on initial load *and* whenever it changes (paste-and-enter re-seeds the Color value). One rule, one format (`c0ffee.cafe/#C0FFEE`). A `?hex=` **query is deliberately not accepted**: we emit only hash so query links never arise, and a single format keeps the parser and tests honest. (Revisit only if server-side link **previews/unfurls** are ever wanted — fragments are invisible to unfurlers, queries are not — but that needs hosting infra a static site lacks, so it's a separate future decision.) This live re-seed extends ADR-0001's "seed in" from initial-only; per ADR-0001, Lessons still do not auto-reflect.
+When an interactive that satisfies the ADR-0001 Color value interface owns the page's URL (e.g. the console shown **solo** at `/`), the link round-trips **live**: the **hash is the only URL form** — emitted as the canonical address *and* the only one read back, on initial load *and* whenever it changes (paste-and-enter re-seeds the Color value). One rule, one format (`c0ffee.cafe/#C0FFEE`). A `?hex=` **query is deliberately not accepted**: we emit only hash so query links never arise, and a single format keeps the parser and tests honest. (Revisit only if server-side link **previews/unfurls** are ever wanted — fragments are invisible to unfurlers, queries are not — but that needs hosting infra a static site lacks, so it's a separate future decision.) This live re-seed extends ADR-0001's "seed in" from initial-only; per ADR-0001, Lessons still do not auto-reflect.
 _Avoid_: deep link, seed, permalink, hexlink
 
 ## Relationships
 
-- An **interactive** is a self-contained element (the console, a swatch, a future game); a **Playground** and a **Lesson** are pages that embed interactives.
-- A **Playground** embeds exactly one interactive and no prose.
+- An **interactive** is a self-contained element (the console, a swatch, a future game); a **solo interactive** page and a **Lesson** are pages that embed interactives.
+- A **solo interactive** page embeds exactly one interactive and no prose.
 - A **Lesson** embeds one or more interactives interleaved with prose.
-- The site root (`/`) **is** the flagship console's **Playground** (the landing page).
-- The **Menu** links to **Playgrounds** and **Lessons**; it is not the landing page and stays unlinked from home until it has more than one thing to show.
+- The site root (`/`) **is** the flagship console shown **solo** (the landing page).
+- The **Menu** links to **solo interactives** and **Lessons**; it is not the landing page and stays unlinked from home until it has more than one thing to show.
 - A single-color interactive (the console, a swatch) holds one **Color value** as its single source of truth, and every **Swatch** renders it; some interactives (a game, a palette) carry more than one, or none.
 - A **Color value** is written as a **Color address** (hex primary); a **Color address** placed in a URL/attribute is a **Color link**.
 - A **Color link** seeds an interactive's **Color value** on load.
@@ -135,13 +139,13 @@ _Avoid_: deep link, seed, permalink, hexlink
 ## Example dialogue
 
 > **Dev:** "When someone clicks the flagship from the Menu, do they land on a Lesson?"
-> **Designer:** "No — that's a Playground: just `<c0ffee-console>` full-bleed, no prose. A Lesson is when I wrap prose around it."
+> **Designer:** "No — that's the console shown **solo**: just `<c0ffee-console>` full-bleed, no prose. A Lesson is when I wrap prose around it."
 > **Dev:** "So the same element appears in both?"
-> **Designer:** "Exactly. The interactive is the reusable atom; Playgrounds and Lessons are just two ways to frame it."
+> **Designer:** "Exactly. The interactive is the reusable atom; a solo-interactive page and a Lesson are just two ways to frame it."
 
 ## Flagged ambiguities
 
-- "page" was used for both the single-interactive view and the prose-and-interactives view — resolved: **Playground** (single interactive, no prose) vs **Lesson** (prose + interactives) are distinct flavors built by the same mechanism.
+- "page" was used for both the single-interactive view and the prose-and-interactives view — resolved into **page types**: a **solo interactive** page (single interactive, no prose) vs a **Lesson** (prose + interactives), built by the same mechanism. ("Playground" was the earlier name for the solo-interactive page; retired because URL-ownership — the only thing it load-bore — turned out to be a property of the *interactive's* ADR-0001 contract, not the page, leaving only a thin internal page-type that users never see by name.)
 - "the color" / "state" / "code" were used interchangeably — resolved into three layers: **Color value** (abstract), **Color address** (a notation of it; hex primary), **Color link** (an address in a URL/attribute).
 - "mirror" named the flagship by its internal binding (every surface *mirrors* one value) — an implementer's truth, not a user's. Renamed to **Color console** (`<c0ffee-console>`); "Companion mirror" → **Companion console**. The element tag, files, and ADR-0004 still carry the old name and need a rename pass (ticketed).
 - The flagship's "compact vs full" forms are resolved as **presentations** (named presets of parts + layout on the one console), not separate elements — forced by shadow-DOM encapsulation (ADR-0002).
