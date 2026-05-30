@@ -9,44 +9,44 @@
 // route it to a Companion mirror. The element itself is read-only and knows
 // nothing about what consumes the event.
 
-import { parseHex, formatHex, bestTextColor } from '../lib/color.js';
+import { parseHex, formatHex, bestTextColor } from '../lib/color.ts';
+import type { Rgb, Hex, ColorInterface, ColorChangeDetail } from '../lib/color.ts';
 
-const DEFAULT = { r: 58, g: 123, b: 213 };
+const DEFAULT: Rgb = { r: 58, g: 123, b: 213 };
 
-class C0ffeeSwatch extends HTMLElement {
+class C0ffeeSwatch extends HTMLElement implements ColorInterface {
   static observedAttributes = ['hex', 'label'];
 
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-    this.value = { ...DEFAULT };
-  }
+  // The single source of truth for this chip's Color value. Seeded in connectedCallback.
+  value: Rgb = { ...DEFAULT };
+  // attachShadow returns the root, so we never juggle a nullable shadowRoot.
+  private root: ShadowRoot = this.attachShadow({ mode: 'open' });
 
-  connectedCallback() {
+  connectedCallback(): void {
     this._seed();
     this._build();
     this._render();
     this.addEventListener('click', () => this._emit());
   }
 
-  attributeChangedCallback(_name, _old, _new) {
-    if (this.shadowRoot.childElementCount) {
+  attributeChangedCallback(): void {
+    if (this.root.childElementCount) {
       this._seed();
       this._render();
     }
   }
 
   // --- public interface (ADR-0001) ---
-  get hex() {
+  get hex(): Hex {
     return formatHex(this.value);
   }
 
-  _seed() {
-    this.value = parseHex(this.getAttribute('hex') || '') || { ...DEFAULT };
+  private _seed(): void {
+    this.value = parseHex(this.getAttribute('hex')) || { ...DEFAULT };
   }
 
-  _build() {
-    this.shadowRoot.innerHTML = `
+  private _build(): void {
+    this.root.innerHTML = `
       <style>
         :host {
           display: inline-block;
@@ -79,13 +79,14 @@ class C0ffeeSwatch extends HTMLElement {
       <span class="chip" id="chip" tabindex="0"></span>`;
 
     // keyboard affordance: Enter/Space activate like a click
-    this.shadowRoot.getElementById('chip').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._emit(); }
+    this._el('chip').addEventListener('keydown', (e) => {
+      const key = (e as KeyboardEvent).key;
+      if (key === 'Enter' || key === ' ') { e.preventDefault(); this._emit(); }
     });
   }
 
-  _render() {
-    const chip = this.shadowRoot.getElementById('chip');
+  private _render(): void {
+    const chip = this._el('chip');
     const hex = formatHex(this.value);
     const label = this.getAttribute('label');
     chip.title = `#${hex} · click to load`; // uniform tooltip, both modes
@@ -104,12 +105,20 @@ class C0ffeeSwatch extends HTMLElement {
   }
 
   // Announce this chip's Color value; a Lesson routes it to the Companion mirror.
-  _emit() {
-    this.dispatchEvent(new CustomEvent('colorchange', {
+  private _emit(): void {
+    const detail: ColorChangeDetail = { ...this.value, hex: formatHex(this.value) };
+    this.dispatchEvent(new CustomEvent<ColorChangeDetail>('colorchange', {
       bubbles: true,
       composed: true,
-      detail: { ...this.value, hex: formatHex(this.value) },
+      detail,
     }));
+  }
+
+  // Shadow-DOM lookup; the id is a build-time invariant, so a miss is a bug.
+  private _el(id: string): HTMLElement {
+    const node = this.root.getElementById(id);
+    if (!node) throw new Error(`c0ffee-swatch: missing #${id}`);
+    return node;
   }
 }
 

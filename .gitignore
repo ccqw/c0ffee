@@ -1,6 +1,10 @@
 # Brainstorm/visual-companion scratch (not part of the site)
 .superpowers/
 
+# Build tooling (ADR-0006)
+node_modules/
+dist/
+
 # macOS
 .DS_Store
 

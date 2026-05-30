@@ -1,4 +1,4 @@
-// <c0ffee-mirror> — the flagship Toy (imperative shell, ADR-0001/0002/0003).
+// <c0ffee-mirror> — the flagship interactive (imperative shell, ADR-0001/0002/0003).
 //
 // Holds ONE Color value as the single source of truth. Every input handler
 // mutates `this.value` then calls `_render()`, which redraws every view from
@@ -12,44 +12,53 @@
 // stickyHsv. Editing RGB recomputes hsv stickily; editing HSV is authoritative
 // and writes value = hsvToRgb(hsv) directly, which is what stops hue jitter.
 
-import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv } from '../lib/color.js';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv } from '../lib/color.ts';
+import type { Rgb, Hsv, Hex, ColorInterface, ColorChangeDetail } from '../lib/color.ts';
 
-const DEFAULT = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake mint, when no/invalid hex given
+const DEFAULT: Rgb = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake mint, when no/invalid hex given
 
-const CHANNELS = [
+type RgbKey = keyof Rgb; // 'r' | 'g' | 'b'
+type HsvKey = keyof Hsv; // 'h' | 's' | 'v'
+
+interface Channel {
+  key: RgbKey;
+  label: string;
+  token: string;
+  pure: (v: number) => string;
+}
+
+const CHANNELS: Channel[] = [
   { key: 'r', label: 'R', token: '--c0ffee-r', pure: (v) => `rgb(${v},0,0)` },
   { key: 'g', label: 'G', token: '--c0ffee-g', pure: (v) => `rgb(0,${v},0)` },
   { key: 'b', label: 'B', token: '--c0ffee-b', pure: (v) => `rgb(0,0,${v})` },
 ];
 
-const hexPair = (n) => n.toString(16).toUpperCase().padStart(2, '0');
+const hexPair = (n: number): string => n.toString(16).toUpperCase().padStart(2, '0');
 
-class C0ffeeMirror extends HTMLElement {
+class C0ffeeMirror extends HTMLElement implements ColorInterface {
   static observedAttributes = ['hex'];
 
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-    // Source of truth. Seeded from the `hex` attribute in connectedCallback.
-    this.value = { ...DEFAULT };
-    this.hsv = rgbToHsv(this.value); // cached HSV view, kept stable via stickyHsv
-  }
+  // Source of truth. Seeded from the `hex` attribute in connectedCallback.
+  value: Rgb = { ...DEFAULT };
+  hsv: Hsv = rgbToHsv(this.value); // cached HSV view, kept stable via stickyHsv
+  private root: ShadowRoot = this.attachShadow({ mode: 'open' });
+  private _anim: number | null = null;
 
-  connectedCallback() {
+  connectedCallback(): void {
     this._seedFromAttribute();
     this._build();
     this._render();
   }
 
-  attributeChangedCallback(name, _old, _new) {
-    if (name === 'hex' && this.shadowRoot.childElementCount) {
+  attributeChangedCallback(name: string): void {
+    if (name === 'hex' && this.root.childElementCount) {
       this._seedFromAttribute();
       this._render();
     }
   }
 
   // --- public interface (ADR-0001) ---
-  get hex() {
+  get hex(): Hex {
     return formatHex(this.value);
   }
 
@@ -57,12 +66,12 @@ class C0ffeeMirror extends HTMLElement {
   // so a click-to-load shows the journey (channels climbing), not just the
   // destination. Each frame writes value + hsv (stickily) and re-renders, so
   // every view animates together. Used by the Lesson runtime.
-  animateTo(target, ms = 320) {
+  animateTo(target: Rgb, ms = 320): void {
     if (this._anim) cancelAnimationFrame(this._anim);
     const from = { ...this.value };
     const start = performance.now();
-    const ease = (t) => 1 - (1 - t) * (1 - t); // easeOutQuad
-    const step = (now) => {
+    const ease = (t: number): number => 1 - (1 - t) * (1 - t); // easeOutQuad
+    const step = (now: number): void => {
       const t = Math.min(1, (now - start) / ms);
       const k = ease(t);
       this.value = {
@@ -78,16 +87,16 @@ class C0ffeeMirror extends HTMLElement {
     this._anim = requestAnimationFrame(step);
   }
 
-  // --- seed (attribute in; graceful fallback so a toy never breaks) ---
-  _seedFromAttribute() {
-    const parsed = parseHex(this.getAttribute('hex') || '');
+  // --- seed (attribute in; graceful fallback so an interactive never breaks) ---
+  private _seedFromAttribute(): void {
+    const parsed = parseHex(this.getAttribute('hex'));
     this.value = parsed || { ...DEFAULT };
     this.hsv = rgbToHsv(this.value);
   }
 
   // --- one-time DOM construction ---
-  _build() {
-    this.shadowRoot.innerHTML = `
+  private _build(): void {
+    this.root.innerHTML = `
       <style>
         :host {
           display: inline-block;
@@ -196,28 +205,25 @@ class C0ffeeMirror extends HTMLElement {
 
     // Wire inputs. Each handler does the same two steps: write value, re-render.
     for (const c of CHANNELS) {
-      this.shadowRoot.getElementById(`sl-${c.key}`)
-        .addEventListener('input', (e) => this._setChannel(c.key, +e.target.value));
-      this.shadowRoot.getElementById(`hex-${c.key}`)
-        .addEventListener('input', (e) => this._setChannelHex(c.key, e.target.value));
+      this._input(`sl-${c.key}`)
+        .addEventListener('input', (e) => this._setChannel(c.key, +this._target(e).value));
+      this._input(`hex-${c.key}`)
+        .addEventListener('input', (e) => this._setChannelHex(c.key, this._target(e).value));
     }
     // HSV sliders: HSV is authoritative for these edits (no lossy round-trip).
-    this.shadowRoot.getElementById('sl-h')
-      .addEventListener('input', (e) => this._setHsv('h', +e.target.value));
-    this.shadowRoot.getElementById('sl-s')
-      .addEventListener('input', (e) => this._setHsv('s', +e.target.value / 100));
-    this.shadowRoot.getElementById('sl-v')
-      .addEventListener('input', (e) => this._setHsv('v', +e.target.value / 100));
+    this._input('sl-h').addEventListener('input', (e) => this._setHsv('h', +this._target(e).value));
+    this._input('sl-s').addEventListener('input', (e) => this._setHsv('s', +this._target(e).value / 100));
+    this._input('sl-v').addEventListener('input', (e) => this._setHsv('v', +this._target(e).value / 100));
   }
 
   // RGB edits: value is authoritative; re-derive hsv stickily so hue holds at edges.
-  _setChannel(key, n) {
+  private _setChannel(key: RgbKey, n: number): void {
     this.value[key] = Math.max(0, Math.min(255, n));
     this.hsv = stickyHsv(this.value, this.hsv);
     this._render();
   }
 
-  _setChannelHex(key, str) {
+  private _setChannelHex(key: RgbKey, str: string): void {
     const n = parseInt(str, 16);
     if (!Number.isNaN(n) && n >= 0 && n <= 255) {
       this.value[key] = n;
@@ -227,53 +233,69 @@ class C0ffeeMirror extends HTMLElement {
   }
 
   // HSV edits: hsv is authoritative; value follows directly.
-  _setHsv(key, n) {
-    this.hsv = { ...this.hsv, [key]: n };
+  private _setHsv(key: HsvKey, n: number): void {
+    const next = { ...this.hsv };
+    next[key] = n;
+    this.hsv = next;
     this.value = hsvToRgb(this.hsv);
     this._render();
   }
 
   // --- redraw every view from the single value ---
-  _render(activeHexKey) {
-    const $ = (id) => this.shadowRoot.getElementById(id);
-    $('swatch').style.background = '#' + formatHex(this.value);
+  private _render(activeHexKey?: RgbKey): void {
+    this._el('swatch').style.background = '#' + formatHex(this.value);
     for (const c of CHANNELS) {
       const v = this.value[c.key];
-      $(`mini-${c.key}`).style.background = c.pure(v);
+      this._el(`mini-${c.key}`).style.background = c.pure(v);
       // Venn circle = this channel in isolation; screen-blend does the addition.
-      $(`c-${c.key}`).style.background = c.pure(v);
-      $(`sl-${c.key}`).value = v;
-      $(`dec-${c.key}`).textContent = v;
-      if (activeHexKey !== c.key) $(`hex-${c.key}`).value = hexPair(v);
+      this._el(`c-${c.key}`).style.background = c.pure(v);
+      this._input(`sl-${c.key}`).value = String(v);
+      this._el(`dec-${c.key}`).textContent = String(v);
+      if (activeHexKey !== c.key) this._input(`hex-${c.key}`).value = hexPair(v);
     }
     this._renderHsv();
     this._emitChange();
   }
 
-  // Notify-out half of the Toy interface (ADR-0001). composed:true so the event
+  // Notify-out half of the interface (ADR-0001). composed:true so the event
   // escapes the Shadow DOM; a Playground listens to reflect state to the URL.
-  _emitChange() {
-    this.dispatchEvent(new CustomEvent('colorchange', {
+  private _emitChange(): void {
+    const detail: ColorChangeDetail = { ...this.value, hex: formatHex(this.value) };
+    this.dispatchEvent(new CustomEvent<ColorChangeDetail>('colorchange', {
       bubbles: true,
       composed: true,
-      detail: { ...this.value, hex: formatHex(this.value) },
+      detail,
     }));
   }
 
   // HSV sliders + self-coloring tracks (sat/val previewed at the current hue).
-  _renderHsv() {
-    const $ = (id) => this.shadowRoot.getElementById(id);
+  private _renderHsv(): void {
     const { h, s, v } = this.hsv;
-    $('sl-h').value = Math.round(h);
-    $('sl-s').value = Math.round(s * 100);
-    $('sl-v').value = Math.round(v * 100);
-    $('dec-h').textContent = Math.round(h) + '°';
-    $('dec-s').textContent = Math.round(s * 100) + '%';
-    $('dec-v').textContent = Math.round(v * 100) + '%';
+    this._input('sl-h').value = String(Math.round(h));
+    this._input('sl-s').value = String(Math.round(s * 100));
+    this._input('sl-v').value = String(Math.round(v * 100));
+    this._el('dec-h').textContent = Math.round(h) + '°';
+    this._el('dec-s').textContent = Math.round(s * 100) + '%';
+    this._el('dec-v').textContent = Math.round(v * 100) + '%';
     // tracks: sat goes gray->pure-hue; val goes black->pure-hue.
     const pureHue = '#' + formatHex(hsvToRgb({ h, s: 1, v: 1 }));
-    $('sl-s').style.background = `linear-gradient(to right, #888, ${pureHue})`;
-    $('sl-v').style.background = `linear-gradient(to right, #000, ${pureHue})`;
+    this._input('sl-s').style.background = `linear-gradient(to right, #888, ${pureHue})`;
+    this._input('sl-v').style.background = `linear-gradient(to right, #000, ${pureHue})`;
+  }
+
+  // --- shadow-DOM lookup helpers; ids are build-time invariants, so a miss is a bug ---
+  private _el(id: string): HTMLElement {
+    const node = this.root.getElementById(id);
+    if (!node) throw new Error(`c0ffee-mirror: missing #${id}`);
+    return node;
+  }
+
+  private _input(id: string): HTMLInputElement {
+    return this._el(id) as HTMLInputElement;
+  }
+
+  private _target(e: Event): HTMLInputElement {
+    return e.target as HTMLInputElement;
   }
 }
 
