@@ -1,5 +1,7 @@
 # 0004 — Lessons are scroll-driven sequences of beats with a pinned Companion mirror
 
+> **Status:** partially superseded by **ADR-0005** — the fixed *left*-pin is replaced by a responsive pin axis (top on narrow screens, beside the prose on wide). Everything else here still holds. ("Companion mirror" is also renamed **Companion console**; see the `mirror → console` rename.)
+
 A Lesson splits into authored **beats** (teaching steps). The layout pins one **Companion mirror** on the left; prose scrolls on the right (a flipped-Codecademy split). Scrolling activates whichever beat enters the focus zone (via an Intersection Observer); inactive beats are **dimmed**, and the active beat owns the mirror. Click-to-load interactions animate the mirror's Color value.
 
 ## Why
