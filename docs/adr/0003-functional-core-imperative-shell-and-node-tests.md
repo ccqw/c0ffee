@@ -1,5 +1,7 @@
 # 0003 — Functional core / imperative shell, with Node's built-in test runner
 
+> **Partially superseded by [ADR-0006](0006-typescript-build.md) (C0FFEE-19).** The **functional-core / imperative-shell** decision below still stands. Only the **zero-build / no-npm / `node --test`** half is superseded: the codebase is now TypeScript built with Vite and tested with Vitest + happy-dom. Read the "why functional core" reasoning as current; read "`node --test` keeps the site zero-build" as historical — the shell is now unit-testable too.
+
 The color math lives in `lib/color.js` as **pure functions** (hex parse/format, rgb↔hsv) — the functional core. Each Toy is a **class** (a Web Component) that owns its own Color value as instance state and calls the pure core — the imperative shell. Automated tests cover the core via Node's built-in runner (`node --test`).
 
 ## Why

@@ -10,7 +10,7 @@ The thinnest slice that exercises every architectural layer end-to-end:
 - **`<c0ffee-swatch>`** — inline swatch (chip): mode A (swatch + hex) / mode C (painted label), uniform `{hex} · click to load` tooltip, click loads the Companion mirror.
 - **One Lesson** — "Colors are made of light" (adding R/G/B light → primaries, white, black), pinned Companion mirror on the left, prose scrolling on the right.
 - **Toybox** — landing grid.
-- **`lib/color.js`** — functional core (hex parse/format, rgb↔hsv, sticky-hue helper, `bestTextColor`), tested via `node --test`.
+- **`lib/color.ts`** — functional core (hex parse/format, rgb↔hsv, sticky-hue helper, `bestTextColor`), tested with Vitest.
 - **`tokens.css`** — design tokens.
 
 ## v2 — the other launch toys
@@ -42,6 +42,6 @@ These were scoped then shelved to protect the thin slice. Bring back next.
 
 ## Infrastructure backlog
 
-- **CI** — run `node --test` on push (GitHub Action) and/or a pre-commit hook, gating the functional core.
+- **CI** — run `npm test` (Vitest) on push (GitHub Action) and/or a pre-commit hook, gating the functional core and the shell tests.
 - **Custom domain** — wire `c0ffee.cafe` to GitHub Pages (CNAME) when ready.
 - **DOM/interaction tests** — a lightweight harness for Toy behavior (beyond the pure-core unit tests), if/when toys get complex enough to warrant it.

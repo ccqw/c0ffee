@@ -1,6 +1,6 @@
 # c0ffee
 
-A front-end-only, zero-build website of small color interactives (and, later, lessons woven from them) that teach how color works in computer graphics, with a special love for hex intuition. The name is itself a valid hex color (`#C0FFEE`, a pale mint).
+A front-end-only website of small color interactives (and, later, lessons woven from them) that teach how color works in computer graphics, with a special love for hex intuition. Built with TypeScript + Vite (ADR-0006). The name is itself a valid hex color (`#C0FFEE`, a pale mint).
 
 ## Language
 

@@ -1,4 +1,4 @@
-// lesson-runtime.js — powers a Lesson (ADR-0004).
+// lesson-runtime.ts — powers a Lesson (ADR-0004).
 //
 // Functional core (pure, tested): pickActiveBeat, resolveTarget.
 // Imperative shell (DOM, eyeballed): initLesson — wires an IntersectionObserver
@@ -7,18 +7,25 @@
 //
 // Importing this module has NO side effects; the page calls initLesson().
 
+import type { Rgb, ColorChangeDetail } from '../lib/color.ts';
+
 // --- functional core ---
 
+/** A beat's vertical span in viewport space. */
+export interface BeatSpan {
+  top: number;
+  bottom: number;
+}
+
 // pickActiveBeat(beatPositions, focusLine) -> index
-// beatPositions: [{top, bottom}, ...]; focusLine: a y coordinate.
 // Returns the index of the beat whose span contains the focus line; if none
 // does, the nearest by distance to its span; clamps past the ends. [] -> -1.
-export function pickActiveBeat(beatPositions, focusLine) {
+export function pickActiveBeat(beatPositions: BeatSpan[], focusLine: number): number {
   if (!beatPositions.length) return -1;
   let best = 0;
   let bestDist = Infinity;
   for (let i = 0; i < beatPositions.length; i++) {
-    const { top, bottom } = beatPositions[i];
+    const { top, bottom } = beatPositions[i]!;
     if (focusLine >= top && focusLine < bottom) return i; // inside the span
     const dist = focusLine < top ? top - focusLine : focusLine - bottom;
     if (dist < bestDist) { bestDist = dist; best = i; }
@@ -28,20 +35,31 @@ export function pickActiveBeat(beatPositions, focusLine) {
 
 // resolveTarget(swatchValue, companionRef) -> {mirror, value} | null
 // Where a clicked Inline swatch's Color value should land. No companion -> null.
-export function resolveTarget(swatchValue, companionRef) {
+// Generic over the companion + value shapes so it stays pure and testable with
+// plain objects, not just live elements.
+export function resolveTarget<C, V>(
+  swatchValue: V,
+  companionRef: C | null | undefined,
+): { mirror: C; value: V } | null {
   if (!companionRef) return null;
   return { mirror: companionRef, value: swatchValue };
 }
 
 // --- imperative shell ---
 
+// A Companion mirror exposes animateTo (the <c0ffee-mirror>); typed loosely so
+// the runtime depends only on the capability, not the concrete element class.
+interface CompanionMirror extends Element {
+  animateTo?: (target: Rgb, ms?: number) => void;
+}
+
 // initLesson(root?) — call once after the DOM is ready.
 // Conventions in the Lesson HTML:
 //   - the Companion mirror is the <c0ffee-mirror data-companion>
 //   - each beat is an element with class "beat"
 //   - inline swatches are <c0ffee-swatch> anywhere in the prose
-export function initLesson(root = document) {
-  const mirror = root.querySelector('c0ffee-mirror[data-companion]');
+export function initLesson(root: Document | Element = document): void {
+  const mirror = root.querySelector('c0ffee-mirror[data-companion]') as CompanionMirror | null;
   const beats = Array.from(root.querySelectorAll('.beat'));
   if (!beats.length) return;
 
@@ -49,17 +67,17 @@ export function initLesson(root = document) {
   // (40% down the viewport) and dim the others.
   const focusFraction = 0.4;
   let ticking = false;
-  const update = () => {
+  const update = (): void => {
     ticking = false;
     const focusLine = window.innerHeight * focusFraction;
-    const positions = beats.map((b) => {
+    const positions = beats.map((b): BeatSpan => {
       const r = b.getBoundingClientRect();
       return { top: r.top, bottom: r.bottom };
     });
     const active = pickActiveBeat(positions, focusLine);
     beats.forEach((b, i) => b.classList.toggle('active', i === active));
   };
-  const onScroll = () => {
+  const onScroll = (): void => {
     if (!ticking) { ticking = true; requestAnimationFrame(update); }
   };
   window.addEventListener('scroll', onScroll, { passive: true });
@@ -67,13 +85,14 @@ export function initLesson(root = document) {
 
   // Route inline-swatch clicks to the Companion mirror with an animated load.
   root.addEventListener('colorchange', (e) => {
-    if (e.target.tagName !== 'C0FFEE-SWATCH') return;
-    const target = resolveTarget(e.detail, mirror);
+    const ev = e as CustomEvent<ColorChangeDetail>;
+    if ((ev.target as Element | null)?.tagName !== 'C0FFEE-SWATCH') return;
+    const target = resolveTarget(ev.detail, mirror);
     if (!target) return;
     if (typeof target.mirror.animateTo === 'function') {
       target.mirror.animateTo(target.value);
     } else {
-      target.mirror.setAttribute('hex', e.detail.hex);
+      target.mirror.setAttribute('hex', ev.detail.hex);
     }
   });
 
