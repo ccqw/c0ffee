@@ -1,4 +1,5 @@
-// <c0ffee-mirror> — the flagship interactive (imperative shell, ADR-0001/0002/0003).
+// <c0ffee-console> — the flagship interactive, the Color console (imperative
+// shell, ADR-0001/0002/0003). Formerly <c0ffee-mirror>; renamed in C0FFEE-20.
 //
 // Holds ONE Color value as the single source of truth. Every input handler
 // mutates `this._value` then calls `_render()`, which redraws every view from
@@ -35,7 +36,7 @@ const CHANNELS: Channel[] = [
 
 const hexPair = (n: number): string => n.toString(16).toUpperCase().padStart(2, '0');
 
-class C0ffeeMirror extends HTMLElement implements ColorInterface {
+class C0ffeeConsole extends HTMLElement implements ColorInterface {
   static observedAttributes = ['hex'];
 
   // Source of truth. Seeded from the `hex` attribute in connectedCallback.
@@ -292,7 +293,7 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
   // --- shadow-DOM lookup helpers; ids are build-time invariants, so a miss is a bug ---
   private _el(id: string): HTMLElement {
     const node = this.root.getElementById(id);
-    if (!node) throw new Error(`c0ffee-mirror: missing #${id}`);
+    if (!node) throw new Error(`c0ffee-console: missing #${id}`);
     return node;
   }
 
@@ -305,4 +306,4 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
   }
 }
 
-customElements.define('c0ffee-mirror', C0ffeeMirror);
+customElements.define('c0ffee-console', C0ffeeConsole);

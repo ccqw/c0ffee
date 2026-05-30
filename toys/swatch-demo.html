@@ -34,16 +34,16 @@
        <c0ffee-swatch hex="FACADE"></c0ffee-swatch>.</p>
   </div>
 
-  <p class="hint">Click any swatch → it loads into the mirror below (the lesson mechanic).</p>
-  <c0ffee-mirror id="mirror" hex="3A7BD5"></c0ffee-mirror>
+  <p class="hint">Click any swatch → it loads into the console below (the lesson mechanic).</p>
+  <c0ffee-console id="console" hex="3A7BD5"></c0ffee-console>
 
   <script type="module">
     import '../toys/swatch.ts';
-    import '../toys/mirror.ts';
-    // Lesson-style routing: any swatch click seeds the (companion) mirror.
-    const mirror = document.getElementById('mirror');
+    import '../toys/console.ts';
+    // Lesson-style routing: any swatch click seeds the Companion console.
+    const consoleEl = document.getElementById('console');
     document.addEventListener('colorchange', (e) => {
-      if (e.target.tagName === 'C0FFEE-SWATCH') mirror.setAttribute('hex', e.detail.hex);
+      if (e.target.tagName === 'C0FFEE-SWATCH') consoleEl.setAttribute('hex', e.detail.hex);
     });
   </script>
 </body>
