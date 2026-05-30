@@ -1,12 +1,12 @@
 // <c0ffee-mirror> — the flagship interactive (imperative shell, ADR-0001/0002/0003).
 //
 // Holds ONE Color value as the single source of truth. Every input handler
-// mutates `this.value` then calls `_render()`, which redraws every view from
+// mutates `this._value` then calls `_render()`, which redraws every view from
 // that value. Views never update each other directly — they all read the value.
 //
 // Swatch + RGB panel (C0FFEE-2), Venn palette (C0FFEE-3), HSV panel (C0FFEE-4).
 //
-// RGB (`this.value`) is the canonical Color value. The HSV panel adds one bit
+// RGB (`this._value`) is the canonical Color value. The HSV panel adds one bit
 // of legitimately-stateful caching (`this.hsv`): RGB->HSV is lossy at grays
 // (no hue) and black (no hue/sat), so we keep the last meaningful hue/sat via
 // stickyHsv. Editing RGB recomputes hsv stickily; editing HSV is authoritative
@@ -39,8 +39,10 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
   static observedAttributes = ['hex'];
 
   // Source of truth. Seeded from the `hex` attribute in connectedCallback.
-  value: Rgb = { ...DEFAULT };
-  hsv: Hsv = rgbToHsv(this.value); // cached HSV view, kept stable via stickyHsv
+  // Private + exposed read-only via the `value` getter so views (and outside
+  // consumers) read it but can't mutate it behind the setters' backs.
+  private _value: Rgb = { ...DEFAULT };
+  private hsv: Hsv = rgbToHsv(this._value); // cached HSV view, kept stable via stickyHsv
   private root: ShadowRoot = this.attachShadow({ mode: 'open' });
   private _anim: number | null = null;
 
@@ -58,8 +60,12 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
   }
 
   // --- public interface (ADR-0001) ---
+  get value(): Readonly<Rgb> {
+    return this._value;
+  }
+
   get hex(): Hex {
-    return formatHex(this.value);
+    return formatHex(this._value);
   }
 
   // animateTo({r,g,b}) — tween the Color value from current to target (~300ms)
@@ -68,18 +74,18 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
   // every view animates together. Used by the Lesson runtime.
   animateTo(target: Rgb, ms = 320): void {
     if (this._anim) cancelAnimationFrame(this._anim);
-    const from = { ...this.value };
+    const from = { ...this._value };
     const start = performance.now();
     const ease = (t: number): number => 1 - (1 - t) * (1 - t); // easeOutQuad
     const step = (now: number): void => {
       const t = Math.min(1, (now - start) / ms);
       const k = ease(t);
-      this.value = {
+      this._value = {
         r: Math.round(from.r + (target.r - from.r) * k),
         g: Math.round(from.g + (target.g - from.g) * k),
         b: Math.round(from.b + (target.b - from.b) * k),
       };
-      this.hsv = stickyHsv(this.value, this.hsv);
+      this.hsv = stickyHsv(this._value, this.hsv);
       this._render();
       if (t < 1) this._anim = requestAnimationFrame(step);
       else this._anim = null;
@@ -90,8 +96,8 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
   // --- seed (attribute in; graceful fallback so an interactive never breaks) ---
   private _seedFromAttribute(): void {
     const parsed = parseHex(this.getAttribute('hex'));
-    this.value = parsed || { ...DEFAULT };
-    this.hsv = rgbToHsv(this.value);
+    this._value = parsed || { ...DEFAULT };
+    this.hsv = rgbToHsv(this._value);
   }
 
   // --- one-time DOM construction ---
@@ -218,16 +224,16 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
 
   // RGB edits: value is authoritative; re-derive hsv stickily so hue holds at edges.
   private _setChannel(key: RgbKey, n: number): void {
-    this.value[key] = Math.max(0, Math.min(255, n));
-    this.hsv = stickyHsv(this.value, this.hsv);
+    this._value[key] = Math.max(0, Math.min(255, n));
+    this.hsv = stickyHsv(this._value, this.hsv);
     this._render();
   }
 
   private _setChannelHex(key: RgbKey, str: string): void {
     const n = parseInt(str, 16);
     if (!Number.isNaN(n) && n >= 0 && n <= 255) {
-      this.value[key] = n;
-      this.hsv = stickyHsv(this.value, this.hsv);
+      this._value[key] = n;
+      this.hsv = stickyHsv(this._value, this.hsv);
       this._render(key); // don't stomp the box the user is typing in
     }
   }
@@ -237,15 +243,15 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
     const next = { ...this.hsv };
     next[key] = n;
     this.hsv = next;
-    this.value = hsvToRgb(this.hsv);
+    this._value = hsvToRgb(this.hsv);
     this._render();
   }
 
   // --- redraw every view from the single value ---
   private _render(activeHexKey?: RgbKey): void {
-    this._el('swatch').style.background = '#' + formatHex(this.value);
+    this._el('swatch').style.background = '#' + formatHex(this._value);
     for (const c of CHANNELS) {
-      const v = this.value[c.key];
+      const v = this._value[c.key];
       this._el(`mini-${c.key}`).style.background = c.pure(v);
       // Venn circle = this channel in isolation; screen-blend does the addition.
       this._el(`c-${c.key}`).style.background = c.pure(v);
@@ -260,7 +266,7 @@ class C0ffeeMirror extends HTMLElement implements ColorInterface {
   // Notify-out half of the interface (ADR-0001). composed:true so the event
   // escapes the Shadow DOM; a Playground listens to reflect state to the URL.
   private _emitChange(): void {
-    const detail: ColorChangeDetail = { ...this.value, hex: formatHex(this.value) };
+    const detail: ColorChangeDetail = { ...this._value, hex: formatHex(this._value) };
     this.dispatchEvent(new CustomEvent<ColorChangeDetail>('colorchange', {
       bubbles: true,
       composed: true,

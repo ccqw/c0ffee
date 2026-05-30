@@ -17,8 +17,9 @@ const DEFAULT: Rgb = { r: 58, g: 123, b: 213 };
 class C0ffeeSwatch extends HTMLElement implements ColorInterface {
   static observedAttributes = ['hex', 'label'];
 
-  // The single source of truth for this chip's Color value. Seeded in connectedCallback.
-  value: Rgb = { ...DEFAULT };
+  // The single source of truth for this chip's Color value. Seeded in
+  // connectedCallback; exposed read-only via the `value` getter (ADR-0001).
+  private _value: Rgb = { ...DEFAULT };
   // attachShadow returns the root, so we never juggle a nullable shadowRoot.
   private root: ShadowRoot = this.attachShadow({ mode: 'open' });
 
@@ -37,12 +38,16 @@ class C0ffeeSwatch extends HTMLElement implements ColorInterface {
   }
 
   // --- public interface (ADR-0001) ---
+  get value(): Readonly<Rgb> {
+    return this._value;
+  }
+
   get hex(): Hex {
-    return formatHex(this.value);
+    return formatHex(this._value);
   }
 
   private _seed(): void {
-    this.value = parseHex(this.getAttribute('hex')) || { ...DEFAULT };
+    this._value = parseHex(this.getAttribute('hex')) || { ...DEFAULT };
   }
 
   private _build(): void {
@@ -87,14 +92,14 @@ class C0ffeeSwatch extends HTMLElement implements ColorInterface {
 
   private _render(): void {
     const chip = this._el('chip');
-    const hex = formatHex(this.value);
+    const hex = formatHex(this._value);
     const label = this.getAttribute('label');
     chip.title = `#${hex} · click to load`; // uniform tooltip, both modes
 
     if (label) {
       chip.className = 'chip c';
       chip.style.background = '#' + hex;
-      chip.style.color = bestTextColor(this.value);
+      chip.style.color = bestTextColor(this._value);
       chip.textContent = label;
     } else {
       chip.className = 'chip a';
@@ -106,7 +111,7 @@ class C0ffeeSwatch extends HTMLElement implements ColorInterface {
 
   // Announce this chip's Color value; a Lesson routes it to the Companion mirror.
   private _emit(): void {
-    const detail: ColorChangeDetail = { ...this.value, hex: formatHex(this.value) };
+    const detail: ColorChangeDetail = { ...this._value, hex: formatHex(this._value) };
     this.dispatchEvent(new CustomEvent<ColorChangeDetail>('colorchange', {
       bubbles: true,
       composed: true,

@@ -5,14 +5,16 @@
 
 // --- domain types ---
 
-/** A Color value: red, green, blue channels, each an integer 0–255. */
+/** A Color value: red, green, blue channels. By convention each is an integer
+ *  0–255 — that range is a caller contract, not enforced by the type. */
 export interface Rgb {
   r: number;
   g: number;
   b: number;
 }
 
-/** The same color in HSV: hue in [0,360), saturation & value in [0,1]. */
+/** The same color in HSV. By convention hue in [0,360), saturation & value in
+ *  [0,1] — again a caller contract, not type-enforced. */
 export interface Hsv {
   h: number;
   s: number;
@@ -33,12 +35,15 @@ export type Hex = string & { readonly [hexBrand]: true };
  * attribute and notify-out via `colorchange` are the element's other two halves.)
  */
 export interface ColorInterface {
-  readonly value: Rgb;
+  // Readonly<Rgb> so a consumer can read the live value but can't reach in and
+  // mutate the element's single source of truth, bypassing its setters.
+  readonly value: Readonly<Rgb>;
   readonly hex: Hex;
 }
 
-/** Payload of the `colorchange` CustomEvent (ADR-0001 notify-out half). */
-export interface ColorChangeDetail extends Rgb {
+/** Payload of the `colorchange` CustomEvent (ADR-0001 notify-out half). A
+ *  snapshot — fully immutable, so a listener can't scribble on it. */
+export interface ColorChangeDetail extends Readonly<Rgb> {
   readonly hex: Hex;
 }
 

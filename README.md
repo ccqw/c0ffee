@@ -37,4 +37,4 @@ npm run build      # bundle to dist/ (what GitHub Pages publishes)
 
 ## Deploy
 
-Pushing to the default branch runs the GitHub Actions workflow (`.github/workflows/deploy.yml`): it builds with Vite and publishes `dist/` to GitHub Pages. The custom domain rides along via `public/CNAME` (copied into `dist/`), so `c0ffee.cafe` and HTTPS are unchanged.
+Once the repo's Pages **Source** is set to **GitHub Actions**, pushing to the default branch runs `.github/workflows/deploy.yml`: it builds with Vite and publishes `dist/` to GitHub Pages. The custom domain rides along via `public/CNAME` (copied into `dist/`), so `c0ffee.cafe` and HTTPS are unchanged. (Until that switch, Pages still serves the branch root directly — which is why the source must be flipped to Actions as part of landing this build.)

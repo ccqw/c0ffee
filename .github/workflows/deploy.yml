@@ -27,7 +27,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm test # gate the deploy on the color core + shell tests
+      - run: npm run typecheck # fail the deploy on a type regression — vite build alone strips types unchecked
+      - run: npm test # gate on the color core + happy-dom shell tests
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

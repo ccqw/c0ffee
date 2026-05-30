@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "A color toybox — interactive color tools and lessons, with a love for hex. c0ffee.cafe",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
