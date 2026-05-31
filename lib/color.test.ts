@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, bestTextColor } from './color.ts';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, bestTextColor, sanitizeHexInput } from './color.ts';
 
 // HSV uses h in [0,360), s and v in [0,1]. Helper for approximate comparison.
 const close = (a: number, b: number, eps = 1e-6): boolean => Math.abs(a - b) <= eps;
@@ -83,4 +83,32 @@ test('bestTextColor: dark text on light backgrounds, light text on dark', () => 
   expect(bestTextColor({ r: 255, g: 255, b: 255 })).toBe('#000'); // white -> black
   expect(bestTextColor({ r: 0, g: 0, b: 0 })).toBe('#fff');       // black -> white
   expect(bestTextColor({ r: 192, g: 255, b: 238 })).toBe('#000'); // mint -> black
+});
+
+test('sanitizeHexInput: valid hex passes through, normalized to uppercase', () => {
+  expect(sanitizeHexInput('ff', 2)).toBe('FF');
+  expect(sanitizeHexInput('C0', 2)).toBe('C0');
+  expect(sanitizeHexInput('aB', 2)).toBe('AB'); // mixed case -> uppercase
+});
+
+test('sanitizeHexInput: strips non-hex characters', () => {
+  expect(sanitizeHexInput('g', 2)).toBe('');     // a fully-invalid keystroke vanishes
+  expect(sanitizeHexInput('a b', 2)).toBe('AB'); // stray space dropped
+  expect(sanitizeHexInput('#f', 2)).toBe('F');   // a '#' is not a hex digit
+});
+
+test('sanitizeHexInput: clamps to maxLen', () => {
+  expect(sanitizeHexInput('abc', 2)).toBe('AB'); // third char dropped
+  expect(sanitizeHexInput('FFA', 2)).toBe('FF');
+});
+
+test('sanitizeHexInput: empty input stays empty', () => {
+  expect(sanitizeHexInput('', 2)).toBe('');
+});
+
+test('sanitizeHexInput: kills the historical parseInt leniency', () => {
+  // parseInt('1g', 16) === 1 and parseInt('1g3', 16) === 1 let partly-invalid
+  // values sneak through. The filter strips the junk char instead of prefix-parsing.
+  expect(sanitizeHexInput('1g', 2)).toBe('1');
+  expect(sanitizeHexInput('1g3', 2)).toBe('13');
 });

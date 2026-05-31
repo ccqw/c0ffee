@@ -13,7 +13,7 @@
 // stickyHsv. Editing RGB recomputes hsv stickily; editing HSV is authoritative
 // and writes value = hsvToRgb(hsv) directly, which is what stops hue jitter.
 
-import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv } from '../lib/color.ts';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, sanitizeHexInput } from '../lib/color.ts';
 import type { Rgb, Hsv, Hex, ColorInterface, ColorChangeDetail } from '../lib/color.ts';
 
 const DEFAULT: Rgb = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake mint, when no/invalid hex given
@@ -230,13 +230,22 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     this._render();
   }
 
-  private _setChannelHex(key: RgbKey, str: string): void {
-    const n = parseInt(str, 16);
-    if (!Number.isNaN(n) && n >= 0 && n <= 255) {
-      this._value[key] = n;
-      this.hsv = stickyHsv(this._value, this.hsv);
-      this._render(key); // don't stomp the box the user is typing in
-    }
+  // Hex box edit. Filter the raw input to valid hex digits first, then write
+  // the *filtered* string straight back into the box so it can never show a
+  // character the value silently dropped (the old `if`-no-`else` bug). Two hex
+  // digits cap at FF = 255, so the filter alone keeps the channel in range —
+  // no separate bounds check, no lenient parseInt prefix-parse.
+  private _setChannelHex(key: RgbKey, raw: string): void {
+    const clean = sanitizeHexInput(raw, 2);
+    // Correct the box in place — but only when the filter actually changed the
+    // characters, not just their case. The box is displayed uppercase via CSS
+    // (text-transform), so a valid lowercase keystroke needs no rewrite; writing
+    // box.value would just jump the caret to the end and fight mid-string edits.
+    const box = this._input(`hex-${key}`);
+    if (box.value.toUpperCase() !== clean) box.value = clean;
+    this._value[key] = clean === '' ? 0 : parseInt(clean, 16);
+    this.hsv = stickyHsv(this._value, this.hsv);
+    this._render(key); // don't stomp the box the user is typing in
   }
 
   // HSV edits: hsv is authoritative; value follows directly.

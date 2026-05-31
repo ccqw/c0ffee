@@ -85,3 +85,51 @@ test('<c0ffee-console> RGB slider edit updates the value and emits a composed co
   expect(detail).not.toBeNull(); // event escaped the shadow root (composed)
   expect(detail!).toMatchObject({ r: 255, g: 0, b: 0, hex: 'FF0000' });
 });
+
+// C0FFEE-21 — the per-Channel hex box can never lie about what the color
+// accepted. After each edit the box shows exactly the sanitized value and the
+// Color value matches it; the silent-swallow and parseInt-leniency bugs are gone.
+function typeHex(el: HTMLElement & ColorInterface, key: 'r' | 'g' | 'b', raw: string): HTMLInputElement {
+  const box = el.shadowRoot?.getElementById(`hex-${key}`) as HTMLInputElement;
+  box.value = raw;
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  return box;
+}
+
+test('<c0ffee-console> hex box strips the trailing junk parseInt used to swallow', () => {
+  const el = mount('c0ffee-console', '000000');
+  const box = typeHex(el, 'r', '1g'); // old: parseInt('1g',16)===1, box kept '1g'
+  expect(box.value).toBe('1');        // box shows only what survived the filter
+  expect(el.value.r).toBe(1);         // and the value agrees with the box
+});
+
+test('<c0ffee-console> hex box drops a fully-invalid keystroke instead of silently swallowing it', () => {
+  const el = mount('c0ffee-console', '000000');
+  const box = typeHex(el, 'r', 'g'); // old: box was left showing 'g', value untouched -> disagreement
+  expect(box.value).toBe('');        // rejected char never shows
+  expect(el.value.r).toBe(0);        // color unchanged — box and value still agree
+});
+
+test('<c0ffee-console> hex box clamps an over-long paste to two digits', () => {
+  const el = mount('c0ffee-console', '000000');
+  const box = typeHex(el, 'r', 'FFA'); // a paste can exceed maxlength=2
+  expect(box.value).toBe('FF');
+  expect(el.value.r).toBe(255);
+});
+
+test('<c0ffee-console> typing a two-digit hex value is not stomped mid-keystroke', () => {
+  const el = mount('c0ffee-console', '000000');
+  typeHex(el, 'r', 'c');             // first keystroke (lowercase)
+  const box = typeHex(el, 'r', 'c0'); // second keystroke completes the pair
+  // A valid keystroke isn't rewritten (no caret jump); the box keeps the user's
+  // own characters and CSS shows them uppercase. The value reads them either way.
+  expect(box.value).toBe('c0');
+  expect(el.value.r).toBe(192);       // parseInt is case-insensitive: c0 -> 192
+});
+
+test('<c0ffee-console> a valid lowercase keystroke is left untouched (no caret-jumping rewrite)', () => {
+  const el = mount('c0ffee-console', '000000');
+  const box = typeHex(el, 'r', 'ab'); // already valid hex, just lowercase
+  expect(box.value).toBe('ab');       // not rewritten to 'AB' — caret stays put
+  expect(el.value.r).toBe(171);       // 0xAB
+});
