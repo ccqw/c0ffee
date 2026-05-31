@@ -1,6 +1,6 @@
 {
   "name": "c0ffee",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "A color toybox — interactive color tools and lessons, with a love for hex. c0ffee.cafe",
