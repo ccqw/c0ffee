@@ -13,7 +13,7 @@
 // stickyHsv. Editing RGB recomputes hsv stickily; editing HSV is authoritative
 // and writes value = hsvToRgb(hsv) directly, which is what stops hue jitter.
 
-import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, sanitizeHexInput } from '../lib/color.ts';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, sanitizeHexInput, parseColorLink, formatColorLink } from '../lib/color.ts';
 import type { Rgb, Hsv, Hex, ColorInterface, ColorChangeDetail } from '../lib/color.ts';
 
 const DEFAULT: Rgb = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake mint, when no/invalid hex given
@@ -48,9 +48,30 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   private _anim: number | null = null;
 
   connectedCallback(): void {
-    this._seedFromAttribute();
+    // Opt-in URL reflection (ADR-0001 point 4, as amended 2026-05-31): hash-only,
+    // live, and a property of THIS interactive's contract — never auto-enabled, so
+    // multiple interactives on one page never contend for the address bar. The solo
+    // play page sets `reflect`; a Lesson's Companion console deliberately does not.
+    // (The ADR-0001 prose amendment already landed in C0FFEE-17; this is its behavior.)
+    // Local, not a field: reflection is wired once here and never toggled post-connect.
+    if (this.hasAttribute('reflect')) {
+      this._seedFromHash();
+      window.addEventListener('hashchange', this._onHashChange);
+      // Arm the writer BEFORE _render(): the initial render's colorchange is what
+      // canonicalizes the just-seeded hash in the URL (#f60 -> #FF6600). Registering
+      // after _render() would silently drop connect-time canonicalization.
+      this.addEventListener('colorchange', this._reflectToUrl);
+    } else {
+      this._seedFromAttribute();
+    }
     this._build();
     this._render();
+  }
+
+  disconnectedCallback(): void {
+    // The colorchange listener sits on `this` (GC'd with the element); the
+    // hashchange listener lives on window, so it must be detached explicitly.
+    window.removeEventListener('hashchange', this._onHashChange);
   }
 
   attributeChangedCallback(name: string): void {
@@ -100,6 +121,32 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     this._value = parsed || { ...DEFAULT };
     this.hsv = rgbToHsv(this._value);
   }
+
+  // --- reflection: seed from the URL hash, re-seed on change, write on change ---
+  // Only wired when `reflect` is set. The hash is the sole URL form (the legacy
+  // `?hex=` query is retired — read nowhere, written nowhere).
+
+  // Seed from location.hash; empty/malformed -> the #C0FFEE default, never a broken
+  // render. Mirrors _seedFromAttribute's fresh-HSV reset.
+  private _seedFromHash(): void {
+    this._value = parseColorLink(location.hash) || { ...DEFAULT };
+    this.hsv = rgbToHsv(this._value);
+  }
+
+  // hashchange = the address bar changed (the paste-and-enter the old page-level
+  // reflection silently ignored). Re-seed live.
+  private _onHashChange = (): void => {
+    this._seedFromHash();
+    this._render();
+  };
+
+  // Write the live Color link back to the hash. replaceState (not `location.hash =`)
+  // keeps history clean AND fires no hashchange, so there's no seed/echo loop; the
+  // equality guard skips redundant writes and canonicalizes case/shorthand for free.
+  private _reflectToUrl = (): void => {
+    const next = formatColorLink(this._value);
+    if (location.hash !== next) history.replaceState(null, '', next);
+  };
 
   // --- one-time DOM construction ---
   private _build(): void {
