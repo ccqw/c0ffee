@@ -19,8 +19,12 @@
 
     /* The site root IS the flagship Color console shown solo (CONTEXT.md): the
        Site banner is quiet chrome at the top of the document (normal flow, not
-       sticky), and the console owns the rest of the viewport — centered, full-
-       bleed, with no prose. A visitor lands directly in the interactive. */
+       sticky), and the console owns the rest of the viewport — centered, with
+       no prose. "Full-bleed" here is the page-type sense (the one interactive
+       owns the whole page, no cards or prose framing it), not zero-margin: the
+       console is a fixed-width card, so the padding is just breathing room that
+       keeps it off the edges on a narrow viewport. A visitor lands directly in
+       the interactive. */
     main {
       flex: 1;
       display: flex; align-items: center; justify-content: center;
