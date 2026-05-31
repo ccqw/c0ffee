@@ -35,15 +35,21 @@ describe('Menu page (/menu.html)', () => {
   });
 
   it('does not resurrect retired Toy-era vocabulary', () => {
-    // The relocated copy is exactly where the deferred de-Toy fix lands.
-    for (const retired of [/playground/i, /toybox/i, /\bmirror\b/i, /\bgallery\b/i]) {
-      expect(html).not.toMatch(retired);
+    // The relocated copy is exactly where the deferred de-Toy fix lands. Strip
+    // the element module's <script> first: `toys/banner.ts` is an architectural
+    // directory (it moves to elements/ in C0FFEE-24), not user-facing copy, so
+    // it must not trip the bare "toy(s)" guard.
+    const copy = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    for (const retired of [/\btoys?\b/i, /toybox/i, /playground/i, /\bmirror\b/i, /\bgallery\b/i]) {
+      expect(copy).not.toMatch(retired);
     }
   });
 });
 
 describe('Home page (index.html)', () => {
   it('does not link to the Menu (unlinked until there is more to show)', () => {
-    expect(read('./index.html')).not.toContain('menu.html');
+    // Guard the intent — home points at no Menu — independent of URL shape:
+    // catch any href to the menu, with or without the .html extension.
+    expect(read('./index.html')).not.toMatch(/href=["'][^"']*menu/i);
   });
 });
