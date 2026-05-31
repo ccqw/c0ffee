@@ -311,6 +311,17 @@ test('<c0ffee-console> switching presentation at runtime preserves the Color val
     .toBe(hueBefore); // sticky hue held — no reset, no jitter
 });
 
+test('<c0ffee-console> keeps companion-specific styling so "compact" can never silently revert to full', () => {
+  // happy-dom does no layout, so the narrowing itself is browser-verified, not
+  // asserted here. This anchors the *mechanism*: if the :host([presentation=...])
+  // selector is renamed or dropped, companion silently reverts to full-width while
+  // every other test stays green — the one way a downstream Companion console could
+  // regress invisibly. Assert the selector exists, not an exact pixel width.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const css = el.shadowRoot?.querySelector('style')?.textContent ?? '';
+  expect(css).toContain(':host([presentation="companion"])');
+});
+
 test('<c0ffee-console presentation="companion"> still honours the full ADR-0001 contract', () => {
   const el = mountPresentation('companion', '3A7BD5');
 
