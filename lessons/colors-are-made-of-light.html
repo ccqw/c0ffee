@@ -72,6 +72,11 @@
   </style>
 </head>
 <body>
+  <!-- The Site banner sits in normal flow at the top of the document, so it
+       scrolls away as you read and the top-pinned Companion console (ADR-0005)
+       owns the top of the viewport. -->
+  <c0ffee-banner></c0ffee-banner>
+
   <div class="lesson">
     <!-- Pinned Companion console (data-companion marks it for the runtime). -->
     <aside class="stage">
@@ -143,13 +148,14 @@
       </section>
 
       <footer class="footer">
-        <p>← <a href="../index.html">back to the toybox</a> &nbsp;·&nbsp;
+        <p>← <a href="../menu.html">browse the menu</a> &nbsp;·&nbsp;
            <a href="../play/console.html">open the console on its own</a></p>
       </footer>
     </main>
   </div>
 
   <script type="module">
+    import '../toys/banner.ts';
     import '../toys/console.ts';
     import '../toys/swatch.ts';
     import { initLesson } from './lesson-runtime.ts';
