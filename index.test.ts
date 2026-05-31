@@ -44,6 +44,17 @@ describe('Home page (/, index.html) — the solo Color console', () => {
     expect(html).not.toContain('lessons/colors-are-made-of-light.html');
   });
 
+  it('is prose-free: carries no headings or paragraphs of its own', () => {
+    // The solo interactive frames exactly one interactive with NO prose
+    // (CONTEXT.md). The console and banner render their own content inside
+    // shadow roots, so the host document itself must hold no prose tags — this
+    // pins the "no prose" contract positively, so a future tagline/hero can't
+    // creep back while every negative grid/vocab guard stays green.
+    for (const prose of [/<p\b/i, /<h1\b/i, /<h2\b/i, /<h3\b/i]) {
+      expect(html).not.toMatch(prose);
+    }
+  });
+
   it('does not resurrect retired Toy-era vocabulary', () => {
     // Strip the element module <script>s first: `toys/banner.ts` / `toys/console.ts`
     // are architectural paths (the dir moves to elements/ in C0FFEE-24), not
