@@ -135,3 +135,14 @@ export function formatHex({ r, g, b }: Rgb): Hex {
   const pair = (n: number): string => n.toString(16).toUpperCase().padStart(2, '0');
   return (pair(r) + pair(g) + pair(b)) as Hex;
 }
+
+// sanitizeHexInput(raw, maxLen) -> filtered uppercase hex string
+// The boundary filter for a hex digit box: drop everything that isn't a hex
+// digit, clamp to maxLen, normalize to the console's uppercase display. What
+// survives IS exactly what's valid, so the shell can write it straight back to
+// the box — there's no leftover junk for the box to show that the value dropped.
+// Replaces the shell's old parseInt path, whose prefix-leniency (parseInt('1g',
+// 16) === 1) let partly-invalid input through.
+export function sanitizeHexInput(raw: string, maxLen: number): string {
+  return raw.replace(/[^0-9a-fA-F]/g, '').slice(0, maxLen).toUpperCase();
+}
