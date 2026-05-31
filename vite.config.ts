@@ -13,6 +13,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(root, 'index.html'),
+        menu: resolve(root, 'menu.html'),
         playConsole: resolve(root, 'play/console.html'),
         lessonLight: resolve(root, 'lessons/colors-are-made-of-light.html'),
         consoleDemo: resolve(root, 'toys/console-demo.html'),
