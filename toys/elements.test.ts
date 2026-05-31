@@ -121,6 +121,15 @@ test('<c0ffee-console> typing a two-digit hex value is not stomped mid-keystroke
   const el = mount('c0ffee-console', '000000');
   typeHex(el, 'r', 'c');             // first keystroke (lowercase)
   const box = typeHex(el, 'r', 'c0'); // second keystroke completes the pair
-  expect(box.value).toBe('C0');       // active box keeps the full value, uppercased
-  expect(el.value.r).toBe(192);
+  // A valid keystroke isn't rewritten (no caret jump); the box keeps the user's
+  // own characters and CSS shows them uppercase. The value reads them either way.
+  expect(box.value).toBe('c0');
+  expect(el.value.r).toBe(192);       // parseInt is case-insensitive: c0 -> 192
+});
+
+test('<c0ffee-console> a valid lowercase keystroke is left untouched (no caret-jumping rewrite)', () => {
+  const el = mount('c0ffee-console', '000000');
+  const box = typeHex(el, 'r', 'ab'); // already valid hex, just lowercase
+  expect(box.value).toBe('ab');       // not rewritten to 'AB' — caret stays put
+  expect(el.value.r).toBe(171);       // 0xAB
 });

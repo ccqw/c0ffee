@@ -237,10 +237,12 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   // no separate bounds check, no lenient parseInt prefix-parse.
   private _setChannelHex(key: RgbKey, raw: string): void {
     const clean = sanitizeHexInput(raw, 2);
-    // Correct the box in place. Guard so an already-clean keystroke doesn't
-    // rewrite value/caret — that's what keeps two-digit typing feeling natural.
+    // Correct the box in place — but only when the filter actually changed the
+    // characters, not just their case. The box is displayed uppercase via CSS
+    // (text-transform), so a valid lowercase keystroke needs no rewrite; writing
+    // box.value would just jump the caret to the end and fight mid-string edits.
     const box = this._input(`hex-${key}`);
-    if (box.value !== clean) box.value = clean;
+    if (box.value.toUpperCase() !== clean) box.value = clean;
     this._value[key] = clean === '' ? 0 : parseInt(clean, 16);
     this.hsv = stickyHsv(this._value, this.hsv);
     this._render(key); // don't stomp the box the user is typing in
