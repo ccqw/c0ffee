@@ -46,7 +46,6 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   private hsv: Hsv = rgbToHsv(this._value); // cached HSV view, kept stable via stickyHsv
   private root: ShadowRoot = this.attachShadow({ mode: 'open' });
   private _anim: number | null = null;
-  private _reflect = false;
 
   connectedCallback(): void {
     // Opt-in URL reflection (ADR-0001 point 4, as amended 2026-05-31): hash-only,
@@ -54,10 +53,13 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     // multiple interactives on one page never contend for the address bar. The solo
     // play page sets `reflect`; a Lesson's Companion console deliberately does not.
     // (The ADR-0001 prose amendment already landed in C0FFEE-17; this is its behavior.)
-    this._reflect = this.hasAttribute('reflect');
-    if (this._reflect) {
+    // Local, not a field: reflection is wired once here and never toggled post-connect.
+    if (this.hasAttribute('reflect')) {
       this._seedFromHash();
       window.addEventListener('hashchange', this._onHashChange);
+      // Arm the writer BEFORE _render(): the initial render's colorchange is what
+      // canonicalizes the just-seeded hash in the URL (#f60 -> #FF6600). Registering
+      // after _render() would silently drop connect-time canonicalization.
       this.addEventListener('colorchange', this._reflectToUrl);
     } else {
       this._seedFromAttribute();

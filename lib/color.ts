@@ -160,9 +160,11 @@ export function parseColorLink(fragment: string | null | undefined): Rgb | null 
 // formatColorLink({r,g,b}) -> "#RRGGBB"
 // Writes the canonical Color link: the uppercase Hex address prefixed with the
 // URL fragment delimiter '#'. The '#' is the fragment delimiter, not a hex sigil —
-// it only coincides with CSS's hex '#'. Hash-only: never a '?hex=' query.
-export function formatColorLink(rgb: Rgb): string {
-  return '#' + formatHex(rgb);
+// it only coincides with CSS's hex '#'. Hash-only: never a '?hex=' query. The
+// `#${string}` return type keeps the link distinguishable from a bare Hex address
+// at the boundary — the same '#C0FFEE' ≠ 'C0FFEE' distinction the Hex brand draws.
+export function formatColorLink(rgb: Rgb): `#${string}` {
+  return `#${formatHex(rgb)}`;
 }
 
 // sanitizeHexInput(raw, maxLen) -> filtered uppercase hex string

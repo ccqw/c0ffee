@@ -218,6 +218,22 @@ test('<c0ffee-console reflect> canonicalizes a shorthand/lowercase hash to upper
   el.remove();
 });
 
+test('<c0ffee-console reflect> stops responding to hashchange once disconnected (no listener leak)', () => {
+  clearUrl();
+  history.replaceState(null, '', '#000000');
+  const el = mountReflect();
+  expect(el.value).toEqual({ r: 0, g: 0, b: 0 });
+
+  el.remove(); // disconnectedCallback must detach the window 'hashchange' listener
+
+  // A hashchange after disconnect must NOT re-seed the detached element — if the
+  // listener leaked, this would still mutate el.value (and on a real page, every
+  // removed console would keep reacting to the address bar).
+  history.replaceState(null, '', '#FF6600');
+  window.dispatchEvent(new Event('hashchange'));
+  expect(el.value).toEqual({ r: 0, g: 0, b: 0 }); // frozen at its last value
+});
+
 test('<c0ffee-console> WITHOUT reflect never touches the URL', () => {
   clearUrl();
   history.replaceState(null, '', '#123456');

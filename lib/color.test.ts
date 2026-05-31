@@ -168,6 +168,14 @@ test('formatColorLink: emits a hash link only — never a ?hex= query', () => {
 });
 
 test('parseColorLink and formatColorLink round-trip through the # delimiter', () => {
-  const rgb = { r: 255, g: 102, b: 0 };
-  expect(parseColorLink(formatColorLink(rgb))).toEqual(rgb);
+  // Boundary values exercise the pad/uppercase/channel-slice logic: all-zero,
+  // all-max, and a single-digit-pad channel (5 -> "05", 16 -> "10").
+  for (const rgb of [
+    { r: 255, g: 102, b: 0 },
+    { r: 0, g: 0, b: 0 },       // -> #000000
+    { r: 255, g: 255, b: 255 }, // -> #FFFFFF
+    { r: 0, g: 5, b: 16 },      // -> #000510 (zero-pad path)
+  ]) {
+    expect(parseColorLink(formatColorLink(rgb))).toEqual(rgb);
+  }
 });
