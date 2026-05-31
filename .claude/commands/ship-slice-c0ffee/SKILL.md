@@ -5,7 +5,7 @@ description: c0ffee's adapted end-to-end slice pipeline — read a Linear ticket
 
 # Ship a c0ffee slice
 
-The generic `ship-slice` skill assumes GitHub Issues + temper + `/peer-review`. **c0ffee has none of those.** Follow the phases below instead. Stack: TypeScript + Vite + Vitest + happy-dom (ADR-0006); pure functional core in `lib/`, custom-element shells in `toys/` (→ `elements/` once C0FFEE-24 lands), Lessons in `lessons/`. Commands: `npm run dev|build|test|typecheck`.
+The generic `ship-slice` skill assumes GitHub Issues + temper + `/peer-review`. **c0ffee has none of those.** Follow the phases below instead. Stack: TypeScript + Vite + Vitest + happy-dom (ADR-0006); pure functional core in `lib/`, custom-element shells in `elements/`, Lessons in `lessons/`. Commands: `npm run dev|build|test|typecheck`.
 
 Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **never `gh issue`**. Decisions live in **ADRs** (`docs/adr/`), the glossary in **CONTEXT.md**.
 
@@ -22,7 +22,7 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
 ### 3 — TDD (red → green, Vitest)
 - **Write failing tests first**, then `npm run test` to confirm **red**. If green without code, the test is too weak.
 - **Pure core** (`lib/color.ts`) → unit tests (input→output, assert behavior not internals).
-- **Element/shell behavior** → **happy-dom shell test** (`toys/elements.test.ts` pattern: mount the element, assert the ADR-0001 contract + the edit path). This is the C0FFEE-19 dividend — the shell IS unit-testable now; don't extract logic into pure functions *just* to test it (that tests implementation).
+- **Element/shell behavior** → **happy-dom shell test** (`elements/elements.test.ts` pattern: mount the element, assert the ADR-0001 contract + the edit path). This is the C0FFEE-19 dividend — the shell IS unit-testable now; don't extract logic into pure functions *just* to test it (that tests implementation).
 - Implement → full suite **green** (`npm run test`), `npm run typecheck` clean.
 
 ### 4 — Browser-verify (the body)

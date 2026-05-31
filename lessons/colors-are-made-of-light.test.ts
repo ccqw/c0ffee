@@ -21,7 +21,7 @@ describe('Lesson page (colors-are-made-of-light.html)', () => {
 
   it('wears the Site banner and loads its element module', () => {
     expect(html).toContain('<c0ffee-banner>');
-    expect(html).toMatch(/toys\/banner\.ts/);
+    expect(html).toMatch(/elements\/banner\.ts/);
   });
 
   it('keeps the pinned Companion console intact', () => {
@@ -34,12 +34,10 @@ describe('Lesson page (colors-are-made-of-light.html)', () => {
   });
 
   it('does not resurrect retired Toy-era vocabulary', () => {
-    // Strip the module <script>s first: `toys/*.ts` are architectural paths (the
-    // dir moves to elements/ in C0FFEE-24), not user-facing copy, so they must
-    // not trip the bare "toy(s)" guard.
-    const copy = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    // After C0FFEE-24 the element modules live under `elements/`, so no script
+    // path collides with the bare "toy(s)" guard — the raw HTML is checked directly.
     for (const retired of [/\btoys?\b/i, /toybox/i, /playground/i, /\bmirror\b/i, /\bgallery\b/i]) {
-      expect(copy).not.toMatch(retired);
+      expect(html).not.toMatch(retired);
     }
   });
 });
