@@ -42,7 +42,7 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
 
 ### 7 — Peer review (ollama, not /peer-review)
 - Use the **`ollama-peer-review`** skill (`/peer-review` is **not installed** here). Host `100.78.49.57:11434`, model **`gemma4:31b`** (set `OLLAMA_MODEL=gemma4:31b`; the skill's `gemma3:27b` default is NOT on the box). Allow a cold-load minute or two if the model isn't already resident — switching models on the box is not instant.
-- **Triage hard** — these models hallucinate. `qwen3-coder-next:latest` returned a confident `BLOCK` on C0FFEE-22 built entirely on two invented bugs (claimed an arrow-field class method loses `this`; claimed `parseHex` throws when it returns null) — gemma4:31b reviewed the same diff and correctly said SHIP, which is why it's the default reviewer now. (Earlier, on C0FFEE-19, the model invented a CRIT the passing build refuted.) Cross-check every finding against the diff before acting.
+- **Triage hard** — these models hallucinate, `qwen` especially. `qwen3-coder-next:latest` returned a confident `BLOCK` on C0FFEE-22 built entirely on two invented bugs (claimed an arrow-field class method loses `this`; claimed `parseHex` throws when it returns null) — gemma4:31b reviewed the same diff and correctly said SHIP, which is why it's the trusted default reviewer now. gemma is far more reliable but not infallible (it once flagged a non-existent malformed `</span>` on C0FFEE-26). Cross-check every finding against the diff before acting.
 - Skip for XS / docs-only.
 
 ### 8 — Merge (mind the classifier)
