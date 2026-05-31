@@ -14,4 +14,4 @@ The color math lives in `lib/color.js` as **pure functions** (hex parse/format, 
 ## Consequences
 
 - Contributors need Node installed to run tests (not to run or deploy the site).
-- Pure functions are the tested surface; Toys are checked manually via their Playgrounds for v1 (no DOM test harness yet).
+- Pure functions are the tested surface; interactives were checked manually via a solo page for v1 (no DOM test harness then — ADR-0006 later added happy-dom shell tests).

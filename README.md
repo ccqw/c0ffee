@@ -9,17 +9,17 @@ Live at **[c0ffee.cafe](https://c0ffee.cafe)** (GitHub Pages).
 ## How it's built
 
 - **TypeScript, built with Vite.** Pages are hand-authored HTML; the TypeScript modules are bundled by Vite into `dist/`, which is what GitHub Pages publishes (ADR-0006).
-- **Toys are Web Components.** Each toy (e.g. `<c0ffee-mirror>`) is a self-contained custom element. A page just imports it and drops in the tag.
+- **Interactives are Web Components.** Each one (e.g. `<c0ffee-console>`) is a self-contained custom element. A page just imports it and drops in the tag.
 - **One color brain.** `lib/color.ts` holds the pure color math (hex parse/format, RGB↔HSV, legibility) and the domain types (`Rgb`, `Hsv`, the ADR-0001 `ColorInterface`); see the architecture below.
 
 ## Architecture
 
 The design language lives in [`CONTEXT.md`](./CONTEXT.md). Key decisions are recorded as ADRs in [`docs/adr/`](./docs/adr/):
 
-- **0001** — uniform Toy color interface (attribute/URL in, property + event out)
+- **0001** — uniform Color value interface (attribute/URL in, property + event out)
 - **0002** — Shadow DOM isolation + shared design tokens (`tokens.css`)
 - **0003** — functional core / imperative shell (the `node --test` / no-build half superseded by 0006)
-- **0004** — scroll-driven lesson beats with a pinned companion mirror
+- **0004** — scroll-driven lesson beats with a pinned Companion console
 - **0005** — mobile-first responsive layout
 - **0006** — TypeScript build (Vite + Vitest + happy-dom), superseding ADR-0003's no-build constraint
 

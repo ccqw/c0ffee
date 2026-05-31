@@ -6,24 +6,24 @@ Ideas deferred past v1, kept here so they're remembered without bloating the v1 
 
 The thinnest slice that exercises every architectural layer end-to-end:
 
-- **`<c0ffee-mirror>`** — the flagship: Swatch, three Channel swatches, Venn palette, RGB panel + HSV panel, two-way bound through one Color value, seeded by Hex color link.
-- **`<c0ffee-swatch>`** — inline swatch (chip): mode A (swatch + hex) / mode C (painted label), uniform `{hex} · click to load` tooltip, click loads the Companion mirror.
-- **One Lesson** — "Colors are made of light" (adding R/G/B light → primaries, white, black), pinned Companion mirror on the left, prose scrolling on the right.
-- **Toybox** — landing grid.
+- **`<c0ffee-console>`** — the flagship Color console: Swatch, three Channel swatches, Venn palette, RGB panel + HSV panel, two-way bound through one Color value, seeded by Hex color link.
+- **`<c0ffee-swatch>`** — inline swatch (chip): mode A (swatch + hex) / mode C (painted label), uniform `{hex} · click to load` tooltip, click loads the Companion console.
+- **One Lesson** — "Colors are made of light" (adding R/G/B light → primaries, white, black), pinned Companion console on the left, prose scrolling on the right.
+- **Menu** — the grid linking to interactives and Lessons (its own address, not the landing page).
 - **`lib/color.ts`** — functional core (hex parse/format, rgb↔hsv, sticky-hue helper, `bestTextColor`), tested with Vitest.
 - **`tokens.css`** — design tokens.
 
-## v2 — the other launch toys
+## v2 — the other launch interactives
 
 These were scoped then shelved to protect the thin slice. Bring back next.
 
 - **`<c0ffee-guess>` — guess-the-hex game.** Random target Swatch → player types a 6-digit guess → reveal target vs guess with per-channel closeness, + "new color" button. *Later polish:* streaks/score, difficulty modes (grayscale-only, primaries-only), nearest-CSS-name hints ("ooh, close to teal").
 - **`<c0ffee-blender>` — two-color blender.** Two endpoint Color values (attribute-seeded + user-adjustable) with an interpolation slider + gradient strip. v2 = RGB interpolation. *Later:* **HSV-path blending** — the contrast between RGB blend (`FF0000`→`00FF00` through muddy `808000`) and HSV-around-the-wheel (through vivid `FFFF00`) is its own great lesson.
 
-## Toy backlog (unscoped)
+## Interactive backlog (unscoped)
 
 - **Hexword gallery/finder** — browse/validate real hexwords (C0FFEE, FACADE, 0FF1CE…). On-brand with the name; pure delight. Could double as a generator (find words within an edit-distance of a target hue).
-- **HSV picker square** — the "Photoshop picker": 2D saturation×value square + hue strip. A more tactile way to drive the mirror.
+- **HSV picker square** — the "Photoshop picker": 2D saturation×value square + hue strip. A more tactile way to drive the console.
 - **Channel decomposition viewer** — a color split into its R/G/B contributions as stacked light, emphasizing the "16s and 1s" of each hex pair.
 
 ## Lesson backlog
@@ -35,8 +35,8 @@ These were scoped then shelved to protect the thin slice. Bring back next.
 
 ## Notation / feature backlog
 
-- **RGB and HSV Color links** — alternate notations of the Color link (`?rgb=0,200,133`, `?hsv=…`), extending the seed/reflect layer without touching the value or event shape (per ADR-0001).
-- **Live URL reflection inside Lessons** — let a Lesson designate one Toy (likely the Companion mirror) as the URL owner so its state is shareable, beyond the Playground-only default (ADR-0001).
+- **RGB and HSV Color links** — alternate notations of the Color link (RGB triples, HSV) carried in the hash and sniffed by shape, extending the seed/reflect layer without touching the value or event shape (per ADR-0001; hash-only per its 2026-05-31 amendment).
+- **Live URL reflection inside Lessons** — let a Lesson opt one interactive (likely the Companion console) in as the URL owner so its state is shareable. Now an opt-in property of the ADR-0001 Color value interface (see the 2026-05-31 amendment), not a page-type default.
 - **Custom styled tooltip** — replace native `title=` with a styled tooltip that also works on touch (tap-to-reveal), so mode-C chips reveal their hex on mobile.
 - **Site-wide theming demo** — show off `tokens.css` by offering a couple of alternate palettes (the design-token "rebrand from one file" trick, made visible).
 
@@ -44,4 +44,4 @@ These were scoped then shelved to protect the thin slice. Bring back next.
 
 - **CI** — run `npm test` (Vitest) on push (GitHub Action) and/or a pre-commit hook, gating the functional core and the shell tests.
 - **Custom domain** — wire `c0ffee.cafe` to GitHub Pages (CNAME) when ready.
-- **DOM/interaction tests** — a lightweight harness for Toy behavior (beyond the pure-core unit tests), if/when toys get complex enough to warrant it.
+- **DOM/interaction tests** — a lightweight harness for interactive behavior (beyond the pure-core unit tests), if/when interactives get complex enough to warrant it. (happy-dom shell tests, ADR-0006, already cover the basics.)
