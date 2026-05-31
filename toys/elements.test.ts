@@ -252,3 +252,94 @@ test('<c0ffee-console> WITHOUT reflect never touches the URL', () => {
 
   el.remove();
 });
+
+// C0FFEE-23 — the `presentation` attribute (full / companion). One element, two
+// layouts (ADR-0002: a presentation is an attribute on the one console, never a
+// second element). `full` (default) shows all parts; `companion` is the minimal
+// compact layout — fewer parts on screen, no rich reveal-drawer (that's C0FFEE-18).
+// The HSV panel (the secondary color model) is the part `companion` drops, so its
+// visibility is the testable shadow-DOM difference. The Color value + sticky-hue
+// are state, not layout, so switching presentation must never disturb them.
+
+// presentation must be present BEFORE connectedCallback runs, like `reflect`, so
+// this can't reuse mount() (which only seeds `hex`).
+function mountPresentation(presentation: string, hex?: string): HTMLElement & ColorInterface {
+  const el = document.createElement('c0ffee-console');
+  el.setAttribute('presentation', presentation);
+  if (hex !== undefined) el.setAttribute('hex', hex);
+  document.body.appendChild(el);
+  return el as HTMLElement & ColorInterface;
+}
+
+const hsvPanel = (el: HTMLElement): HTMLElement =>
+  el.shadowRoot?.getElementById('hsv-panel') as HTMLElement;
+
+test('<c0ffee-console> defaults to the full presentation — the HSV panel is visible', () => {
+  const el = mount('c0ffee-console', 'C0FFEE'); // no presentation attribute
+  expect(hsvPanel(el).hidden).toBe(false);
+});
+
+test('<c0ffee-console presentation="companion"> renders the compact layout — HSV panel hidden', () => {
+  const el = mountPresentation('companion', 'C0FFEE');
+  expect(hsvPanel(el).hidden).toBe(true);
+  el.remove();
+});
+
+test('<c0ffee-console> an unknown presentation value falls back to full', () => {
+  const el = mountPresentation('bogus', 'C0FFEE');
+  expect(hsvPanel(el).hidden).toBe(false); // unknown ≠ companion → full
+  el.remove();
+});
+
+test('<c0ffee-console> switching presentation at runtime preserves the Color value and sticky hue', () => {
+  // Seed a gray (no hue) and drive an HSV hue edit: the value stays gray but the
+  // sticky hue parks at 200° (the exact jitter-prone case ADR-0005 warns about).
+  const el = mount('c0ffee-console', '808080');
+  const h = el.shadowRoot?.getElementById('sl-h') as HTMLInputElement;
+  h.value = '200';
+  h.dispatchEvent(new Event('input', { bubbles: true }));
+  const valueBefore = { ...el.value };
+  const hueBefore = (el.shadowRoot?.getElementById('dec-h') as HTMLElement).textContent;
+
+  el.setAttribute('presentation', 'companion'); // observed attribute → re-layout
+  expect(hsvPanel(el).hidden).toBe(true);
+  el.setAttribute('presentation', 'full');
+  expect(hsvPanel(el).hidden).toBe(false);
+
+  expect(el.value).toEqual(valueBefore); // value untouched by the layout switch
+  expect((el.shadowRoot?.getElementById('dec-h') as HTMLElement).textContent)
+    .toBe(hueBefore); // sticky hue held — no reset, no jitter
+});
+
+test('<c0ffee-console> keeps companion-specific styling so "compact" can never silently revert to full', () => {
+  // happy-dom does no layout, so the narrowing itself is browser-verified, not
+  // asserted here. This anchors the *mechanism*: if the :host([presentation=...])
+  // selector is renamed or dropped, companion silently reverts to full-width while
+  // every other test stays green — the one way a downstream Companion console could
+  // regress invisibly. Assert the selector exists, not an exact pixel width.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const css = el.shadowRoot?.querySelector('style')?.textContent ?? '';
+  expect(css).toContain(':host([presentation="companion"])');
+});
+
+test('<c0ffee-console presentation="companion"> still honours the full ADR-0001 contract', () => {
+  const el = mountPresentation('companion', '3A7BD5');
+
+  // read-out (pull) is identical in companion
+  expect(el.hex).toBe('3A7BD5');
+  expect(el.value).toEqual({ r: 58, g: 123, b: 213 });
+
+  // notify-out (push): an RGB edit still mutates the value and emits a composed event
+  let detail: ColorChangeDetail | null = null;
+  document.body.addEventListener('colorchange', (e) => {
+    detail = (e as CustomEvent<ColorChangeDetail>).detail;
+  });
+  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  slider.value = '255';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+
+  expect(el.value.r).toBe(255);
+  expect(detail).not.toBeNull();
+  expect(detail!).toMatchObject({ r: 255, g: 123, b: 213, hex: 'FF7BD5' });
+  el.remove();
+});

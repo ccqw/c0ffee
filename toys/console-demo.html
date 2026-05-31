@@ -13,21 +13,32 @@
       padding: 40px 16px;
     }
     h1 { font-size: 18px; font-weight: 600; color: #888; }
-    .pair { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; }
-    .note { color: #777; font-size: 13px; text-align: center; max-width: 40ch; }
+    .pair { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+    figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    figcaption { color: #777; font-size: 13px; }
+    .note { color: #777; font-size: 13px; text-align: center; max-width: 44ch; }
   </style>
 </head>
 <body>
-  <h1>&lt;c0ffee-console&gt; — C0FFEE-2 demo</h1>
+  <h1>&lt;c0ffee-console&gt; — presentations (C0FFEE-23)</h1>
   <div class="pair">
-    <!-- seeded from attribute -->
-    <c0ffee-console hex="3A7BD5"></c0ffee-console>
-    <!-- a second instance proves per-instance state isolation -->
-    <c0ffee-console hex="C0FFEE"></c0ffee-console>
+    <!-- full: all parts visible — the solo-view layout (default) -->
+    <figure>
+      <c0ffee-console hex="3A7BD5" presentation="full"></c0ffee-console>
+      <figcaption><code>presentation="full"</code></figcaption>
+    </figure>
+    <!-- companion: the compact band a Lesson pins — HSV panel dropped -->
+    <figure>
+      <c0ffee-console hex="3A7BD5" presentation="companion"></c0ffee-console>
+      <figcaption><code>presentation="companion"</code></figcaption>
+    </figure>
   </div>
-  <p class="note">Two consoles, independent state. Drag sliders or type hex pairs.
-     The left is seeded <code>#3A7BD5</code>; the right <code>#C0FFEE</code>.
-     A bad <code>hex</code> attribute falls back to the default blue.</p>
+  <p class="note">One element, two presentations (ADR-0002). Both seeded
+     <code>#3A7BD5</code> with independent state — drag sliders or type hex pairs.
+     <strong>Full</strong> shows every part; <strong>companion</strong> is the
+     compact layout for a Lesson's pinned console — fewer parts (no HSV panel),
+     narrower card. The Color value and sticky hue survive a live presentation
+     switch.</p>
   <script type="module" src="./console.ts"></script>
 </body>
 </html>
