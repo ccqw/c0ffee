@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>c0ffee — a color toybox</title>
-  <meta name="description" content="Interactive toys and lessons for how color works in computer graphics, with a love for hex.">
+  <title>c0ffee — the Color console</title>
+  <meta name="description" content="One color, every way at once — a swatch, the additive Venn palette, and RGB + HSV controls, all kept in sync. Share any color by its link.">
   <link rel="stylesheet" href="tokens.css">
   <style>
     * { box-sizing: border-box; }
@@ -13,87 +13,38 @@
       background: var(--c0ffee-bg);
       color: var(--c0ffee-fg);
       font-family: var(--c0ffee-font);
-      line-height: 1.6;
       min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center;
-      padding: 8vh 6vw 6vh;
-    }
-
-    /* Hero */
-    .wordmark {
-      font-size: clamp(2.4rem, 9vw, 4.5rem); font-weight: 700; letter-spacing: 2px;
-      margin: 0;
-    }
-    .wordmark .hex { color: var(--c0ffee-accent); }
-    .tagline { color: #9aa; max-width: 38ch; text-align: center; margin: .6em 0 0; }
-    .sub { color: #667; font-size: 13px; margin-top: .4em; }
-
-    /* Grid of toys/lessons */
-    .grid {
-      display: grid; gap: 18px; margin-top: 3rem; width: 100%; max-width: 760px;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    }
-    .card {
       display: flex; flex-direction: column;
-      background: var(--c0ffee-panel, #161616);
-      border: 1px solid #222; border-radius: var(--c0ffee-radius, 10px);
-      overflow: hidden; text-decoration: none; color: inherit;
-      transition: transform .12s, border-color .12s;
-    }
-    .card:hover { transform: translateY(-3px); border-color: #3a3a3a; }
-    .card .art { height: 110px; }
-    .card .body { padding: 16px 18px 18px; }
-    .card .kind { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #667; }
-    .card h2 { font-size: 19px; margin: .25em 0 .35em; }
-    .card p { margin: 0; color: #9aa; font-size: 14px; }
-
-    /* Card art: the lesson shows the additive primaries; the mirror shows channels. */
-    .art.lesson {
-      background:
-        radial-gradient(circle at 38% 42%, rgba(255,0,0,.9), transparent 38%),
-        radial-gradient(circle at 62% 42%, rgba(0,255,0,.9), transparent 38%),
-        radial-gradient(circle at 50% 66%, rgba(0,0,255,.9), transparent 38%),
-        #050505;
-    }
-    .art.mirror {
-      background: linear-gradient(90deg, #c0392b 0 33%, #1e8449 33% 66%, #2471a3 66%);
     }
 
-    footer { margin-top: auto; padding-top: 3rem; color: #556; font-size: 12px; text-align: center; }
-    footer a { color: #889; }
+    /* The site root IS the flagship Color console shown solo (CONTEXT.md): the
+       Site banner is quiet chrome at the top of the document (normal flow, not
+       sticky), and the console owns the rest of the viewport — centered, with
+       no prose. "Full-bleed" here is the page-type sense (the one interactive
+       owns the whole page, no cards or prose framing it), not zero-margin: the
+       console is a fixed-width card, so the padding is just breathing room that
+       keeps it off the edges on a narrow viewport. A visitor lands directly in
+       the interactive. */
+    main {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 4vh 6vw 6vh;
+    }
   </style>
 </head>
 <body>
-  <h1 class="wordmark">#<span class="hex">C0FFEE</span></h1>
-  <p class="tagline">A color toybox — interactive toys and lessons for how color
-     works in computer graphics, with a love for hex.</p>
-  <p class="sub">#C0FFEE is itself a valid color: a pale mint. ☕</p>
+  <c0ffee-banner></c0ffee-banner>
 
-  <div class="grid">
-    <a class="card" href="lessons/colors-are-made-of-light.html">
-      <div class="art lesson"></div>
-      <div class="body">
-        <span class="kind">Lesson</span>
-        <h2>Colors are made of light</h2>
-        <p>How screens build every color by adding red, green, and blue light —
-           with a canvas that paints as you read.</p>
-      </div>
-    </a>
+  <!-- The flagship shown solo. `presentation="full"` (C0FFEE-23) shows every part;
+       `reflect` (C0FFEE-22) opts this console into owning location.hash, so a
+       shared c0ffee.cafe/#<hex> link seeds it on load, paste-and-enter re-seeds
+       live, and edits write the canonical Color link back. Both behaviors live
+       inside the element — the root is a thin host with no bespoke wiring. -->
+  <main>
+    <c0ffee-console presentation="full" reflect></c0ffee-console>
+  </main>
 
-    <a class="card" href="play/console.html">
-      <div class="art mirror"></div>
-      <div class="body">
-        <span class="kind">Playground</span>
-        <h2>The mirror</h2>
-        <p>One color, four ways: a swatch, the additive Venn, and RGB + HSV
-           controls. Share any color by its link.</p>
-      </div>
-    </a>
-  </div>
-
-  <footer>
-    More toys & lessons brewing.
-    &nbsp;·&nbsp; <a href="https://github.com/ccqw/c0ffee">source on GitHub</a>
-  </footer>
+  <script type="module" src="./toys/banner.ts"></script>
+  <script type="module" src="./toys/console.ts"></script>
 </body>
 </html>
