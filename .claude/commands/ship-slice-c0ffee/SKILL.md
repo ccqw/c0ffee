@@ -46,6 +46,7 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
 - Skip for XS / docs-only.
 
 ### 8 — Merge (mind the classifier)
+- **Bring it up on the dev server FIRST, then ask.** Before requesting merge approval, start `npm run dev` (background) on the feature branch and hand Caitlin the local URL(s) to look at — the home/slice route plus any relevant state (e.g. a `/#hex` link to exercise). She will almost always want to *see* the slice in the real app before approving, so make serving-it part of the merge ask, not a thing she has to request. Keep the server running until the merge is done.
 - **Caitlin approves the merge** ("the code looks great, approved" counts). Don't auto-merge.
 - **CLASSIFIER GOTCHA — each external action is its OWN turn, after a plain verifying read.** Never bundle PR-create + merge + Linear-Done + verification into one batch — the auto-mode safety classifier reads it as fabrication.
   - Turn A: `gh pr merge N --squash --delete-branch`.
