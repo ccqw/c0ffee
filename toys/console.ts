@@ -21,6 +21,12 @@ const DEFAULT: Rgb = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake min
 type RgbKey = keyof Rgb; // 'r' | 'g' | 'b'
 type HsvKey = keyof Hsv; // 'h' | 's' | 'v'
 
+// A presentation is a named preset of which parts the one console renders and how
+// (ADR-0002: never a separate element). `full` shows everything (the solo view);
+// `companion` is the minimal compact layout a Lesson pins (C0FFEE-23) — fewer
+// parts, no reveal-drawer (that's deferred to C0FFEE-18). Unknown values → full.
+type Presentation = 'full' | 'companion';
+
 interface Channel {
   key: RgbKey;
   label: string;
@@ -37,7 +43,7 @@ const CHANNELS: Channel[] = [
 const hexPair = (n: number): string => n.toString(16).toUpperCase().padStart(2, '0');
 
 class C0ffeeConsole extends HTMLElement implements ColorInterface {
-  static observedAttributes = ['hex'];
+  static observedAttributes = ['hex', 'presentation'];
 
   // Source of truth. Seeded from the `hex` attribute in connectedCallback.
   // Private + exposed read-only via the `value` getter so views (and outside
@@ -65,6 +71,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
       this._seedFromAttribute();
     }
     this._build();
+    this._applyPresentation(); // show/hide parts for the chosen presentation
     this._render();
   }
 
@@ -75,9 +82,17 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   }
 
   attributeChangedCallback(name: string): void {
-    if (name === 'hex' && this.root.childElementCount) {
+    // Guard on a built shadow root: pre-connect setAttribute fires this before
+    // _build(), and connectedCallback applies both seed and presentation itself.
+    if (!this.root.childElementCount) return;
+    if (name === 'hex') {
       this._seedFromAttribute();
       this._render();
+    } else if (name === 'presentation') {
+      // Re-layout only: show/hide parts, never re-seed. The Color value and the
+      // sticky hsv are state, not layout, so a presentation switch leaves both
+      // untouched (no reset, no jitter — ADR-0005's compact-presentation promise).
+      this._applyPresentation();
     }
   }
 
@@ -148,6 +163,25 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     if (location.hash !== next) history.replaceState(null, '', next);
   };
 
+  // --- presentation (ADR-0002 / ADR-0005): which parts this one element shows ---
+
+  // Read the presentation off the attribute; only 'companion' opts out of full,
+  // so a missing/unknown value is always the safe `full` default (never a broken,
+  // half-hidden layout from a typo).
+  private get _presentation(): Presentation {
+    return this.getAttribute('presentation') === 'companion' ? 'companion' : 'full';
+  }
+
+  // Apply the current presentation by toggling part visibility only. `companion`
+  // drops the HSV panel (the secondary color model) for a compact band; `full`
+  // shows it. Uses `hidden` (not removal) so the panel's state stays live and
+  // correct underneath — switching back to full reveals the right HSV instantly,
+  // and the Color value is never disturbed. The narrower card width is pure CSS
+  // (`:host([presentation="companion"])`).
+  private _applyPresentation(): void {
+    this._el('hsv-panel').hidden = this._presentation === 'companion';
+  }
+
   // --- one-time DOM construction ---
   private _build(): void {
     this.root.innerHTML = `
@@ -206,6 +240,12 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         .dec { width: 40px; text-align: right; color: #999; font-size: 13px; }
         .divider { text-align: center; color: #555; font-size: 12px; padding: 2px 0 8px; }
         .lbl.hsv { color: var(--c0ffee-accent, #C0FFEE); }
+        /* companion presentation (C0FFEE-23): a compact band for a Lesson's pinned
+           Companion console. The HSV panel is dropped in JS (#hsv-panel[hidden]);
+           the card narrows and the swatch shrinks so it reads as compact, not just
+           shorter. Minimal by design — the rich reveal-drawer is C0FFEE-18. */
+        :host([presentation="companion"]) .card { width: 240px; }
+        :host([presentation="companion"]) .swatch { min-height: 110px; }
       </style>
       <div class="card">
         <div class="stage">
@@ -236,24 +276,26 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
               <code class="dec" id="dec-${c.key}"></code>
             </label>`).join('')}
         </div>
-        <div class="divider">↕ same color ↕</div>
-        <div class="sliders">
-          <label class="row">
-            <span class="lbl hsv">H</span>
-            <input type="range" min="0" max="360" id="sl-h"
-                   style="background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);">
-            <code class="dec" id="dec-h"></code>
-          </label>
-          <label class="row">
-            <span class="lbl hsv">S</span>
-            <input type="range" min="0" max="100" id="sl-s">
-            <code class="dec" id="dec-s"></code>
-          </label>
-          <label class="row">
-            <span class="lbl hsv">V</span>
-            <input type="range" min="0" max="100" id="sl-v">
-            <code class="dec" id="dec-v"></code>
-          </label>
+        <div class="hsv-panel" id="hsv-panel">
+          <div class="divider">↕ same color ↕</div>
+          <div class="sliders">
+            <label class="row">
+              <span class="lbl hsv">H</span>
+              <input type="range" min="0" max="360" id="sl-h"
+                     style="background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);">
+              <code class="dec" id="dec-h"></code>
+            </label>
+            <label class="row">
+              <span class="lbl hsv">S</span>
+              <input type="range" min="0" max="100" id="sl-s">
+              <code class="dec" id="dec-s"></code>
+            </label>
+            <label class="row">
+              <span class="lbl hsv">V</span>
+              <input type="range" min="0" max="100" id="sl-v">
+              <code class="dec" id="dec-v"></code>
+            </label>
+          </div>
         </div>
       </div>`;
 
