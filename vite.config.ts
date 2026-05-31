@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
-// c0ffee is a multi-page site of hand-authored HTML (ADR-0006): the playground,
+// c0ffee is a multi-page site of hand-authored HTML (ADR-0006): the solo console,
 // the lesson, and the element demos are each their own document. Every page must
 // be a named build entry or Vite drops it from dist/. Pages live at their existing
 // paths (project root is the Vite root), so the deployed URLs are unchanged.

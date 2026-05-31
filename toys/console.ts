@@ -265,7 +265,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   }
 
   // Notify-out half of the interface (ADR-0001). composed:true so the event
-  // escapes the Shadow DOM; a Playground listens to reflect state to the URL.
+  // escapes the Shadow DOM; a page that opts in listens to reflect state to the URL.
   private _emitChange(): void {
     const detail: ColorChangeDetail = { ...this._value, hex: formatHex(this._value) };
     this.dispatchEvent(new CustomEvent<ColorChangeDetail>('colorchange', {
