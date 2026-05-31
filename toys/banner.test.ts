@@ -27,7 +27,7 @@ describe('<c0ffee-banner> (the Site banner)', () => {
     expect(root.textContent).toContain('c0ffee');
   });
 
-  it('makes the wordmark the home link (the only nav affordance)', async () => {
+  it('makes the wordmark the home link (brand-only — no nav yet)', async () => {
     const root = await mount();
     const links = root.querySelectorAll('a');
     // exactly one link, pointing home — no Menu/nav links yet (deferred)

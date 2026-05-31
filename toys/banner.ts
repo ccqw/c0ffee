@@ -47,18 +47,20 @@ class C0ffeeBanner extends HTMLElement {
         /* The "touch of #C0FFEE": a small accent on the leading zero only — a hint
            of the namesake color, not a painted patch. */
         .accent { color: var(--c0ffee-accent, #C0FFEE); }
-        /* The coffee logo: a small cup outline + a wisp of steam, drawn in the
-           current (dimmed) text color so it reads as quiet chrome too. */
+        /* The coffee logo: a cup with rising steam (the canonical Lucide "coffee"
+           glyph), drawn in the current (dimmed) text color so it reads as quiet
+           chrome too. */
         .logo { width: 1.15em; height: 1.15em; flex: none; }
       </style>
       <a class="wordmark" href="/" aria-label="c0ffee — home">
         <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
              aria-hidden="true">
-          <path d="M4 11h13v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/>
-          <path d="M17 12h2a2 2 0 0 1 0 4h-2"/>
-          <path d="M8 7c0-1 1-1.5 1-2.5S8 3 8 2"/>
-          <path d="M12 7c0-1 1-1.5 1-2.5S12 3 12 2"/>
+          <path d="M17 8h1a4 4 0 1 1 0 8h-1"/>
+          <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
+          <line x1="6" x2="6" y1="2" y2="4"/>
+          <line x1="10" x2="10" y1="2" y2="4"/>
+          <line x1="14" x2="14" y1="2" y2="4"/>
         </svg>
         <span>c<span class="accent">0</span>ffee</span>
       </a>`;
