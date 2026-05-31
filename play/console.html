@@ -24,28 +24,17 @@
 <body>
   <h1>#<span class="hex">C0FFEE</span> · console playground</h1>
 
-  <c0ffee-console id="console"></c0ffee-console>
+  <!-- `reflect` opts this console into owning the URL: it seeds from the hash on
+       load, re-seeds on paste-and-enter (hashchange), and writes the canonical link
+       as the color moves — all inside the element now (C0FFEE-22). The page no longer
+       hand-rolls a listener, and the legacy ?hex= query is retired. -->
+  <c0ffee-console reflect></c0ffee-console>
 
   <p class="share">Your color lives in this page's URL — copy the address to share it.
-     <br>Try <code>?hex=FF6600</code> or <code>#E91E63</code>.</p>
+     <br>Try <code>#E91E63</code>, or paste any hex into the address bar.</p>
 
   <script type="module">
     import '../toys/console.ts';
-
-    const consoleEl = document.getElementById('console');
-
-    // --- seed once from the URL (Hex color link), bad/missing -> console's default ---
-    const fromQuery = new URLSearchParams(location.search).get('hex');
-    const fromHash = location.hash.slice(1);
-    const seed = (fromQuery || fromHash || '').replace(/^#/, '').trim();
-    if (seed) consoleEl.setAttribute('hex', seed); // console tolerates junk & falls back
-
-    // --- reflect live state to the URL hash (write-only; no hashchange listener,
-    //     so there's no seed/echo loop). Playground-only concern, not in the element. ---
-    consoleEl.addEventListener('colorchange', (e) => {
-      const next = '#' + e.detail.hex;
-      if (location.hash !== next) history.replaceState(null, '', next);
-    });
   </script>
 </body>
 </html>

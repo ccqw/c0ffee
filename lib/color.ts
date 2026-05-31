@@ -136,6 +136,35 @@ export function formatHex({ r, g, b }: Rgb): Hex {
   return (pair(r) + pair(g) + pair(b)) as Hex;
 }
 
+// --- Color link codec (C0FFEE-22) ---
+// A Color link is a Color address carried in a URL hash (CONTEXT.md). These two
+// pure fns are the hash-only, total-for-hex codec; the Named/RGB/HSV notations
+// are future seams that extend the parser's shape-sniff without touching callers.
+
+// parseColorLink(fragment) -> Rgb | null
+// Reads a bare URL hash fragment (the part after '#'; a leading '#' is tolerated
+// since location.hash includes it) and sniffs the address BY SHAPE: a run of hex
+// digits is a Hex address. The CSS-keyword/Named-address branch is a deferred open
+// seam — all-hex and keyword inputs are character-disjoint, so a keyword falls
+// through to null today rather than being misread as hex. Malformed -> null.
+export function parseColorLink(fragment: string | null | undefined): Rgb | null {
+  if (typeof fragment !== 'string') return null;
+  const bare = fragment.replace(/^#/, '');
+  // Shape sniff: all hex digits -> Hex address. parseHex enforces 3-or-6 length,
+  // so an all-hex-but-wrong-length fragment (#12) still resolves to null.
+  if (/^[0-9a-fA-F]+$/.test(bare)) return parseHex(bare);
+  // Named-address (CSS keyword) branch — deferred (CONTEXT.md → Color link). null.
+  return null;
+}
+
+// formatColorLink({r,g,b}) -> "#RRGGBB"
+// Writes the canonical Color link: the uppercase Hex address prefixed with the
+// URL fragment delimiter '#'. The '#' is the fragment delimiter, not a hex sigil —
+// it only coincides with CSS's hex '#'. Hash-only: never a '?hex=' query.
+export function formatColorLink(rgb: Rgb): string {
+  return '#' + formatHex(rgb);
+}
+
 // sanitizeHexInput(raw, maxLen) -> filtered uppercase hex string
 // The boundary filter for a hex digit box: drop everything that isn't a hex
 // digit, clamp to maxLen, normalize to the console's uppercase display. What

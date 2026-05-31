@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, bestTextColor, sanitizeHexInput } from './color.ts';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, bestTextColor, sanitizeHexInput, parseColorLink, formatColorLink } from './color.ts';
 
 // HSV uses h in [0,360), s and v in [0,1]. Helper for approximate comparison.
 const close = (a: number, b: number, eps = 1e-6): boolean => Math.abs(a - b) <= eps;
@@ -111,4 +111,63 @@ test('sanitizeHexInput: kills the historical parseInt leniency', () => {
   // values sneak through. The filter strips the junk char instead of prefix-parsing.
   expect(sanitizeHexInput('1g', 2)).toBe('1');
   expect(sanitizeHexInput('1g3', 2)).toBe('13');
+});
+
+// C0FFEE-22 — the Color link codec. A bare URL fragment in, a Color value out
+// (parse), or a Color value in, the canonical "#HEX" link out (format). The
+// parser sniffs by SHAPE (CONTEXT.md → Color link): all-hex digits → Hex
+// address; the CSS-keyword/Named-address branch is a deferred open seam.
+
+test('parseColorLink: a bare 6-digit fragment becomes an {r,g,b} value', () => {
+  expect(parseColorLink('3A7BD5')).toEqual({ r: 58, g: 123, b: 213 });
+});
+
+test('parseColorLink: tolerates a leading # (the URL fragment delimiter)', () => {
+  // location.hash hands us "#3A7BD5"; the '#' is the fragment delimiter, not part
+  // of the address, so the codec strips it before sniffing.
+  expect(parseColorLink('#3A7BD5')).toEqual({ r: 58, g: 123, b: 213 });
+});
+
+test('parseColorLink: expands 3-digit shorthand (f0a -> FF00AA)', () => {
+  expect(parseColorLink('f0a')).toEqual({ r: 255, g: 0, b: 170 });
+});
+
+test('parseColorLink: malformed or unknown fragments return null', () => {
+  expect(parseColorLink('#zzz')).toBeNull();      // non-hex chars
+  expect(parseColorLink('#12')).toBeNull();       // all-hex but wrong length
+  expect(parseColorLink('12345')).toBeNull();     // all-hex but wrong length
+  expect(parseColorLink('')).toBeNull();          // empty fragment
+  expect(parseColorLink('#')).toBeNull();         // bare delimiter, nothing after
+  expect(parseColorLink(null)).toBeNull();        // not a string
+  expect(parseColorLink(undefined)).toBeNull();
+});
+
+test('parseColorLink: the sniff-by-shape boundary — a CSS keyword is the deferred seam, not hex', () => {
+  // 'dodgerblue' has non-hex letters, so it is NOT sniffed as a Hex address. The
+  // Named-address branch is an open seam (CONTEXT.md): deferred, so → null today,
+  // never misread as hex. (all-hex vs keyword are character-disjoint.)
+  expect(parseColorLink('dodgerblue')).toBeNull();
+});
+
+test('formatColorLink: an {r,g,b} value becomes a canonical #-prefixed uppercase link', () => {
+  expect(formatColorLink({ r: 58, g: 123, b: 213 })).toBe('#3A7BD5');
+});
+
+test('formatColorLink: zero-pads single-digit channels', () => {
+  expect(formatColorLink({ r: 0, g: 5, b: 16 })).toBe('#000510');
+});
+
+test('formatColorLink: emits a hash link only — never a ?hex= query', () => {
+  // The retired query form (?hex=…) must never be produced: the canonical link is
+  // hash-only (ADR-0001 amendment 2026-05-31). Guard the shape so a regression to
+  // query-emitting can't slip through the codec.
+  const link = formatColorLink({ r: 255, g: 102, b: 0 });
+  expect(link.startsWith('#')).toBe(true);
+  expect(link).not.toContain('?');
+  expect(link).not.toContain('hex=');
+});
+
+test('parseColorLink and formatColorLink round-trip through the # delimiter', () => {
+  const rgb = { r: 255, g: 102, b: 0 };
+  expect(parseColorLink(formatColorLink(rgb))).toEqual(rgb);
 });
