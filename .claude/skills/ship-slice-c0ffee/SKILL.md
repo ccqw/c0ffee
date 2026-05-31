@@ -51,10 +51,18 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
   - Turn A: `gh pr merge N --squash --delete-branch`.
   - Turn B: verify it landed (`gh pr view N --json state,mergedAt`), confirm the **deploy** run succeeded (`gh run watch …` — deploy IS the post-merge gate), then set the Linear issue **Done** (`mcp__linear__save_issue id:C0FFEE-N state:Done`).
 
-### 9 — Recommend next
+### 9 — Tag the release (semver)
+- **Every behavioral slice gets a version.** After the merge lands on `main`, bump `package.json` `version` and create an **annotated** git tag, then `git push origin main --follow-tags`.
+- **0.x rules** (we're pre-1.0, the console contract isn't frozen): a **feature** slice → **minor** (`0.2.0`→`0.3.0`); a **bugfix** slice → **patch** (`0.3.0`→`0.3.1`). Breaking changes also land as a minor while in 0.x. We hit `1.0.0` only when Caitlin freezes the public contract.
+- Invariant: **`package.json` version == the tag on that commit.** So bump + tag in the same commit (a tiny `chore: vX.Y.Z` commit straight to `main` is fine; it triggers a no-op deploy). Tag message = a short human changelog of what shipped.
+- **GitHub Releases only at milestones** (a meaningful chunk, e.g. "v2 console core complete"), not per slice — `gh release create vX.Y.0 --notes "…"`. Tags are the per-slice record; Releases are the user-facing moments.
+- v0.1.0 = the v1 launch (retroactive anchor on `3601316`); v0.2.0 = the v2 console-core baseline (folded in #19/#20/#17/#21, the pre-versioning work).
+
+### 10 — Recommend next
 - List open `ready-for-agent` Linear issues whose blockers are now closed; recommend the highest-leverage / smallest unblocked one.
 
 ## Conventions worth not relearning
 - **Demo-page hygiene:** a `*-demo.html` may ship to prod only if unlinked **and** paired with a removal ticket filed at creation. No orphaned demos.
 - **Branch off `main`, squash-merge, delete branch.** Keep `main` deployable.
-- **One slice = one Linear issue = one PR.**
+- **One slice = one Linear issue = one PR = one version tag.**
+- **Semver per slice** (see step 9): bump `package.json` + annotated tag; minor=feature, patch=bugfix in 0.x; `gh release` only at milestones.
