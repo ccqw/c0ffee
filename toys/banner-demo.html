@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>c0ffee-banner — demo</title>
+  <link rel="stylesheet" href="../tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--c0ffee-bg);
+      color: var(--c0ffee-fg);
+      font-family: var(--c0ffee-font);
+      min-height: 100vh;
+    }
+    /* A tall block of filler so there's something to scroll — the banner must
+       scroll away with it (it is not sticky). The Swatch comparison patch sits
+       partway down so you can eyeball "banner reads as chrome, not a Swatch". */
+    .filler { padding: 32px 6vw 60vh; max-width: 60ch; line-height: 1.8; color: #889; }
+    .filler h1 { color: #aab; font-size: 18px; }
+    .swatch {
+      width: 220px; height: 140px; border-radius: var(--c0ffee-radius);
+      background: #3A7BD5; margin: 24px 0; box-shadow: 0 6px 24px rgba(0,0,0,.4);
+    }
+    .cap { font-size: 13px; color: #667; }
+  </style>
+</head>
+<body>
+  <c0ffee-banner></c0ffee-banner>
+
+  <div class="filler">
+    <h1>&lt;c0ffee-banner&gt; — C0FFEE-26 demo</h1>
+    <p>The Site banner above is quiet chrome: a small coffee logo + the
+       <code>c0ffee</code> wordmark with a touch of <code>#C0FFEE</code> on the
+       leading zero. The wordmark links home (<code>/</code>). There is no nav
+       affordance yet — that's deferred until the Menu earns surfacing.</p>
+
+    <p>It is <strong>not sticky</strong>: scroll down and it leaves with the page.
+       On a short page (delete this filler) it simply stays put.</p>
+
+    <div class="swatch"></div>
+    <p class="cap">For contrast: <em>this</em> large painted patch is what a Swatch
+       looks like. The banner must never read like this — it stays dim and blends
+       into the background.</p>
+
+    <p>Scroll back up to bring the banner into view again.</p>
+  </div>
+
+  <script type="module" src="./banner.ts"></script>
+</body>
+</html>
