@@ -16,7 +16,7 @@
       line-height: 1.7;
     }
 
-    /* Flipped-Codecademy split: pinned mirror left, scrolling prose right. */
+    /* Flipped-Codecademy split: pinned console left, scrolling prose right. */
     .lesson { display: flex; align-items: flex-start; }
     .stage {
       position: sticky; top: 0;
@@ -59,7 +59,7 @@
     .footer { min-height: 60vh; display: flex; flex-direction: column; justify-content: center; color: #777; }
     .footer a { color: var(--c0ffee-accent); }
 
-    /* Mobile: stack — mirror docks to the top, prose flows beneath. */
+    /* Mobile: stack — console docks to the top, prose flows beneath. */
     @media (max-width: 720px) {
       .lesson { flex-direction: column; }
       .stage {
@@ -67,16 +67,16 @@
         border-right: none; border-bottom: 1px solid #1c1c1c; z-index: 5;
       }
       .prose { width: 100%; padding: 0 8vw; }
-      .stage c0ffee-mirror { transform: scale(.78); }
+      .stage c0ffee-console { transform: scale(.78); }
     }
   </style>
 </head>
 <body>
   <div class="lesson">
-    <!-- Pinned Companion mirror (data-companion marks it for the runtime). -->
+    <!-- Pinned Companion console (data-companion marks it for the runtime). -->
     <aside class="stage">
       <span class="kicker">the canvas</span>
-      <c0ffee-mirror data-companion hex="000000"></c0ffee-mirror>
+      <c0ffee-console data-companion hex="000000"></c0ffee-console>
     </aside>
 
     <main class="prose">
@@ -144,13 +144,13 @@
 
       <footer class="footer">
         <p>← <a href="../index.html">back to the toybox</a> &nbsp;·&nbsp;
-           <a href="../play/mirror.html">open the mirror on its own</a></p>
+           <a href="../play/console.html">open the console on its own</a></p>
       </footer>
     </main>
   </div>
 
   <script type="module">
-    import '../toys/mirror.ts';
+    import '../toys/console.ts';
     import '../toys/swatch.ts';
     import { initLesson } from './lesson-runtime.ts';
     initLesson();

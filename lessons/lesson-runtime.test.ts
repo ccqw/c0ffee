@@ -37,10 +37,10 @@ test('pickActiveBeat: empty list returns -1', () => {
   expect(pickActiveBeat([], 100)).toBe(-1);
 });
 
-test('resolveTarget: routes a swatch value to the companion mirror', () => {
-  const companion = { id: 'mirror' };
+test('resolveTarget: routes a swatch value to the Companion console', () => {
+  const companion = { id: 'console' };
   const out = resolveTarget({ r: 255, g: 0, b: 0 }, companion);
-  expect(out).toEqual({ mirror: companion, value: { r: 255, g: 0, b: 0 } });
+  expect(out).toEqual({ companion, value: { r: 255, g: 0, b: 0 } });
 });
 
 test('resolveTarget: no companion -> null (nothing to drive)', () => {

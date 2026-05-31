@@ -13,9 +13,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(root, 'index.html'),
-        playMirror: resolve(root, 'play/mirror.html'),
+        playConsole: resolve(root, 'play/console.html'),
         lessonLight: resolve(root, 'lessons/colors-are-made-of-light.html'),
-        mirrorDemo: resolve(root, 'toys/mirror-demo.html'),
+        consoleDemo: resolve(root, 'toys/console-demo.html'),
         swatchDemo: resolve(root, 'toys/swatch-demo.html'),
       },
     },

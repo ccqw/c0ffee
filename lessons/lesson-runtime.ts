@@ -3,7 +3,7 @@
 // Functional core (pure, tested): pickActiveBeat, resolveTarget.
 // Imperative shell (DOM, eyeballed): initLesson — wires an IntersectionObserver
 // to drive the Active beat (dim the rest) and routes inline-swatch clicks to the
-// pinned Companion mirror with an animated load.
+// pinned Companion console with an animated load.
 //
 // Importing this module has NO side effects; the page calls initLesson().
 
@@ -33,33 +33,33 @@ export function pickActiveBeat(beatPositions: BeatSpan[], focusLine: number): nu
   return best;
 }
 
-// resolveTarget(swatchValue, companionRef) -> {mirror, value} | null
+// resolveTarget(swatchValue, companionRef) -> {companion, value} | null
 // Where a clicked Inline swatch's Color value should land. No companion -> null.
 // Generic over the companion + value shapes so it stays pure and testable with
 // plain objects, not just live elements.
 export function resolveTarget<C, V>(
   swatchValue: V,
   companionRef: C | null | undefined,
-): { mirror: C; value: V } | null {
+): { companion: C; value: V } | null {
   if (!companionRef) return null;
-  return { mirror: companionRef, value: swatchValue };
+  return { companion: companionRef, value: swatchValue };
 }
 
 // --- imperative shell ---
 
-// A Companion mirror exposes animateTo (the <c0ffee-mirror>); typed loosely so
+// A Companion console exposes animateTo (the <c0ffee-console>); typed loosely so
 // the runtime depends only on the capability, not the concrete element class.
-interface CompanionMirror extends Element {
+interface CompanionConsole extends Element {
   animateTo?: (target: Rgb, ms?: number) => void;
 }
 
 // initLesson(root?) — call once after the DOM is ready.
 // Conventions in the Lesson HTML:
-//   - the Companion mirror is the <c0ffee-mirror data-companion>
+//   - the Companion console is the <c0ffee-console data-companion>
 //   - each beat is an element with class "beat"
 //   - inline swatches are <c0ffee-swatch> anywhere in the prose
 export function initLesson(root: Document | Element = document): void {
-  const mirror = root.querySelector('c0ffee-mirror[data-companion]') as CompanionMirror | null;
+  const companion = root.querySelector('c0ffee-console[data-companion]') as CompanionConsole | null;
   const beats = Array.from(root.querySelectorAll('.beat'));
   if (!beats.length) return;
 
@@ -83,16 +83,16 @@ export function initLesson(root: Document | Element = document): void {
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onScroll, { passive: true });
 
-  // Route inline-swatch clicks to the Companion mirror with an animated load.
+  // Route inline-swatch clicks to the Companion console with an animated load.
   root.addEventListener('colorchange', (e) => {
     const ev = e as CustomEvent<ColorChangeDetail>;
     if ((ev.target as Element | null)?.tagName !== 'C0FFEE-SWATCH') return;
-    const target = resolveTarget(ev.detail, mirror);
+    const target = resolveTarget(ev.detail, companion);
     if (!target) return;
-    if (typeof target.mirror.animateTo === 'function') {
-      target.mirror.animateTo(target.value);
+    if (typeof target.companion.animateTo === 'function') {
+      target.companion.animateTo(target.value);
     } else {
-      target.mirror.setAttribute('hex', ev.detail.hex);
+      target.companion.setAttribute('hex', ev.detail.hex);
     }
   });
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mirror — c0ffee Playground</title>
+  <title>Console — c0ffee Playground</title>
   <meta name="description" content="Play with a color across RGB and HSV, see it as light. Share any color by its link.">
   <link rel="stylesheet" href="../tokens.css">
   <style>
@@ -22,27 +22,27 @@
   </style>
 </head>
 <body>
-  <h1>#<span class="hex">C0FFEE</span> · mirror playground</h1>
+  <h1>#<span class="hex">C0FFEE</span> · console playground</h1>
 
-  <c0ffee-mirror id="mirror"></c0ffee-mirror>
+  <c0ffee-console id="console"></c0ffee-console>
 
   <p class="share">Your color lives in this page's URL — copy the address to share it.
      <br>Try <code>?hex=FF6600</code> or <code>#E91E63</code>.</p>
 
   <script type="module">
-    import '../toys/mirror.ts';
+    import '../toys/console.ts';
 
-    const mirror = document.getElementById('mirror');
+    const consoleEl = document.getElementById('console');
 
-    // --- seed once from the URL (Hex color link), bad/missing -> mirror's default ---
+    // --- seed once from the URL (Hex color link), bad/missing -> console's default ---
     const fromQuery = new URLSearchParams(location.search).get('hex');
     const fromHash = location.hash.slice(1);
     const seed = (fromQuery || fromHash || '').replace(/^#/, '').trim();
-    if (seed) mirror.setAttribute('hex', seed); // mirror tolerates junk & falls back
+    if (seed) consoleEl.setAttribute('hex', seed); // console tolerates junk & falls back
 
     // --- reflect live state to the URL hash (write-only; no hashchange listener,
     //     so there's no seed/echo loop). Playground-only concern, not in the element. ---
-    mirror.addEventListener('colorchange', (e) => {
+    consoleEl.addEventListener('colorchange', (e) => {
       const next = '#' + e.detail.hex;
       if (location.hash !== next) history.replaceState(null, '', next);
     });

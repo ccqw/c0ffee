@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>c0ffee-mirror — demo</title>
+  <title>c0ffee-console — demo</title>
   <link rel="stylesheet" href="../tokens.css">
   <style>
     body {
@@ -18,16 +18,16 @@
   </style>
 </head>
 <body>
-  <h1>&lt;c0ffee-mirror&gt; — C0FFEE-2 demo</h1>
+  <h1>&lt;c0ffee-console&gt; — C0FFEE-2 demo</h1>
   <div class="pair">
     <!-- seeded from attribute -->
-    <c0ffee-mirror hex="3A7BD5"></c0ffee-mirror>
+    <c0ffee-console hex="3A7BD5"></c0ffee-console>
     <!-- a second instance proves per-instance state isolation -->
-    <c0ffee-mirror hex="C0FFEE"></c0ffee-mirror>
+    <c0ffee-console hex="C0FFEE"></c0ffee-console>
   </div>
-  <p class="note">Two mirrors, independent state. Drag sliders or type hex pairs.
+  <p class="note">Two consoles, independent state. Drag sliders or type hex pairs.
      The left is seeded <code>#3A7BD5</code>; the right <code>#C0FFEE</code>.
      A bad <code>hex</code> attribute falls back to the default blue.</p>
-  <script type="module" src="./mirror.ts"></script>
+  <script type="module" src="./console.ts"></script>
 </body>
 </html>

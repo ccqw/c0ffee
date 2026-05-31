@@ -6,7 +6,7 @@
 //                             text color auto-picked for legibility.
 // Both show the uniform tooltip "{hex} · click to load". A plain click fires a
 // `colorchange` event (ADR-0001) carrying the Color value, so a Lesson can
-// route it to a Companion mirror. The element itself is read-only and knows
+// route it to a Companion console. The element itself is read-only and knows
 // nothing about what consumes the event.
 
 import { parseHex, formatHex, bestTextColor } from '../lib/color.ts';
@@ -109,7 +109,7 @@ class C0ffeeSwatch extends HTMLElement implements ColorInterface {
     }
   }
 
-  // Announce this chip's Color value; a Lesson routes it to the Companion mirror.
+  // Announce this chip's Color value; a Lesson routes it to the Companion console.
   private _emit(): void {
     const detail: ColorChangeDetail = { ...this._value, hex: formatHex(this._value) };
     this.dispatchEvent(new CustomEvent<ColorChangeDetail>('colorchange', {
