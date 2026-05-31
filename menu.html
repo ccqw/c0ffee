@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>c0ffee — menu</title>
+  <meta name="description" content="Interactive color tools and lessons for how color works in computer graphics, with a love for hex.">
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--c0ffee-bg);
+      color: var(--c0ffee-fg);
+      font-family: var(--c0ffee-font);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* The Site banner is full-width chrome at the top of the document (normal
+       flow, not sticky); the Menu's own content sits centered below it. */
+    main {
+      flex: 1; width: 100%; max-width: 760px; margin: 0 auto;
+      padding: 4vh 6vw 6vh;
+      display: flex; flex-direction: column; align-items: center;
+    }
+
+    /* Intro */
+    .intro { text-align: center; }
+    .intro h1 {
+      font-size: clamp(1.8rem, 6vw, 2.6rem); font-weight: 700; letter-spacing: 1px;
+      margin: 0;
+    }
+    .tagline { color: #9aa; max-width: 42ch; margin: .6em auto 0; }
+    .sub { color: #667; font-size: 13px; margin-top: .4em; }
+
+    /* Grid of the things to play with */
+    .grid {
+      display: grid; gap: 18px; margin-top: 2.5rem; width: 100%;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .card {
+      display: flex; flex-direction: column;
+      background: var(--c0ffee-panel, #161616);
+      border: 1px solid #222; border-radius: var(--c0ffee-radius, 10px);
+      overflow: hidden; text-decoration: none; color: inherit;
+      transition: transform .12s, border-color .12s;
+    }
+    .card:hover { transform: translateY(-3px); border-color: #3a3a3a; }
+    .card .art { height: 110px; }
+    .card .body { padding: 16px 18px 18px; }
+    .card .kind { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #667; }
+    .card h2 { font-size: 19px; margin: .25em 0 .35em; }
+    .card p { margin: 0; color: #9aa; font-size: 14px; }
+
+    /* Card art: the lesson shows the additive primaries; the console shows its
+       three isolated channels. */
+    .art.lesson {
+      background:
+        radial-gradient(circle at 38% 42%, rgba(255,0,0,.9), transparent 38%),
+        radial-gradient(circle at 62% 42%, rgba(0,255,0,.9), transparent 38%),
+        radial-gradient(circle at 50% 66%, rgba(0,0,255,.9), transparent 38%),
+        #050505;
+    }
+    .art.console {
+      background: linear-gradient(90deg, #c0392b 0 33%, #1e8449 33% 66%, #2471a3 66%);
+    }
+
+    footer { padding: 3rem 6vw; color: #556; font-size: 12px; text-align: center; }
+    footer a { color: #889; }
+  </style>
+</head>
+<body>
+  <c0ffee-banner></c0ffee-banner>
+
+  <main>
+    <header class="intro">
+      <h1>Menu</h1>
+      <p class="tagline">Everything to play with — interactive color tools and
+         lessons for how color works in computer graphics, with a love for hex.</p>
+      <p class="sub">#C0FFEE is itself a valid color: a pale mint. ☕</p>
+    </header>
+
+    <div class="grid">
+      <a class="card" href="lessons/colors-are-made-of-light.html">
+        <div class="art lesson"></div>
+        <div class="body">
+          <span class="kind">Lesson</span>
+          <h2>Colors are made of light</h2>
+          <p>How screens build every color by adding red, green, and blue light —
+             with a canvas that paints as you read.</p>
+        </div>
+      </a>
+
+      <a class="card" href="play/console.html">
+        <div class="art console"></div>
+        <div class="body">
+          <span class="kind">Color console</span>
+          <h2>One color, every way at once</h2>
+          <p>A swatch, three channel swatches, and the additive Venn palette —
+             editable from RGB or HSV, all kept in sync. Share any color by its link.</p>
+        </div>
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    More brewing.
+    &nbsp;·&nbsp; <a href="https://github.com/ccqw/c0ffee">source on GitHub</a>
+  </footer>
+
+  <script type="module" src="./toys/banner.ts"></script>
+</body>
+</html>
