@@ -1,6 +1,6 @@
 # c0ffee ☕
 
-A front-end-only website of interactive color **toys** (and lessons woven from them) that teach how color works in computer graphics — with a special love for hex intuition.
+A front-end-only website of interactive color **tools** (and lessons woven from them) that teach how color works in computer graphics — with a special love for hex intuition.
 
 The name is itself a valid hex color: `#C0FFEE`, a pale mint.
 
