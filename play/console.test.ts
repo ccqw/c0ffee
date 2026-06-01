@@ -23,7 +23,7 @@ describe('Standalone console page (/play/console.html)', () => {
 
   it('wears the Site banner and loads its element module', () => {
     expect(html).toContain('<c0ffee-banner>');
-    expect(html).toMatch(/toys\/banner\.ts/);
+    expect(html).toMatch(/elements\/banner\.ts/);
   });
 
   it('still hosts the reflecting Color console', () => {
@@ -35,12 +35,10 @@ describe('Standalone console page (/play/console.html)', () => {
   });
 
   it('does not resurrect retired Toy-era vocabulary', () => {
-    // Strip the element module's <script> first: `toys/banner.ts` / `toys/console.ts`
-    // are architectural paths (the dir moves to elements/ in C0FFEE-24), not
-    // user-facing copy, so they must not trip the bare "toy(s)" guard.
-    const copy = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    // After C0FFEE-24 the element modules live under `elements/`, so no script
+    // path collides with the bare "toy(s)" guard — the raw HTML is checked directly.
     for (const retired of [/\btoys?\b/i, /toybox/i, /playground/i, /\bmirror\b/i, /\bgallery\b/i]) {
-      expect(copy).not.toMatch(retired);
+      expect(html).not.toMatch(retired);
     }
   });
 });
