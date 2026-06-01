@@ -1,6 +1,6 @@
 /* tokens.css — the single source of design truth (ADR-0002).
    These custom properties cross the Shadow DOM boundary, so both pages
-   and Toys read them. Change a value here to restyle the whole site. */
+   and elements read them. Change a value here to restyle the whole site. */
 
 :root {
   /* Type */
@@ -9,7 +9,7 @@
   /* Brand */
   --c0ffee-accent: #C0FFEE;   /* the name, as a color */
   --c0ffee-bg: #0b0b0b;       /* deep near-black (lets the Venn palette glow) */
-  --c0ffee-panel: #161616;    /* surface for toy cards, one step up from bg */
+  --c0ffee-panel: #161616;    /* surface for element cards, one step up from bg */
   --c0ffee-fg: #ededed;       /* default text on dark surfaces */
 
   /* Shape */
