@@ -2,10 +2,9 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 // c0ffee is a multi-page site of hand-authored HTML (ADR-0006): the home (solo
-// console), the menu, the standalone console, and the lesson are each their own
-// document. Every page must be a named build entry or Vite drops it from dist/.
-// Pages live at their existing paths (project root is the Vite root), so the
-// deployed URLs are unchanged.
+// console), the menu, and the lesson are each their own document. Every page must
+// be a named build entry or Vite drops it from dist/. Pages live at their existing
+// paths (project root is the Vite root), so the deployed URLs are unchanged.
 const root = import.meta.dirname;
 
 export default defineConfig({
@@ -15,7 +14,6 @@ export default defineConfig({
       input: {
         index: resolve(root, 'index.html'),
         menu: resolve(root, 'menu.html'),
-        playConsole: resolve(root, 'play/console.html'),
         lessonLight: resolve(root, 'lessons/colors-are-made-of-light.html'),
       },
     },

@@ -25,8 +25,11 @@ describe('Menu page (/menu.html)', () => {
     expect(html).toMatch(/elements\/banner\.ts/);
   });
 
-  it('carries the grid linking to the console and the lesson', () => {
-    expect(html).toContain('play/console.html');
+  it('carries the grid linking to the console (now at /) and the lesson', () => {
+    // The standalone play/console.html was removed (C0FFEE-31): the solo Color
+    // console lives at the root now, so the console card points home.
+    expect(html).toMatch(/href=["']\/["']/);
+    expect(html).not.toContain('play/console.html');
     expect(html).toContain('lessons/colors-are-made-of-light.html');
   });
 
