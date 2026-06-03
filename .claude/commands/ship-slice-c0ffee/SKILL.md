@@ -13,7 +13,7 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
 
 ### 1 — Read & understand
 - `mcp__linear__get_issue C0FFEE-N` (+ `includeRelations:true`). If a **Blocked-by** issue is still open, stop and report.
-- Read **CONTEXT.md** for domain vocabulary and the **ADRs** touching this area. Titles/descriptions must use glossary terms (Color console, Color value/address/link, Swatch, Venn palette, presentation…), never retired words (mirror, Toy, Playground, widget).
+- Read **CONTEXT.md** for domain vocabulary and the **ADRs** touching this area. Titles/descriptions must use glossary terms (Color console, Color value/address/link, Swatch, Additive Venn, presentation…), never retired words (mirror, Toy, Playground, widget).
 
 ### 2 — Spec (ADR, not temper)
 - If the slice makes a **real, hard-to-reverse architectural decision**, write or append an ADR (`docs/adr/000N-slug.md`). **Amend/supersede, don't rewrite history** — dated notes, never silent edits.

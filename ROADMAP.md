@@ -6,7 +6,7 @@ Ideas deferred past v1, kept here so they're remembered without bloating the v1 
 
 The thinnest slice that exercises every architectural layer end-to-end:
 
-- **`<c0ffee-console>`** — the flagship Color console: Swatch, three Channel swatches, Venn palette, RGB panel + HSV panel, two-way bound through one Color value, seeded by Hex color link.
+- **`<c0ffee-console>`** — the flagship Color console: Swatch, three Channel swatches, Additive Venn, RGB panel + HSV panel, two-way bound through one Color value, seeded by Hex color link.
 - **`<c0ffee-swatch>`** — inline swatch (chip): mode A (swatch + hex) / mode C (painted label), uniform `{hex} · click to load` tooltip, click loads the Companion console.
 - **One Lesson** — "Colors are made of light" (adding R/G/B light → primaries, white, black), pinned Companion console on the left, prose scrolling on the right.
 - **Menu** — the grid linking to interactives and Lessons (its own address, not the landing page).
@@ -25,12 +25,13 @@ These were scoped then shelved to protect the thin slice. Bring back next.
 - **Hexword gallery/finder** — browse/validate real hexwords (C0FFEE, FACADE, 0FF1CE…). On-brand with the name; pure delight. Could double as a generator (find words within an edit-distance of a target hue).
 - **HSV picker square** — the "Photoshop picker": 2D saturation×value square + hue strip. A more tactile way to drive the console.
 - **Channel decomposition viewer** — a color split into its R/G/B contributions as stacked light, emphasizing the "16s and 1s" of each hex pair.
+- **Color-space viz (cube / hexcone)** — render the geometric *volume* the components span: the RGB cube, the HSV hexcone. Makes the model-vs-space distinction (CONTEXT glossary) tangible — the console drives the components; this shows where they live. (C0FFEE-38)
 
 ## Lesson backlog
 
 - **Reading a hex code** — the digit structure: two digits per channel, left = 16s, right = 1s; building the by-eye intuition (the user's superpower, made teachable).
 - **Grayscale & gamma / luminance** — why `#808080` isn't perceptual middle-gray; sRGB gamma; relative luminance. (Shares its engine with `bestTextColor`.)
-- **Why red + green = yellow (light vs paint)** — the Venn palette's payoff: additive light vs subtractive pigment; the misconception the "palette" name baits.
+- **Why red + green = yellow (light vs paint)** — the Additive Venn's payoff: additive light vs subtractive pigment, and the everyday paint-mixing intuition it overturns.
 - **Secondary & complementary colors** — cyan/magenta/yellow; opposites on the wheel.
 
 ## Notation / feature backlog

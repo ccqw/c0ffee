@@ -43,7 +43,7 @@ _Avoid_: toybox, home, landing page, index, gallery
 ### Flagship anatomy — the Color console
 
 **Color console** (the flagship):
-The flagship interactive (`<c0ffee-console>`): one Color value shown every way at once — the **Swatch**, three **Channel swatches**, the **Venn palette** — and editable from any representation via the **RGB panel** and **HSV panel**, all kept in sync. The site root (`/`) shows it solo; a Lesson pins one as its **Companion console**. Renders in a chosen **presentation**.
+The flagship interactive (`<c0ffee-console>`): one Color value shown every way at once — the **Swatch**, the **Additive Venn**, the editable **Hex field** — and editable from any representation via the **RGB panel** and **HSV panel**, all kept in sync. The site root (`/`) shows it solo; a Lesson pins one as its **Companion console**. Renders in a chosen **presentation**.
 _Avoid_: mirror, swatch panel, color picker, editor (informally)
 
 **Presentation**:
@@ -51,20 +51,20 @@ A named preset of the Color console: which parts it renders and how they're laid
 _Avoid_: mode, variant, layout (informally), skin
 
 **Channel**:
-One of the R, G, B **Components** of a Color value (0–255) — the RGB model's components specifically. Channel carries an RGB-light identity here: the Channel swatches and Venn palette are built on isolating one channel's *light*, so it does not extend to HSV. For the model-agnostic notion, see **Component**.
+One of the R, G, B **Components** of a Color value (0–255) — the RGB model's components specifically. Channel carries an RGB-light identity here: the **Additive Venn** is built on isolating one channel's *light* (and can show that channel alone via **channel-solo**), so it does not extend to HSV. For the model-agnostic notion, see **Component**.
 _Avoid_: band; component (Channel is the RGB-specific kind)
 
 **Swatch**:
-The main rendered patch showing the full Color value. (See also Channel swatch.)
+The main rendered patch showing the full Color value. Carries the **Named color address** in a corner when one exists (contrast-colored for legibility), and the active channel's tag while **channel-solo** is on.
 _Avoid_: preview, main color
 
-**Channel swatch**:
-A mini-swatch showing a single Channel in isolation, other channels at zero (e.g. the red channel swatch renders `CC0000`). Referred to per-channel: "the red channel swatch."
-_Avoid_: isolated swatch, mini
+**Channel-solo** (was: Channel swatch):
+Showing a single Channel's light in isolation. In the redesigned console this is a **state of the Additive Venn** — click a channel name and the other two circles fade, leaving one channel's light alone — **not** a discrete mini-swatch. (The three standalone Channel-swatch minis were dropped; see Flagged ambiguities.)
+_Avoid_: channel swatch, mini, isolated swatch
 
-**Venn palette**:
-The three-overlapping-circles diagram where each circle is one Channel's light and overlaps mix additively (R+G=yellow, G+B=cyan, R+B=magenta, center = the full Color value). Named to borrow the painter's-palette model so the console can subvert it — this palette mixes *light*, not pigment.
-_Avoid_: additive venn, light venn, color wheel, mixing circles
+**Additive Venn**:
+The three-overlapping-circles diagram where each circle is one Channel's light and overlaps mix additively (R+G=yellow, G+B=cyan, R+B=magenta, center = the full Color value). The name states the phenomenon directly — additive mixing of *light*, not pigment. Clicking a channel name isolates it (**channel-solo**): the other two circles fade so you see one channel's light alone. The center tri-overlap renders the full Color value **exactly** — which requires the circles screen-blend over pure black in an isolated stacking context (an implementation invariant, not a style choice).
+_Avoid_: Venn palette, light venn, color wheel, mixing circles
 
 **Color model**:
 A way of describing a Color value by a set of components — **RGB** (red, green, blue light, 0–255) or **HSV** (hue 0–360°, saturation & value 0–100%). The same Color value can be written in either. The console exposes one control group per model, each **labeled in the interface by its model** (e.g. red·green·blue / hue·saturation·value). Distinct from a **color space** (the geometric volume those components span — the roadmap "cube/hexcone" idea).
@@ -75,8 +75,12 @@ One axis of a **color model**. RGB's components are its three **Channels** (red/
 _Avoid_: channel (that's RGB-specific here), axis, dimension (informally)
 
 **RGB panel**:
-The control group for editing a Color value via the RGB **color model** — hex digit boxes + RGB sliders. Labeled in the interface by its model (red·green·blue); the "recipe" framing is lesson-level, never interface text.
-_Avoid_: rgb controls, channel panel
+The control group for editing a Color value via the RGB **color model** — the **Hex field** + RGB sliders. Labeled in the interface by its model (red·green·blue); the "recipe" framing is lesson-level, never interface text.
+_Avoid_: rgb controls, channel panel, fader (the sliders are sliders)
+
+**Hex field**:
+The editable **Hex color address** as the console's typographic centerpiece: a single field that *looks* segmented into three channel-demarcated pairs (each pair carries a small channel-colored dot) but is **one** field — so paste/copy/select-all act on the whole address. Tapping a pair's **dot** opens the **place-value popover** (the 16s-and-1s decomposition, e.g. `C×16 + 0×1`). Editing it filters input so the field can never show a character the Color value dropped.
+_Avoid_: hex boxes, hex readout, cyclops (the popover is the place-value popover)
 
 **HSV panel**:
 The control group for editing a Color value via the HSV **color model** — hue/saturation/value sliders. Labeled in the interface by its model (hue·saturation·value); the "perception" framing is lesson-level, never interface text.
@@ -101,7 +105,7 @@ _Avoid_: style API, css api
 These three layers separate the abstract color from how it is written and transported. The layering is what makes future notations (RGB, HSV) cheap to add.
 
 **Swatch**:
-A visual rendered patch of a Color value on screen (the big swatch, the per-channel minis, the Venn regions).
+A visual rendered patch of a Color value on screen (the big swatch and the Additive Venn regions).
 _Avoid_: tile, chip, sample
 
 **Color value**:
@@ -132,7 +136,7 @@ _Avoid_: deep link, seed, permalink, hexlink
 - A single-color interactive (the console, a swatch) holds one **Color value** as its single source of truth, and every **Swatch** renders it; some interactives (a game, a palette) carry more than one, or none.
 - A **Color value** is written as a **Color address** (hex primary); a **Color address** placed in a URL/attribute is a **Color link**.
 - A **Color link** seeds an interactive's **Color value** on load.
-- The flagship **console** renders one **Color value** as the **Swatch**, three **Channel swatches**, and the **Venn palette**; it is edited via the **RGB panel** and **HSV panel**, which stay in sync.
+- The flagship **console** renders one **Color value** as the **Swatch** and the **Additive Venn** (which can isolate one channel via **channel-solo**); it is edited via the **Hex field**, the **RGB panel** and the **HSV panel**, which stay in sync.
 - A mode-C **Inline swatch**'s label text color is chosen automatically for legibility against its background (by relative luminance) — a pure helper in the color core, and the same science as the future gamma/luminance lesson.
 - A **Lesson** is a sequence of **Beats**; scrolling the prose changes the **Active beat**, which owns the **Companion console**. Beats also invite direct interaction with the console (hands-on prompts), not only swatch clicks.
 
@@ -150,3 +154,6 @@ _Avoid_: deep link, seed, permalink, hexlink
 - "mirror" named the flagship by its internal binding (every surface *mirrors* one value) — an implementer's truth, not a user's. Renamed to **Color console** (`<c0ffee-console>`); "Companion mirror" → **Companion console**. The element tag, files, and ADR-0004 wording were renamed in the C0FFEE-20 pass (done 2026-05-31).
 - The flagship's "compact vs full" forms are resolved as **presentations** (named presets of parts + layout on the one console), not separate elements — forced by shadow-DOM encapsulation (ADR-0002).
 - "**Toy**" was a false category: it conflated "a custom element on this site" with "a thing satisfying the ADR-0001 Color value contract" — and the contract doesn't even hold for the known zoo (a guess game has a target + a guess; a palette has many). **Dissolved**, not renamed: call interactives by their real names (console, swatch, guess, blender); when the *contract* is meant, name the **ADR-0001 Color value interface**; when a collective is genuinely needed in planning/specs, use lowercase **"interactive"** (internal, never user-facing). ADR-0001 + ROADMAP were de-Toy'd in the C0FFEE-17 docs pass (done 2026-05-31); user-facing copy on the home/play pages is deferred to the home-IA work (C0FFEE-15).
+- "**Venn palette**" → "**Additive Venn**" (renamed in the 2026-06-02 console-redesign grill). The original name carried a painter's-palette→light subversion pun; it was dropped for a term that states the phenomenon directly (additive light mixing). The rename sweep is **done**: the phrase was retired from prose and comments (`index.html`, `menu.html`, `tokens.css`, `ROADMAP.md`, `elements/console.ts` header, the ship-slice glossary). The new term *keeps* "Venn", so the `.venn*` shadow-DOM classes were left as-is — only the punning "palette" was retired, and the classes never said it.
+- The three **Channel-swatch** minis (discrete per-channel boxes) were **dropped** in the console redesign; isolating one channel's light is now the **Additive Venn**'s **channel-solo** state. "Channel swatch" is retired as a part name.
+- The redesigned **Hex field** is one editable field shown as three channel pairs (OTP-style segmented appearance), replacing the old separate hex digit boxes — *not* a second, display-only readout alongside them. One representation: read, edit, and (later) copy in the same place.
