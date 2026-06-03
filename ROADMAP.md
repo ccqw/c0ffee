@@ -25,6 +25,7 @@ These were scoped then shelved to protect the thin slice. Bring back next.
 - **Hexword gallery/finder** — browse/validate real hexwords (C0FFEE, FACADE, 0FF1CE…). On-brand with the name; pure delight. Could double as a generator (find words within an edit-distance of a target hue).
 - **HSV picker square** — the "Photoshop picker": 2D saturation×value square + hue strip. A more tactile way to drive the console.
 - **Channel decomposition viewer** — a color split into its R/G/B contributions as stacked light, emphasizing the "16s and 1s" of each hex pair.
+- **Color-space viz (cube / hexcone)** — render the geometric *volume* the components span: the RGB cube, the HSV hexcone. Makes the model-vs-space distinction (CONTEXT glossary) tangible — the console drives the components; this shows where they live. (C0FFEE-38)
 
 ## Lesson backlog
 
