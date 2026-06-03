@@ -5,7 +5,7 @@
 // mutates `this._value` then calls `_render()`, which redraws every view from
 // that value. Views never update each other directly — they all read the value.
 //
-// Swatch + RGB panel (C0FFEE-2), Venn palette (C0FFEE-3), HSV panel (C0FFEE-4).
+// Swatch + RGB panel (C0FFEE-2), Additive Venn (C0FFEE-3), HSV panel (C0FFEE-4).
 //
 // RGB (`this._value`) is the canonical Color value. The HSV panel adds one bit
 // of legitimately-stateful caching (`this.hsv`): RGB->HSV is lossy at grays
