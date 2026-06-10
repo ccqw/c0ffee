@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, bestTextColor, sanitizeHexInput, parseColorLink, formatColorLink } from './color.ts';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, bestTextColor, sanitizeHexInput, parseColorLink, formatColorLink, namedColor, NAMED_COLORS } from './color.ts';
 
 // HSV uses h in [0,360), s and v in [0,1]. Helper for approximate comparison.
 const close = (a: number, b: number, eps = 1e-6): boolean => Math.abs(a - b) <= eps;
@@ -165,6 +165,65 @@ test('formatColorLink: emits a hash link only — never a ?hex= query', () => {
   expect(link.startsWith('#')).toBe(true);
   expect(link).not.toContain('?');
   expect(link).not.toContain('hex=');
+});
+
+// C0FFEE-50 — the Named color address (CONTEXT.md): the CSS keyword for a Color
+// value, when one exists. A PARTIAL notation — present or absent, never a
+// "closest match" — so namedColor returns the name on an exact hit and null
+// otherwise. Backed by the full CSS named-color table, not a curated subset.
+
+test('namedColor: an exact match returns the CSS keyword', () => {
+  expect(namedColor('FF0000')).toBe('red');
+  expect(namedColor('1E90FF')).toBe('dodgerblue');
+  expect(namedColor('C0C0C0')).toBe('silver');
+});
+
+test('namedColor: the table is the full CSS set, not a curated few — deep cuts resolve', () => {
+  expect(namedColor('663399')).toBe('rebeccapurple');
+  expect(namedColor('FFEFD5')).toBe('papayawhip');
+  expect(namedColor('00FA9A')).toBe('mediumspringgreen');
+  expect(namedColor('B0C4DE')).toBe('lightsteelblue');
+});
+
+test('namedColor: a near-miss returns null — a partial answer would lie', () => {
+  expect(namedColor('FF0001')).toBeNull(); // one off pure red: no name
+  expect(namedColor('1E90FE')).toBeNull(); // one off dodgerblue: no name
+  expect(namedColor('C0FFEE')).toBeNull(); // the namesake mint has no CSS name
+});
+
+test('namedColor: case/format-insensitive — the same tolerance as parseHex', () => {
+  expect(namedColor('#FF0000')).toBe('red'); // leading # tolerated
+  expect(namedColor('ff0000')).toBe('red');  // lowercase tolerated
+  expect(namedColor('f00')).toBe('red');     // 3-digit shorthand expands
+});
+
+test('namedColor: malformed input returns null, never throws', () => {
+  expect(namedColor('not-a-color')).toBeNull();
+  expect(namedColor('')).toBeNull();
+  expect(namedColor(null)).toBeNull();
+  expect(namedColor(undefined)).toBeNull();
+});
+
+test('namedColor: alias hexes resolve to ONE canonical name — the additive secondaries win', () => {
+  // CSS gives some hexes two keywords (aqua/cyan, fuchsia/magenta, gray/grey…).
+  // A hex→name table must pick one; we pick the names the Additive Venn teaches
+  // (R+G=yellow, G+B=cyan, R+B=magenta) and the American gray family.
+  expect(namedColor('00FFFF')).toBe('cyan');    // not aqua
+  expect(namedColor('FF00FF')).toBe('magenta'); // not fuchsia
+  expect(namedColor('808080')).toBe('gray');    // not grey
+  expect(namedColor('696969')).toBe('dimgray'); // the family follows
+});
+
+test('NAMED_COLORS: the full CSS table — 148 keywords collapse to 139 unique hexes', () => {
+  // 148 CSS named colors minus the 9 alias pairs (aqua/fuchsia + 7 grey spellings)
+  // = 139 entries. Pinning the count keeps the table honest: a dropped or
+  // duplicated entry (object literals silently keep the last duplicate key)
+  // changes this number.
+  expect(Object.keys(NAMED_COLORS).length).toBe(139);
+  // every key is a canonical bare uppercase 6-digit hex address
+  for (const key of Object.keys(NAMED_COLORS)) {
+    expect(key).toMatch(/^[0-9A-F]{6}$/);
+  }
 });
 
 test('parseColorLink and formatColorLink round-trip through the # delimiter', () => {

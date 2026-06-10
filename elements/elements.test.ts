@@ -368,6 +368,126 @@ test('<c0ffee-console> card surface is the page bg + inset hairline + drop shado
   expect(card).toContain('0 30px 70px -30px rgba(0,0,0,.8)');
 });
 
+// C0FFEE-50 — channel-solo on the Additive Venn + the Named color address on the
+// Swatch. Channel-solo (grill Q2) is a state of the VENN, not of the Color value:
+// clicking a Channel name fades the other two circles so one channel's light
+// stands alone; the value, the Swatch paint, and the ADR-0001 contract are
+// untouched. The Swatch corner slot carries the active channel's tag while solo
+// is on, else the Named color address when one exists (present-only).
+
+const circle = (el: HTMLElement, k: string): HTMLElement =>
+  el.shadowRoot?.getElementById(`c-${k}`) as HTMLElement;
+const channelBtn = (el: HTMLElement, k: string): HTMLElement =>
+  el.shadowRoot?.getElementById(`ch-${k}`) as HTMLElement;
+const swatchTag = (el: HTMLElement): HTMLElement =>
+  el.shadowRoot?.getElementById('swatch-tag') as HTMLElement;
+
+test('<c0ffee-console> clicking a Channel name solos it — the other two circles fade', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  channelBtn(el, 'r').click();
+  expect(circle(el, 'r').style.opacity).toBe('1');
+  expect(circle(el, 'g').style.opacity).toBe('0');
+  expect(circle(el, 'b').style.opacity).toBe('0');
+  expect(channelBtn(el, 'r').getAttribute('aria-pressed')).toBe('true');
+});
+
+test('<c0ffee-console> clicking the soloed Channel again releases it', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  channelBtn(el, 'g').click();
+  channelBtn(el, 'g').click();
+  for (const k of ['r', 'g', 'b']) {
+    expect(circle(el, k).style.opacity).toBe('1');
+    expect(channelBtn(el, k).getAttribute('aria-pressed')).toBe('false');
+  }
+});
+
+test('<c0ffee-console> clicking another Channel switches the solo directly', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  channelBtn(el, 'r').click();
+  channelBtn(el, 'b').click(); // switch, not release-then-solo
+  expect(circle(el, 'b').style.opacity).toBe('1');
+  expect(circle(el, 'r').style.opacity).toBe('0');
+  expect(circle(el, 'g').style.opacity).toBe('0');
+});
+
+test('<c0ffee-console> the active-solo name takes the pure channel color; resting names stay neutral', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  channelBtn(el, 'r').click();
+  expect(channelBtn(el, 'r').style.color).toBe('var(--c0ffee-r)');
+  expect(channelBtn(el, 'g').style.color).toBe(''); // neutral resting color comes from CSS
+});
+
+test('<c0ffee-console> solo never touches the Color value and never emits colorchange', () => {
+  // Solo is view state. A colorchange here would ripple into the URL reflector
+  // and the Lesson runtime for a color that did not move.
+  const el = mount('c0ffee-console', '3A7BD5');
+  let fired = 0;
+  el.addEventListener('colorchange', () => { fired++; });
+  channelBtn(el, 'r').click();
+  channelBtn(el, 'r').click();
+  expect(el.hex).toBe('3A7BD5');
+  expect(fired).toBe(0);
+});
+
+test('<c0ffee-console> while solo is on, the Swatch carries the active channel tag', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  channelBtn(el, 'r').click();
+  expect(swatchTag(el).hidden).toBe(false);
+  expect(swatchTag(el).textContent).toBe('Red only');
+});
+
+test('<c0ffee-console> an RGB edit while soloed keeps the solo state (no jitter)', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  channelBtn(el, 'r').click();
+  const slider = el.shadowRoot?.getElementById('sl-g') as HTMLInputElement;
+  slider.value = '10';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(circle(el, 'g').style.opacity).toBe('0'); // still faded
+  expect(swatchTag(el).textContent).toBe('Red only'); // tag survives the re-render
+});
+
+test('<c0ffee-console> Swatch shows the Named color address when one exists', () => {
+  const el = mount('c0ffee-console', '1E90FF');
+  expect(swatchTag(el).hidden).toBe(false);
+  expect(swatchTag(el).textContent).toBe('dodgerblue');
+  expect(swatchTag(el).style.color).toBe('#000'); // bestTextColor over dodgerblue
+});
+
+test('<c0ffee-console> a nameless Color value shows no label — present-only, never a closest match', () => {
+  const el = mount('c0ffee-console'); // #C0FFEE, the deliberately nameless namesake
+  expect(swatchTag(el).hidden).toBe(true);
+});
+
+test('<c0ffee-console> the name tracks the live Color value', () => {
+  const el = mount('c0ffee-console', '000000');
+  expect(swatchTag(el).textContent).toBe('black');
+  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  slider.value = '255';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(swatchTag(el).textContent).toBe('red'); // FF0000 has a name too
+});
+
+test('<c0ffee-console> the corner slot is shared: the solo tag takes it, the name returns on release', () => {
+  const el = mount('c0ffee-console', 'FF0000'); // named 'red'
+  expect(swatchTag(el).textContent).toBe('red');
+  channelBtn(el, 'r').click();
+  expect(swatchTag(el).textContent).toBe('Red only'); // solo wins the slot while on
+  channelBtn(el, 'r').click();
+  expect(swatchTag(el).textContent).toBe('red'); // the Named address returns
+});
+
+test('<c0ffee-console> the hex columns hold exactly the digit inputs — the Channel-swatch minis are gone', () => {
+  // Channel-solo replaced the three mini swatches (grill Q2): each .col is now
+  // just its hex digit box. Asserting the exact contents (not an absence) pins it.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const cols = el.shadowRoot?.querySelectorAll('.col') ?? [];
+  expect(cols.length).toBe(3);
+  for (const col of cols) {
+    expect(col.children.length).toBe(1);
+    expect(col.children[0].classList.contains('digit')).toBe(true);
+  }
+});
+
 test('<c0ffee-console presentation="companion"> still honours the full ADR-0001 contract', () => {
   const el = mountPresentation('companion', '3A7BD5');
 

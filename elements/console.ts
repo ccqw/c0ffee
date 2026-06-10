@@ -5,7 +5,8 @@
 // mutates `this._value` then calls `_render()`, which redraws every view from
 // that value. Views never update each other directly — they all read the value.
 //
-// Swatch + RGB panel (C0FFEE-2), Additive Venn (C0FFEE-3), HSV panel (C0FFEE-4).
+// Swatch + RGB panel (C0FFEE-2), Additive Venn (C0FFEE-3), HSV panel (C0FFEE-4),
+// channel-solo + Named color address on the Swatch corner (C0FFEE-50).
 //
 // RGB (`this._value`) is the canonical Color value. The HSV panel adds one bit
 // of legitimately-stateful caching (`this.hsv`): RGB->HSV is lossy at grays
@@ -13,7 +14,7 @@
 // stickyHsv. Editing RGB recomputes hsv stickily; editing HSV is authoritative
 // and writes value = hsvToRgb(hsv) directly, which is what stops hue jitter.
 
-import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, sanitizeHexInput, parseColorLink, formatColorLink } from '../lib/color.ts';
+import { parseHex, formatHex, rgbToHsv, hsvToRgb, stickyHsv, sanitizeHexInput, parseColorLink, formatColorLink, namedColor, bestTextColor } from '../lib/color.ts';
 import type { Rgb, Hsv, Hex, ColorInterface, ColorChangeDetail } from '../lib/color.ts';
 
 const DEFAULT: Rgb = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake mint, when no/invalid hex given
@@ -35,9 +36,9 @@ interface Channel {
 }
 
 const CHANNELS: Channel[] = [
-  { key: 'r', label: 'R', token: '--c0ffee-r', pure: (v) => `rgb(${v},0,0)` },
-  { key: 'g', label: 'G', token: '--c0ffee-g', pure: (v) => `rgb(0,${v},0)` },
-  { key: 'b', label: 'B', token: '--c0ffee-b', pure: (v) => `rgb(0,0,${v})` },
+  { key: 'r', label: 'Red', token: '--c0ffee-r', pure: (v) => `rgb(${v},0,0)` },
+  { key: 'g', label: 'Green', token: '--c0ffee-g', pure: (v) => `rgb(0,${v},0)` },
+  { key: 'b', label: 'Blue', token: '--c0ffee-b', pure: (v) => `rgb(0,0,${v})` },
 ];
 
 const hexPair = (n: number): string => n.toString(16).toUpperCase().padStart(2, '0');
@@ -52,6 +53,9 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   private hsv: Hsv = rgbToHsv(this._value); // cached HSV view, kept stable via stickyHsv
   private root: ShadowRoot = this.attachShadow({ mode: 'open' });
   private _anim: number | null = null;
+  // Channel-solo (grill Q2): which channel the Additive Venn is isolating, or
+  // null. VIEW state, not color state — it never touches _value and never emits.
+  private _solo: RgbKey | null = null;
 
   connectedCallback(): void {
     // Opt-in URL reflection (ADR-0001 point 4, as amended 2026-05-31): hash-only,
@@ -210,11 +214,21 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            so the companion presentation keeps its row with no markup change. */
         .stage { display: flex; flex-direction: column-reverse; }
         .swatch {
+          position: relative;
           height: clamp(92px, 18vw, 116px);
           border-radius: 12px;
           /* hairline so a dark Color value still separates from the card */
           box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55);
           transition: background .08s;
+        }
+        /* The Swatch corner slot: the active channel's tag while channel-solo
+           is on, else the Named color address when one exists (present-only —
+           a "closest match" would lie). Text color is set per-render via
+           bestTextColor so it stays legible over any Color value. */
+        .tag {
+          position: absolute; right: 12px; bottom: 10px;
+          font-size: 12px; letter-spacing: .4px; opacity: .72;
+          pointer-events: none;
         }
         .venn { display: flex; justify-content: center; padding: 6px 0 20px; }
         /* ── Blend correctness — load-bearing, not a style choice ──
@@ -245,6 +259,8 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           position: absolute; width: 70%; height: 70%; border-radius: 50%;
           mix-blend-mode: screen;
           transform: translateX(-50%);
+          /* channel-solo fades the other two circles in place */
+          transition: opacity .25s, background .08s;
         }
         #c-r { left: 50%; top: 0; }
         #c-g { left: 37%; top: 23%; }
@@ -253,9 +269,8 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           display: flex; gap: 10px; justify-content: center;
           align-items: flex-end; padding: 16px 0 4px;
         }
-        .hash { font-size: 26px; color: #888; align-self: center; padding-top: 28px; }
+        .hash { font-size: 26px; color: #888; align-self: center; }
         .col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-        .mini { width: 64px; height: 22px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
         .digit {
           width: 64px; box-sizing: border-box; font: 600 24px/1 var(--c0ffee-font, monospace);
           text-align: center; text-transform: uppercase; padding: 6px 0;
@@ -263,7 +278,19 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         }
         .sliders { padding: 8px 0 20px; display: flex; flex-direction: column; gap: 13px; }
         .row { display: flex; align-items: center; gap: 12px; }
-        .lbl { width: 16px; font-weight: 700; }
+        /* One label gutter for both models so the rows stay aligned. Resting
+           labels are neutral (ADR-0007: the pure channel color is reserved for
+           where the light itself shows) — the active-solo name takes the pure
+           color via inline style. */
+        .lbl {
+          width: 52px; font-weight: 700; text-align: left;
+          color: color-mix(in srgb, var(--c0ffee-fg, #eee) 85%, transparent);
+        }
+        /* Channel names are buttons: click to solo that channel on the Venn. */
+        button.lbl {
+          background: none; border: none; padding: 0; cursor: pointer;
+          font: inherit; font-weight: 700;
+        }
         input[type=range] {
           flex: 1; -webkit-appearance: none; appearance: none;
           height: 14px; border-radius: 7px;
@@ -289,7 +316,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
       </style>
       <div class="card">
         <div class="stage">
-          <div class="swatch" id="swatch"></div>
+          <div class="swatch" id="swatch"><span class="tag" id="swatch-tag" hidden></span></div>
           <div class="venn">
             <div class="venn-box">
               <div class="circle" id="c-r"></div>
@@ -302,19 +329,19 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           <span class="hash">#</span>
           ${CHANNELS.map((c) => `
             <div class="col">
-              <div class="mini" id="mini-${c.key}"></div>
               <input class="digit" id="hex-${c.key}" maxlength="2"
                      style="border-color: var(${c.token});">
             </div>`).join('')}
         </div>
         <div class="sliders">
           ${CHANNELS.map((c) => `
-            <label class="row">
-              <span class="lbl" style="color: var(${c.token});">${c.label}</span>
-              <input type="range" min="0" max="255" id="sl-${c.key}"
+            <div class="row">
+              <button type="button" class="lbl" id="ch-${c.key}"
+                      title="solo ${c.label}" aria-pressed="false">${c.label}</button>
+              <input type="range" min="0" max="255" id="sl-${c.key}" aria-label="${c.label}"
                      style="background: linear-gradient(to right, #000, ${c.pure(255)});">
               <code class="dec" id="dec-${c.key}"></code>
-            </label>`).join('')}
+            </div>`).join('')}
         </div>
         <div class="hsv-panel" id="hsv-panel">
           <div class="divider">↕ same color ↕</div>
@@ -345,6 +372,8 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         .addEventListener('input', (e) => this._setChannel(c.key, +this._target(e).value));
       this._input(`hex-${c.key}`)
         .addEventListener('input', (e) => this._setChannelHex(c.key, this._target(e).value));
+      this._el(`ch-${c.key}`)
+        .addEventListener('click', () => this._toggleSolo(c.key));
     }
     // HSV sliders: HSV is authoritative for these edits (no lossy round-trip).
     this._input('sl-h').addEventListener('input', (e) => this._setHsv('h', +this._target(e).value));
@@ -386,18 +415,54 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     this._render();
   }
 
+  // Channel-solo toggle (grill Q2): same channel releases, another switches.
+  // View state only — _value is untouched, so no _render() and no colorchange;
+  // a spurious emit here would ripple into the URL reflector and Lesson runtime.
+  private _toggleSolo(key: RgbKey): void {
+    this._solo = this._solo === key ? null : key;
+    this._renderSolo();
+  }
+
+  // Apply the solo state: fade the non-solo circles in place, light the active
+  // channel name with its pure color (resting names stay neutral via CSS), and
+  // refresh the Swatch corner slot.
+  private _renderSolo(): void {
+    for (const c of CHANNELS) {
+      const on = this._solo === c.key;
+      this._el(`c-${c.key}`).style.opacity = this._solo && !on ? '0' : '1';
+      const btn = this._el(`ch-${c.key}`);
+      btn.style.color = on ? `var(${c.token})` : '';
+      btn.setAttribute('aria-pressed', String(on));
+    }
+    this._renderTag();
+  }
+
+  // The Swatch corner slot, shared by two present-only states: the active
+  // channel's tag while solo is on (solo wins — it's the live inspection mode),
+  // else the Named color address when one exists. No name, no label — never a
+  // closest match. The Swatch itself always paints the FULL Color value; solo
+  // isolates light on the Venn, not here.
+  private _renderTag(): void {
+    const tag = this._el('swatch-tag');
+    const soloed = CHANNELS.find((c) => c.key === this._solo);
+    const text = soloed ? `${soloed.label} only` : namedColor(formatHex(this._value));
+    tag.hidden = text === null;
+    tag.textContent = text ?? '';
+    tag.style.color = bestTextColor(this._value);
+  }
+
   // --- redraw every view from the single value ---
   private _render(activeHexKey?: RgbKey): void {
     this._el('swatch').style.background = '#' + formatHex(this._value);
     for (const c of CHANNELS) {
       const v = this._value[c.key];
-      this._el(`mini-${c.key}`).style.background = c.pure(v);
       // Venn circle = this channel in isolation; screen-blend does the addition.
       this._el(`c-${c.key}`).style.background = c.pure(v);
       this._input(`sl-${c.key}`).value = String(v);
       this._el(`dec-${c.key}`).textContent = String(v);
       if (activeHexKey !== c.key) this._input(`hex-${c.key}`).value = hexPair(v);
     }
+    this._renderTag(); // the Named color address tracks the live value
     this._renderHsv();
     this._emitChange();
   }
