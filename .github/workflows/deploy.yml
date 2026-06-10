@@ -31,11 +31,12 @@ jobs:
       - run: npm run typecheck # fail the deploy on a type regression — vite build alone strips types unchecked
       - run: npm test # gate on the color core + happy-dom shell tests
       - run: npm run build
-      # v4+ drops dotfiles from the artifact by default — dist/ carries .nojekyll,
-      # so any future bump needs include-hidden-files: true
-      - uses: actions/upload-pages-artifact@v3
+      # include-hidden-files because v4+ drops dotfiles by default and dist/
+      # carries .nojekyll
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
+          include-hidden-files: true
 
   deploy:
     needs: build
