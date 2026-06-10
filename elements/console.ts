@@ -6,7 +6,8 @@
 // that value. Views never update each other directly — they all read the value.
 //
 // Swatch + RGB panel (C0FFEE-2), Additive Venn (C0FFEE-3), HSV panel (C0FFEE-4),
-// channel-solo + Named color address on the Swatch corner (C0FFEE-50).
+// channel-solo + Named color address on the Swatch corner (C0FFEE-50),
+// the Hex field as the typographic centerpiece (C0FFEE-49).
 //
 // RGB (`this._value`) is the canonical Color value. The HSV panel adds one bit
 // of legitimately-stateful caching (`this.hsv`): RGB->HSV is lossy at grays
@@ -40,8 +41,6 @@ const CHANNELS: Channel[] = [
   { key: 'g', label: 'Green', token: '--c0ffee-g', pure: (v) => `rgb(0,${v},0)` },
   { key: 'b', label: 'Blue', token: '--c0ffee-b', pure: (v) => `rgb(0,0,${v})` },
 ];
-
-const hexPair = (n: number): string => n.toString(16).toUpperCase().padStart(2, '0');
 
 class C0ffeeConsole extends HTMLElement implements ColorInterface {
   static observedAttributes = ['hex', 'presentation'];
@@ -81,8 +80,10 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
 
   disconnectedCallback(): void {
     // The colorchange listener sits on `this` (GC'd with the element); the
-    // hashchange listener lives on window, so it must be detached explicitly.
+    // hashchange listener lives on window and the popover's pointerdown
+    // listener on document, so both must be detached explicitly.
     window.removeEventListener('hashchange', this._onHashChange);
+    this._closePop();
   }
 
   attributeChangedCallback(name: string): void {
@@ -265,17 +266,65 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         #c-r { left: 50%; top: 0; }
         #c-g { left: 37%; top: 23%; }
         #c-b { left: 63%; top: 23%; }
-        .boxes {
-          display: flex; gap: 10px; justify-content: center;
-          align-items: flex-end; padding: 16px 0 4px;
+        /* ── Hex field (C0FFEE-49, grill Q3, prototype variant C) ──
+           ONE real <input> owns editing, so paste/select-all/undo stay native.
+           It is transparent and sits over a presentational mirror of six slots
+           grouped into three channel pairs — a plain input lays glyphs at
+           uniform advance and physically can't hold a gap inside itself, so
+           the pair grouping must be structural. The native caret is hidden;
+           one measured caret element stands in (exact at all 7 boundaries,
+           including the two inside pair-gaps — no trailing-gap artifact). */
+        .hexfield {
+          display: flex; justify-content: center; align-items: baseline; gap: .14em;
+          padding: 30px 0 10px;
+          --hex-fs: clamp(34px, 8vw, 50px);
+          --hex-ls: 0.12em;
+          font: 300 var(--hex-fs)/1 var(--c0ffee-font, monospace);
+          letter-spacing: var(--hex-ls);
+          text-transform: uppercase;
         }
-        .hash { font-size: 26px; color: #888; align-self: center; }
-        .col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-        .digit {
-          width: 64px; box-sizing: border-box; font: 600 24px/1 var(--c0ffee-font, monospace);
-          text-align: center; text-transform: uppercase; padding: 6px 0;
-          border-radius: 7px; border: 2px solid; background: #0d0d0d; color: #eee;
+        .hashmark { color: color-mix(in srgb, var(--c0ffee-fg, #eee) 42%, transparent); }
+        .hex-stack { position: relative; display: inline-block; }
+        .hex-input {
+          position: absolute; inset: 0; width: 100%; height: 100%;
+          background: none; border: none; outline: none; padding: 0; margin: 0;
+          font: inherit; letter-spacing: inherit; /* keep click-x ≈ glyph-x under the mirror */
+          color: transparent; caret-color: transparent;
+          z-index: 2;
         }
+        /* GEOMETRY IS MEASURED: _paintHexCaret and _mapHexClick read these
+           boxes via getBoundingClientRect — restructuring the mirror/slot
+           layout moves the caret and click mapping with it (no type error
+           will catch a drift; re-verify in a browser). */
+        .hex-mirror { display: flex; gap: .42ch; align-items: baseline; position: relative; z-index: 1; }
+        .hex-pair { display: flex; position: relative; }
+        .hex-slot { width: calc(1ch + var(--hex-ls)); text-align: center; }
+        /* an implied (untyped) trailing zero — present in the value, dimmed here */
+        .hex-slot.empty { color: color-mix(in srgb, var(--c0ffee-fg, #eee) 26%, transparent); }
+        .hex-dot {
+          position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
+          margin-bottom: 9px; width: 9px; height: 9px; border-radius: 50%;
+          border: none; padding: 0; cursor: pointer;
+        }
+        .hex-caret {
+          position: absolute; width: 2px; background: var(--c0ffee-accent, #C0FFEE);
+          transform: translateX(-1px); pointer-events: none;
+          animation: hex-blink 1.06s step-end infinite;
+        }
+        @keyframes hex-blink { 50% { opacity: 0; } }
+        /* place-value popover (grill Q11) — anchored inside its pair, so no
+           geometry math; bg + hairline are deliberate one-offs (grill Q10). */
+        .popover {
+          position: absolute; z-index: 5; left: 50%; top: 100%;
+          transform: translate(-50%, 10px);
+          width: max-content; max-width: 250px;
+          background: rgba(18,18,20,.97); border: 1px solid rgba(255,255,255,.12);
+          border-radius: 9px; padding: 10px 12px;
+          font: 400 12.5px/1.5 var(--c0ffee-font, monospace);
+          letter-spacing: normal; text-transform: none;
+          color: var(--c0ffee-fg, #eee);
+        }
+        .popover b { font-weight: 700; }
         .sliders { padding: 8px 0 20px; display: flex; flex-direction: column; gap: 13px; }
         .row { display: flex; align-items: center; gap: 12px; }
         /* One label gutter for both models so the rows stay aligned. Resting
@@ -309,6 +358,9 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         /* 292 border-box = C0FFEE-23's 240px content width + the new card padding,
            so the compact band's parts keep their proven proportions. */
         :host([presentation="companion"]) .card { width: 292px; }
+        /* the hero type would outgrow the 292px band — companion keeps the
+           field, at a fixed compact size */
+        :host([presentation="companion"]) .hexfield { --hex-fs: 26px; padding: 22px 0 8px; }
         :host([presentation="companion"]) .stage { flex-direction: row; gap: 12px; }
         :host([presentation="companion"]) .swatch { flex: 1; height: auto; min-height: 110px; }
         :host([presentation="companion"]) .venn { padding: 0; align-items: center; }
@@ -325,13 +377,24 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
             </div>
           </div>
         </div>
-        <div class="boxes">
-          <span class="hash">#</span>
-          ${CHANNELS.map((c) => `
-            <div class="col">
-              <input class="digit" id="hex-${c.key}" maxlength="2"
-                     style="border-color: var(${c.token});">
-            </div>`).join('')}
+        <div class="hexfield">
+          <span class="hashmark">#</span>
+          <span class="hex-stack">
+            <span class="hex-mirror" id="hex-mirror" aria-hidden="true">
+              ${CHANNELS.map((c, i) => `
+                <span class="hex-pair">
+                  <button type="button" class="hex-dot" id="dot-${c.key}"
+                          title="${c.label} place value" aria-label="${c.label} place value"
+                          style="background: var(${c.token});"></button>
+                  <span class="hex-slot" id="slot-${i * 2}"></span>
+                  <span class="hex-slot" id="slot-${i * 2 + 1}"></span>
+                </span>`).join('')}
+              <span class="hex-caret" id="hex-caret" hidden></span>
+            </span>
+            <input class="hex-input" id="hex-input" maxlength="6" inputmode="text"
+                   autocomplete="off" autocapitalize="characters" spellcheck="false"
+                   aria-label="Hex color address">
+          </span>
         </div>
         <div class="sliders">
           ${CHANNELS.map((c) => `
@@ -370,10 +433,20 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     for (const c of CHANNELS) {
       this._input(`sl-${c.key}`)
         .addEventListener('input', (e) => this._setChannel(c.key, +this._target(e).value));
-      this._input(`hex-${c.key}`)
-        .addEventListener('input', (e) => this._setChannelHex(c.key, this._target(e).value));
       this._el(`ch-${c.key}`)
         .addEventListener('click', () => this._toggleSolo(c.key));
+      this._el(`dot-${c.key}`)
+        .addEventListener('click', () => this._openPlaceValue(c));
+    }
+    // The Hex field: editing flows through _setHexField; every caret-moving
+    // interaction repaints the measured caret. The click listener order matters:
+    // gap-click mapping must fix the selection BEFORE the caret is painted.
+    const field = this._input('hex-input');
+    field.addEventListener('input', () => this._setHexField(field.value));
+    field.addEventListener('paste', this._onHexPaste);
+    field.addEventListener('click', this._mapHexClick);
+    for (const ev of ['keyup', 'click', 'select', 'focus', 'blur']) {
+      field.addEventListener(ev, () => this._paintHexCaret());
     }
     // HSV sliders: HSV is authoritative for these edits (no lossy round-trip).
     this._input('sl-h').addEventListener('input', (e) => this._setHsv('h', +this._target(e).value));
@@ -388,22 +461,26 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     this._render();
   }
 
-  // Hex box edit. Filter the raw input to valid hex digits first, then write
-  // the *filtered* string straight back into the box so it can never show a
-  // character the value silently dropped (the old `if`-no-`else` bug). Two hex
-  // digits cap at FF = 255, so the filter alone keeps the channel in range —
-  // no separate bounds check, no lenient parseInt prefix-parse.
-  private _setChannelHex(key: RgbKey, raw: string): void {
-    const clean = sanitizeHexInput(raw, 2);
-    // Correct the box in place — but only when the filter actually changed the
-    // characters, not just their case. The box is displayed uppercase via CSS
-    // (text-transform), so a valid lowercase keystroke needs no rewrite; writing
-    // box.value would just jump the caret to the end and fight mid-string edits.
-    const box = this._input(`hex-${key}`);
-    if (box.value.toUpperCase() !== clean) box.value = clean;
-    this._value[key] = clean === '' ? 0 : parseInt(clean, 16);
+  // Whole-field Hex edit (C0FFEE-21's invariant at field scope). Filter the raw
+  // input to valid hex digits first, then write the *filtered* string straight
+  // back so the field can never show a character the value silently dropped —
+  // but only when the filter changed the characters, not just their case (the
+  // mirror uppercases via CSS; a case-only rewrite would just jump the caret).
+  // Missing trailing digits read as implied zeros: the value stays total and
+  // the mirror dims what wasn't typed.
+  private _setHexField(raw: string): void {
+    const clean = sanitizeHexInput(raw, 6);
+    const field = this._input('hex-input');
+    if (field.value.toUpperCase() !== clean) {
+      // pull the caret back by however many chars the filter dropped before it
+      const at = Math.max(0, (field.selectionStart ?? clean.length) - (raw.length - clean.length));
+      field.value = clean;
+      field.setSelectionRange(at, at);
+    }
+    // 6 sanitized hex chars always parse; ?? keeps the value total without `!`.
+    this._value = parseHex(clean.padEnd(6, '0')) ?? { ...DEFAULT };
     this.hsv = stickyHsv(this._value, this.hsv);
-    this._render(key); // don't stomp the box the user is typing in
+    this._render(true); // don't stomp the field the user is typing in
   }
 
   // HSV edits: hsv is authoritative; value follows directly.
@@ -452,7 +529,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   }
 
   // --- redraw every view from the single value ---
-  private _render(activeHexKey?: RgbKey): void {
+  private _render(hexFieldActive = false): void {
     this._el('swatch').style.background = '#' + formatHex(this._value);
     for (const c of CHANNELS) {
       const v = this._value[c.key];
@@ -460,12 +537,129 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
       this._el(`c-${c.key}`).style.background = c.pure(v);
       this._input(`sl-${c.key}`).value = String(v);
       this._el(`dec-${c.key}`).textContent = String(v);
-      if (activeHexKey !== c.key) this._input(`hex-${c.key}`).value = hexPair(v);
     }
+    // Sync the Hex field to the canonical address — except while the user is
+    // typing in it (a partial entry like '1A2B' must not snap to '1A2B00').
+    if (!hexFieldActive) this._input('hex-input').value = formatHex(this._value);
+    this._renderHexMirror();
     this._renderTag(); // the Named color address tracks the live value
     this._renderHsv();
     this._emitChange();
   }
+
+  // The mirror shows exactly the field's accepted characters, uppercased by
+  // CSS; an untyped slot shows its implied zero, dimmed. aria-hidden on the
+  // mirror — the real input is the accessibility surface.
+  private _renderHexMirror(): void {
+    const typed = sanitizeHexInput(this._input('hex-input').value, 6);
+    for (let i = 0; i < 6; i++) {
+      const slot = this._el(`slot-${i}`);
+      slot.textContent = typed[i] ?? '0';
+      slot.classList.toggle('empty', i >= typed.length);
+    }
+    this._paintHexCaret();
+  }
+
+  // One fake caret, positioned by MEASURING the slot boxes (prototype variant
+  // C): a text caret sits at the boundary BEFORE the char at the cursor index,
+  // and the structural pair-gaps mean those boundaries can't be computed from
+  // glyph advances. On a range selection the native selection paint takes over.
+  // happy-dom has no layout (every rect is zero) — geometry is browser-verified.
+  private _paintHexCaret = (): void => {
+    const field = this._input('hex-input');
+    const caret = this._el('hex-caret');
+    const at = field.selectionStart ?? 0;
+    // Check the host first: when the field has focus the host IS the document's
+    // active element, and the cheap check also short-circuits past happy-dom's
+    // ShadowRoot.activeElement getter, which throws while nothing has focus.
+    const focused = document.activeElement === this && this.root.activeElement === field;
+    caret.hidden = !focused || field.selectionStart !== field.selectionEnd;
+    if (caret.hidden) return;
+    const mirror = this._el('hex-mirror').getBoundingClientRect();
+    // Nothing to measure (happy-dom, or a zero-width edge like a hidden card):
+    // keep the caret hidden rather than visible at stale coordinates.
+    if (!mirror.width) { caret.hidden = true; return; }
+    const ref = this._el(`slot-${Math.min(at, 5)}`).getBoundingClientRect();
+    const x = at >= 6 ? ref.right - mirror.left : ref.left - mirror.left;
+    caret.style.left = `${x}px`;
+    caret.style.top = `${ref.top - mirror.top + ref.height * 0.16}px`;
+    caret.style.height = `${ref.height * 0.66}px`;
+  };
+
+  // Paste must sanitize BEFORE the length clamp. Left to the browser, a native
+  // paste honors maxlength on the RAW clipboard text — '#00ccff' (8 chars) gets
+  // clamped to '#00ccf' before sanitize ever runs, silently costing the last
+  // digit. So: intercept, filter the clipboard text, splice it over the
+  // selection ourselves, and run the one edit path on the result.
+  private _onHexPaste = (e: ClipboardEvent): void => {
+    e.preventDefault();
+    const field = this._input('hex-input');
+    const text = sanitizeHexInput(e.clipboardData?.getData('text') ?? '', 6);
+    const s = field.selectionStart ?? field.value.length;
+    const en = field.selectionEnd ?? s;
+    field.value = field.value.slice(0, s) + text + field.value.slice(en);
+    field.setSelectionRange(s + text.length, s + text.length);
+    this._setHexField(field.value);
+  };
+
+  // Gap-click compensation (C0FFEE-49 open item 1 — decided: compensate). The
+  // mirror is wider than the transparent input (structural pair-gaps the input
+  // lacks), so the input's own hit-testing drifts near the gaps. Snap a plain
+  // click to the nearest MEASURED slot boundary instead; drag-selections are
+  // left alone.
+  private _mapHexClick = (e: MouseEvent): void => {
+    const field = this._input('hex-input');
+    if (field.selectionStart !== field.selectionEnd) return;
+    if (!this._el('hex-mirror').getBoundingClientRect().width) return; // no layout engine
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i <= 6; i++) {
+      const ref = this._el(`slot-${Math.min(i, 5)}`).getBoundingClientRect();
+      const x = i >= 6 ? ref.right : ref.left;
+      const d = Math.abs(e.clientX - x);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    field.setSelectionRange(best, best);
+  };
+
+  // Place-value popover (grill Q11): a pair's 16s-and-1s decomposition, e.g.
+  // C×16 + 0×1 = 192. Anchored inside its pair (position: relative), so no
+  // geometry math. The input owns editing — a dot tap must never strand the
+  // caret, so focus (and the selection) hand straight back to the field.
+  private _pop: HTMLElement | null = null;
+
+  private _openPlaceValue(c: Channel): void {
+    this._closePop();
+    const i = CHANNELS.indexOf(c);
+    const pair = formatHex(this._value).slice(i * 2, i * 2 + 2);
+    const pop = document.createElement('div');
+    pop.className = 'popover';
+    pop.innerHTML =
+      `<b>${c.label}</b> — the <b>${pair}</b> pair<br>` +
+      `<b>${pair[0]}</b>×16 + <b>${pair[1]}</b>×1 = <b>${this._value[c.key]}</b> (0–255)`;
+    this._el(`dot-${c.key}`).parentElement?.appendChild(pop);
+    this._pop = pop;
+    document.addEventListener('pointerdown', this._closePop);
+    const field = this._input('hex-input');
+    const s = field.selectionStart;
+    const en = field.selectionEnd;
+    field.focus();
+    field.setSelectionRange(s, en);
+  }
+
+  // Close on any outside pointerdown. A pointerdown on the popover itself or on
+  // one of THIS console's dots is not "outside" — the dot's click handler swaps
+  // the popover itself. (Scoped to this shadow root: another console's dot on
+  // the same page must read as outside.)
+  private _closePop = (e?: Event): void => {
+    if (!this._pop) return;
+    if (e && e.composedPath().some((t) =>
+      t === this._pop ||
+      (t instanceof HTMLElement && t.classList.contains('hex-dot') && this.root.contains(t)))) return;
+    this._pop.remove();
+    this._pop = null;
+    document.removeEventListener('pointerdown', this._closePop);
+  };
 
   // Notify-out half of the interface (ADR-0001). composed:true so the event
   // escapes the Shadow DOM; a page that opts in listens to reflect state to the URL.
