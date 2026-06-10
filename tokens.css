@@ -2,21 +2,52 @@
    These custom properties cross the Shadow DOM boundary, so both pages
    and elements read them. Change a value here to restyle the whole site. */
 
+/* DM Mono, self-hosted (latin subsets, ~8.5KB/weight; license in
+   /fonts/OFL.txt). Chosen for its slashed zero — on a site about hex, 0 vs O
+   must never be ambiguous, and the slash is a small teaching win in itself.
+   The slashed zero is DM Mono's DEFAULT glyph: the font has no zero/calt
+   OpenType features at all (and Google's subset pipeline strips GSUB anyway),
+   so a font-feature-settings rule here would be a no-op — deliberately
+   omitted, not forgotten. */
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 300;
+  src: url(/fonts/dm-mono-300.woff2) format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 400;
+  src: url(/fonts/dm-mono-400.woff2) format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 500;
+  src: url(/fonts/dm-mono-500.woff2) format("woff2");
+  font-display: swap;
+}
+
 :root {
   /* Type */
-  --c0ffee-font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --c0ffee-font: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Brand */
   --c0ffee-accent: #C0FFEE;   /* the name, as a color */
-  --c0ffee-bg: #0b0b0b;       /* deep near-black (lets the Additive Venn glow) */
+  --c0ffee-bg: #0a0a0b;       /* deep near-black (lets the Additive Venn glow) */
   --c0ffee-panel: #161616;    /* surface for element cards, one step up from bg */
   --c0ffee-fg: #ededed;       /* default text on dark surfaces */
 
   /* Shape */
   --c0ffee-radius: 10px;
 
-  /* Channel colors — used to label R/G/B consistently everywhere */
-  --c0ffee-r: #c0392b;
-  --c0ffee-g: #1e8449;
-  --c0ffee-b: #2471a3;
+  /* Channel colors — the faithful pure primaries (ADR-0007). The console
+     teaches additive RGB, so its channel signifiers are the real channel
+     colors; do not soften them for aesthetics. */
+  --c0ffee-r: #FF0000;
+  --c0ffee-g: #00FF00;
+  --c0ffee-b: #0000FF;
 }
