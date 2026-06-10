@@ -340,15 +340,56 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           background: none; border: none; padding: 0; cursor: pointer;
           font: inherit; font-weight: 700;
         }
+        /* ── Knurled sliders (C0FFEE-48, grill Q5) ──
+           The control stays a NATIVE range input — keyboard arrows, focus and
+           ARIA come free — and the instrument look is CSS only. The track is a
+           bounded bar: the bright inset outline marks the min/max ends, so no
+           numeric end-caps are needed. */
         input[type=range] {
           flex: 1; -webkit-appearance: none; appearance: none;
-          height: 14px; border-radius: 7px;
+          height: 20px; border-radius: 6px;
+          box-shadow: inset 0 0 0 2px rgba(255,255,255,.82), inset 0 2px 5px rgba(0,0,0,.5);
         }
+        /* The thumb is a knurled grip built from three stacked gradients —
+           top-down: the 1px dark center seam (a thumb pseudo-element can't
+           carry ::after, which is why the seam is a gradient layer and why Q5
+           chose styling-native over a custom widget), the knurl ridges (1px
+           every 3px), the metal body. Keep the -webkit-/-moz- blocks in sync;
+           they can't share a selector list (one unknown pseudo voids the rule). */
         input[type=range]::-webkit-slider-thumb {
-          -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
-          background: #fff; border: 2px solid #222; cursor: pointer;
+          -webkit-appearance: none;
+          width: 18px; height: 26px; border-radius: 5px;
+          border: none; cursor: pointer;
+          background:
+            linear-gradient(90deg, transparent calc(50% - .5px), rgba(0,0,0,.8) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px)),
+            repeating-linear-gradient(90deg, rgba(255,255,255,.34) 0 1px, transparent 1px 3px),
+            linear-gradient(180deg, #8a8b93, #34353a);
+          box-shadow:
+            0 4px 9px rgba(0,0,0,.7),
+            inset 0 0 0 1px rgba(255,255,255,.5),
+            inset 0 1px 0 rgba(255,255,255,.85),
+            0 0 0 1.5px rgba(255,255,255,.18);
         }
-        .dec { width: 40px; text-align: right; color: #999; font-size: 13px; }
+        input[type=range]::-moz-range-thumb {
+          width: 18px; height: 26px; border-radius: 5px;
+          border: none; cursor: pointer;
+          background:
+            linear-gradient(90deg, transparent calc(50% - .5px), rgba(0,0,0,.8) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px)),
+            repeating-linear-gradient(90deg, rgba(255,255,255,.34) 0 1px, transparent 1px 3px),
+            linear-gradient(180deg, #8a8b93, #34353a);
+          box-shadow:
+            0 4px 9px rgba(0,0,0,.7),
+            inset 0 0 0 1px rgba(255,255,255,.5),
+            inset 0 1px 0 rgba(255,255,255,.85),
+            0 0 0 1.5px rgba(255,255,255,.18);
+        }
+        /* Value column: one type voice with the Hex field (DM Mono), left-aligned
+           so RGB and HSV decimals share an edge. 48px fits the widest value (360°). */
+        .dec {
+          width: 48px; text-align: left;
+          font: 500 16px/1 var(--c0ffee-font, monospace);
+          color: var(--c0ffee-fg, #eee);
+        }
         .divider { text-align: center; color: #555; font-size: 12px; padding: 2px 0 8px; }
         .lbl.hsv { color: var(--c0ffee-accent, #C0FFEE); }
         /* companion presentation (C0FFEE-23): a compact band for a Lesson's pinned
