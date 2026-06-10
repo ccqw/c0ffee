@@ -322,6 +322,52 @@ test('<c0ffee-console> keeps companion-specific styling so "compact" can never s
   expect(css).toContain(':host([presentation="companion"])');
 });
 
+// C0FFEE-47 — Additive Venn blend correctness + hero geometry + card surface.
+// happy-dom does no paint/layout, so these anchor the *mechanism* in the shadow
+// CSS (the C0FFEE-23 precedent above): if a rule is renamed or dropped, the blend
+// silently drifts or the hero silently reverts while every other test stays green.
+// The composited result (center tri-overlap === the Color value) is browser-verified.
+
+// Pull one rule block out of the console's shadow stylesheet by selector.
+function cssBlock(el: HTMLElement, selector: string): string {
+  const css = el.shadowRoot?.querySelector('style')?.textContent ?? '';
+  const match = css.match(new RegExp(selector.replace(/[.#]/g, '\\$&') + '\\s*{[^}]*}'));
+  return match?.[0] ?? '';
+}
+
+test('<c0ffee-console> Additive Venn screen-blends over pure black in an isolated stacking context', () => {
+  // The two invariants that make the center tri-overlap EQUAL the Color value
+  // (screen over #000 is exact additive light; isolation walls the blend off
+  // from the card). CONTEXT.md records this as an implementation invariant.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const vennBox = cssBlock(el, '.venn-box');
+  expect(vennBox).toContain('background: #000');
+  expect(vennBox).toContain('isolation: isolate');
+});
+
+test('<c0ffee-console> Venn circles use the hero geometry — 70% of the box, heavy-overlap centers', () => {
+  // 70% circles at these three centers make the central tri-intersection the
+  // LARGEST region — the mixed color is the headline, not a sliver.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const circle = cssBlock(el, '.circle');
+  expect(circle).toContain('width: 70%');
+  expect(circle).toContain('height: 70%');
+  expect(cssBlock(el, '#c-r')).toContain('left: 50%');
+  expect(cssBlock(el, '#c-g')).toContain('left: 37%');
+  expect(cssBlock(el, '#c-b')).toContain('left: 63%');
+});
+
+test('<c0ffee-console> card surface is the page bg + inset hairline + drop shadow', () => {
+  // Frugal-surfaces decision (grill Q10): the card is --c0ffee-bg dressed with
+  // a hairline and shadow — not a lighter panel fill. (--c0ffee-panel staying
+  // #161616 for the Menu tiles + Swatch is asserted in tokens.test.ts.)
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const card = cssBlock(el, '.card');
+  expect(card).toContain('background: var(--c0ffee-bg');
+  expect(card).toContain('inset 0 0 0 1px rgba(255,255,255,.06)');
+  expect(card).toContain('0 30px 70px -30px rgba(0,0,0,.8)');
+});
+
 test('<c0ffee-console presentation="companion"> still honours the full ADR-0001 contract', () => {
   const el = mountPresentation('companion', '3A7BD5');
 
