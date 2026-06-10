@@ -672,7 +672,7 @@ test('<c0ffee-console> the thumb carries the knurled-grip gradient stack — sea
   expect(thumb).toContain('height: 26px');
   expect(thumb).toContain('calc(50% - .5px)'); // the 1px dark center seam
   expect(thumb).toContain('repeating-linear-gradient(90deg'); // the knurl ridges
-  expect(thumb).toContain('linear-gradient(180deg, #8a8b93, #34353a)'); // the metal body
+  expect(thumb).toContain('rgba(235,240,248,.34)'); // the translucent frosted body
   // Firefox gets the same grip via its own pseudo-element
   expect(cssBlock(el, 'input[type=range]::-moz-range-thumb')).toContain('height: 26px');
 });

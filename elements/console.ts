@@ -350,20 +350,23 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           height: 20px; border-radius: 6px;
           box-shadow: inset 0 0 0 2px rgba(255,255,255,.82), inset 0 2px 5px rgba(0,0,0,.5);
         }
-        /* The thumb is a knurled grip built from three stacked gradients —
-           top-down: the 1px dark center seam (a thumb pseudo-element can't
-           carry ::after, which is why the seam is a gradient layer and why Q5
-           chose styling-native over a custom widget), the knurl ridges (1px
-           every 3px), the metal body. Keep the -webkit-/-moz- blocks in sync;
-           they can't share a selector list (one unknown pseudo voids the rule). */
+        /* The thumb is a knurled frosted-glass grip built from three stacked
+           gradients — top-down: the 1px dark center seam (a thumb pseudo-element
+           can't carry ::after, which is why the seam is a gradient layer and why
+           Q5 chose styling-native over a custom widget), the knurl ridges (1px
+           every 3px), the translucent body that lets the Channel's light show
+           through (alpha does the frosting — backdrop-filter doesn't apply to
+           thumb pseudo-elements, and the track under it is a smooth gradient
+           anyway). Keep the -webkit-/-moz- blocks in sync; they can't share a
+           selector list (one unknown pseudo voids the rule). */
         input[type=range]::-webkit-slider-thumb {
           -webkit-appearance: none;
           width: 18px; height: 26px; border-radius: 5px;
           border: none; cursor: pointer;
           background:
-            linear-gradient(90deg, transparent calc(50% - .5px), rgba(0,0,0,.8) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px)),
-            repeating-linear-gradient(90deg, rgba(255,255,255,.34) 0 1px, transparent 1px 3px),
-            linear-gradient(180deg, #8a8b93, #34353a);
+            linear-gradient(90deg, transparent calc(50% - .5px), rgba(0,0,0,.45) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px)),
+            repeating-linear-gradient(90deg, rgba(255,255,255,.4) 0 1px, transparent 1px 3px),
+            linear-gradient(180deg, rgba(235,240,248,.34), rgba(150,155,165,.25));
           box-shadow:
             0 4px 9px rgba(0,0,0,.7),
             inset 0 0 0 1px rgba(255,255,255,.5),
@@ -374,9 +377,9 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           width: 18px; height: 26px; border-radius: 5px;
           border: none; cursor: pointer;
           background:
-            linear-gradient(90deg, transparent calc(50% - .5px), rgba(0,0,0,.8) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px)),
-            repeating-linear-gradient(90deg, rgba(255,255,255,.34) 0 1px, transparent 1px 3px),
-            linear-gradient(180deg, #8a8b93, #34353a);
+            linear-gradient(90deg, transparent calc(50% - .5px), rgba(0,0,0,.45) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px)),
+            repeating-linear-gradient(90deg, rgba(255,255,255,.4) 0 1px, transparent 1px 3px),
+            linear-gradient(180deg, rgba(235,240,248,.34), rgba(150,155,165,.25));
           box-shadow:
             0 4px 9px rgba(0,0,0,.7),
             inset 0 0 0 1px rgba(255,255,255,.5),
