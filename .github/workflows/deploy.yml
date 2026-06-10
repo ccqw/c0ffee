@@ -21,8 +21,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # v6 = Node 24 runtime; GitHub force-migrates v4's Node 20 on 2026-06-16
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -30,6 +31,8 @@ jobs:
       - run: npm run typecheck # fail the deploy on a type regression — vite build alone strips types unchecked
       - run: npm test # gate on the color core + happy-dom shell tests
       - run: npm run build
+      # v4+ drops dotfiles from the artifact by default — dist/ carries .nojekyll,
+      # so any future bump needs include-hidden-files: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
