@@ -4,7 +4,8 @@
 // browser-MCP pass; this covers behavior. This file is the proof-of-pattern the
 // v2 console slices (C0FFEE-14/15/16) copy forward, so it deliberately exercises
 // the edit path + composed event, not just seeding.
-import { test, expect, beforeAll } from 'vitest';
+import { test, expect, beforeAll, vi } from 'vitest';
+import { formatColorLink } from '../lib/color.ts';
 import type { ColorInterface, ColorChangeDetail } from '../lib/color.ts';
 
 // Registering the custom elements is a module side effect (customElements.define).
@@ -708,4 +709,113 @@ test('<c0ffee-console> slider rows pin the label gutter and value column — onl
   expect(cssBlock(el, '.lbl')).toContain('flex: none');
   expect(cssBlock(el, '.dec')).toContain('flex: none');
   expect(cssBlock(el, 'input[type=range]')).toContain('min-width: 0');
+});
+
+// C0FFEE-54 — the copy button: one tap puts the canonical Hex color address on
+// the clipboard (the SAME codec the URL hash uses — formatColorLink — so the
+// address bar, the share link, and the copied value can never disagree), then
+// flashes confirmation. A rejected clipboard write flashes a distinct failed
+// state, never the success check (the console doesn't lie). The flash *look*
+// is browser-verified; these pin the payload + the state machine.
+
+const copyBtn = (el: HTMLElement): HTMLButtonElement =>
+  el.shadowRoot?.getElementById('hex-copy') as HTMLButtonElement;
+const copyStatus = (el: HTMLElement): HTMLElement =>
+  el.shadowRoot?.getElementById('copy-status') as HTMLElement;
+
+// navigator.clipboard is read-only and absent in insecure contexts; tests
+// install their own, recording payloads and resolving (or rejecting) on demand.
+function stubClipboard(fail = false): string[] {
+  const calls: string[] = [];
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: (text: string): Promise<void> => {
+        calls.push(text);
+        return fail ? Promise.reject(new Error('denied')) : Promise.resolve();
+      },
+    },
+  });
+  return calls;
+}
+
+// The write + flash settle in microtasks after the click; flush them.
+const settle = async (): Promise<void> => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
+test('<c0ffee-console> a copy button sits beside the Hex field, quiet and labeled', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const btn = copyBtn(el);
+  expect(btn.getAttribute('type')).toBe('button');
+  expect(btn.getAttribute('aria-label')).toBe('Copy hex color address');
+  expect(btn.closest('.hexfield')).not.toBeNull(); // beside the field, in its row
+});
+
+test('<c0ffee-console presentation="companion"> keeps the copy button — it rides the Hex field', () => {
+  const el = mountPresentation('companion', 'C0FFEE');
+  const btn = copyBtn(el);
+  expect(btn).not.toBeNull();
+  expect(btn.hidden).toBe(false);
+  el.remove();
+});
+
+test('<c0ffee-console> clicking copy puts the canonical #RRGGBB Hex color address on the clipboard', async () => {
+  const calls = stubClipboard();
+  const el = mount('c0ffee-console'); // the namesake default
+  copyBtn(el).click();
+  await settle();
+  expect(calls).toEqual(['#C0FFEE']);
+});
+
+test('<c0ffee-console> the copied address tracks the live Color value via the hash codec', async () => {
+  const calls = stubClipboard();
+  const el = mount('c0ffee-console', '3A7BD5');
+  copyBtn(el).click();
+  await settle();
+  expect(calls).toEqual([formatColorLink(el.value)]); // byte-identical to the URL-hash form
+
+  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  slider.value = '255';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  copyBtn(el).click();
+  await settle();
+  expect(calls[1]).toBe('#FF7BD5'); // the edit is what gets copied, live
+});
+
+test('<c0ffee-console> a successful copy flashes confirmation, announces it, then returns to rest', async () => {
+  vi.useFakeTimers();
+  try {
+    stubClipboard();
+    const el = mount('c0ffee-console', 'C0FFEE');
+    const btn = copyBtn(el);
+    btn.click();
+    await settle();
+    expect(btn.classList.contains('copied')).toBe(true);
+    expect(copyStatus(el).textContent).toBe('Copied'); // the aria-live announcement
+    vi.advanceTimersByTime(2000);
+    expect(btn.classList.contains('copied')).toBe(false); // back to quiet rest
+    expect(copyStatus(el).textContent).toBe('');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console> a rejected clipboard write flashes the failed state, never the success check', async () => {
+  vi.useFakeTimers();
+  try {
+    stubClipboard(true);
+    const el = mount('c0ffee-console', 'C0FFEE');
+    const btn = copyBtn(el);
+    btn.click();
+    await settle();
+    expect(btn.classList.contains('copied')).toBe(false); // no false "it worked"
+    expect(btn.classList.contains('copy-failed')).toBe(true);
+    expect(copyStatus(el).textContent).toBe('Copy failed');
+    vi.advanceTimersByTime(2000);
+    expect(btn.classList.contains('copy-failed')).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
 });
