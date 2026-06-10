@@ -287,7 +287,7 @@ test('<c0ffee-console> keeps companion-specific styling so "compact" can never s
 // Pull one rule block out of the console's shadow stylesheet by selector.
 function cssBlock(el: HTMLElement, selector: string): string {
   const css = el.shadowRoot?.querySelector('style')?.textContent ?? '';
-  const match = css.match(new RegExp(selector.replace(/[.#]/g, '\\$&') + '\\s*{[^}]*}'));
+  const match = css.match(new RegExp(selector.replace(/[.#[\]]/g, '\\$&') + '\\s*{[^}]*}'));
   return match?.[0] ?? '';
 }
 
@@ -640,4 +640,46 @@ test('<c0ffee-console> the Hex field carries the hero typography mechanism', () 
   const block = cssBlock(el, '.hexfield');
   expect(block).toContain('clamp(34px, 8vw, 50px)');
   expect(block).toContain('letter-spacing');
+});
+
+// C0FFEE-48 — knurled styling on the native RGB/HSV sliders (grill Q5). The
+// decision under guard: the sliders STAY native <input type="range"> — keyboard
+// arrows, focus, and ARIA come free — and the knurled look is pure CSS. happy-dom
+// does no paint, so these anchor the mechanism (the C0FFEE-47 precedent); the
+// physical look is browser-verified at the dev-serve gate.
+
+test('<c0ffee-console> every slider is still a native range input — no custom widget', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  expect(el.shadowRoot?.querySelectorAll('input[type=range]').length).toBe(6); // 3 Channels + H/S/V
+  const red = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  expect(red.min).toBe('0');
+  expect(red.max).toBe('255');
+});
+
+test('<c0ffee-console> the track is a bounded 20px bar — bright outline marks the min/max ends', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const track = cssBlock(el, 'input[type=range]');
+  expect(track).toContain('height: 20px');
+  expect(track).toContain('inset 0 0 0 2px rgba(255,255,255,.82)');
+});
+
+test('<c0ffee-console> the thumb carries the knurled-grip gradient stack — seam, ridges, metal body', () => {
+  // The seam is the top gradient layer because ::after cannot attach to a thumb
+  // pseudo-element — the exact constraint that made grill Q5 pick style-native.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const thumb = cssBlock(el, 'input[type=range]::-webkit-slider-thumb');
+  expect(thumb).toContain('width: 18px');
+  expect(thumb).toContain('height: 26px');
+  expect(thumb).toContain('calc(50% - .5px)'); // the 1px dark center seam
+  expect(thumb).toContain('repeating-linear-gradient(90deg'); // the knurl ridges
+  expect(thumb).toContain('rgba(235,240,248,.34)'); // the translucent frosted body
+  // Firefox gets the same grip via its own pseudo-element
+  expect(cssBlock(el, 'input[type=range]::-moz-range-thumb')).toContain('height: 26px');
+});
+
+test('<c0ffee-console> the value column reads in DM Mono 500/16 — one type voice with the Hex field', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const dec = cssBlock(el, '.dec');
+  expect(dec).toContain('500 16px');
+  expect(dec).toContain('var(--c0ffee-font');
 });
