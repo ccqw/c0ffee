@@ -86,53 +86,9 @@ test('<c0ffee-console> RGB slider edit updates the value and emits a composed co
   expect(detail!).toMatchObject({ r: 255, g: 0, b: 0, hex: 'FF0000' });
 });
 
-// C0FFEE-21 — the per-Channel hex box can never lie about what the color
-// accepted. After each edit the box shows exactly the sanitized value and the
-// Color value matches it; the silent-swallow and parseInt-leniency bugs are gone.
-function typeHex(el: HTMLElement & ColorInterface, key: 'r' | 'g' | 'b', raw: string): HTMLInputElement {
-  const box = el.shadowRoot?.getElementById(`hex-${key}`) as HTMLInputElement;
-  box.value = raw;
-  box.dispatchEvent(new Event('input', { bubbles: true }));
-  return box;
-}
-
-test('<c0ffee-console> hex box strips the trailing junk parseInt used to swallow', () => {
-  const el = mount('c0ffee-console', '000000');
-  const box = typeHex(el, 'r', '1g'); // old: parseInt('1g',16)===1, box kept '1g'
-  expect(box.value).toBe('1');        // box shows only what survived the filter
-  expect(el.value.r).toBe(1);         // and the value agrees with the box
-});
-
-test('<c0ffee-console> hex box drops a fully-invalid keystroke instead of silently swallowing it', () => {
-  const el = mount('c0ffee-console', '000000');
-  const box = typeHex(el, 'r', 'g'); // old: box was left showing 'g', value untouched -> disagreement
-  expect(box.value).toBe('');        // rejected char never shows
-  expect(el.value.r).toBe(0);        // color unchanged — box and value still agree
-});
-
-test('<c0ffee-console> hex box clamps an over-long paste to two digits', () => {
-  const el = mount('c0ffee-console', '000000');
-  const box = typeHex(el, 'r', 'FFA'); // a paste can exceed maxlength=2
-  expect(box.value).toBe('FF');
-  expect(el.value.r).toBe(255);
-});
-
-test('<c0ffee-console> typing a two-digit hex value is not stomped mid-keystroke', () => {
-  const el = mount('c0ffee-console', '000000');
-  typeHex(el, 'r', 'c');             // first keystroke (lowercase)
-  const box = typeHex(el, 'r', 'c0'); // second keystroke completes the pair
-  // A valid keystroke isn't rewritten (no caret jump); the box keeps the user's
-  // own characters and CSS shows them uppercase. The value reads them either way.
-  expect(box.value).toBe('c0');
-  expect(el.value.r).toBe(192);       // parseInt is case-insensitive: c0 -> 192
-});
-
-test('<c0ffee-console> a valid lowercase keystroke is left untouched (no caret-jumping rewrite)', () => {
-  const el = mount('c0ffee-console', '000000');
-  const box = typeHex(el, 'r', 'ab'); // already valid hex, just lowercase
-  expect(box.value).toBe('ab');       // not rewritten to 'AB' — caret stays put
-  expect(el.value.r).toBe(171);       // 0xAB
-});
+// C0FFEE-21's invariant — the hex surface can never lie about what the color
+// accepted — now holds at FIELD scope (C0FFEE-49 replaced the per-Channel boxes
+// with the one Hex field; its tests live at the end of this file).
 
 // C0FFEE-22 — opt-in URL reflection. With the `reflect` attribute the console owns
 // location.hash: it seeds from the hash on connect, RE-SEEDS on hashchange (the
@@ -476,16 +432,15 @@ test('<c0ffee-console> the corner slot is shared: the solo tag takes it, the nam
   expect(swatchTag(el).textContent).toBe('red'); // the Named address returns
 });
 
-test('<c0ffee-console> the hex columns hold exactly the digit inputs — the Channel-swatch minis are gone', () => {
-  // Channel-solo replaced the three mini swatches (grill Q2): each .col is now
-  // just its hex digit box. Asserting the exact contents (not an absence) pins it.
+test('<c0ffee-console> the console has exactly ONE text input — the Hex field is the whole hex surface', () => {
+  // C0FFEE-49 replaced the three per-Channel digit boxes with the one Hex field
+  // (grill Q3: one representation — read, edit, copy in the same place).
+  // Asserting the exact input census (not an absence) pins it: every non-range
+  // input in the shadow root is the field.
   const el = mount('c0ffee-console', 'C0FFEE');
-  const cols = el.shadowRoot?.querySelectorAll('.col') ?? [];
-  expect(cols.length).toBe(3);
-  for (const col of cols) {
-    expect(col.children.length).toBe(1);
-    expect(col.children[0].classList.contains('digit')).toBe(true);
-  }
+  const textInputs = el.shadowRoot?.querySelectorAll('input:not([type=range])') ?? [];
+  expect(textInputs.length).toBe(1);
+  expect(textInputs[0].id).toBe('hex-input');
 });
 
 test('<c0ffee-console presentation="companion"> still honours the full ADR-0001 contract', () => {
@@ -508,4 +463,181 @@ test('<c0ffee-console presentation="companion"> still honours the full ADR-0001 
   expect(detail).not.toBeNull();
   expect(detail!).toMatchObject({ r: 255, g: 123, b: 213, hex: 'FF7BD5' });
   el.remove();
+});
+
+// C0FFEE-49 — the Hex field: one editable input as the typographic centerpiece
+// (grill Q3, prototype variant C). A transparent real <input maxlength=6> sits
+// over a presentational mirror of six slots grouped into three channel pairs,
+// a channel dot above each pair; one measured caret element stands in for the
+// hidden native one. The input owns editing: the whole-field path is
+// sanitizeHexInput(raw, 6) + parseHex, so C0FFEE-21's "can't lie" invariant
+// holds at field scope. Partial input means implied trailing zeros — the Color
+// value stays total, the mirror dims what wasn't typed. Caret/selection
+// geometry is rect-measured, so it's browser-verified, not asserted here.
+
+const hexField = (el: HTMLElement): HTMLInputElement =>
+  el.shadowRoot?.getElementById('hex-input') as HTMLInputElement;
+
+function typeHexField(el: HTMLElement & ColorInterface, raw: string): HTMLInputElement {
+  const field = hexField(el);
+  field.value = raw;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  return field;
+}
+
+const slotChars = (el: HTMLElement): string[] =>
+  [...(el.shadowRoot?.querySelectorAll('.hex-slot') ?? [])].map((s) => s.textContent ?? '');
+
+test('<c0ffee-console> renders one editable Hex field seeded with the Color address', () => {
+  const el = mount('c0ffee-console', '3A7BD5');
+  const field = hexField(el);
+  expect(field.value).toBe('3A7BD5');
+  expect(field.getAttribute('maxlength')).toBe('6');
+});
+
+test('<c0ffee-console> the mirror shows six slots in three channel pairs, a dot above each', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const pairs = el.shadowRoot?.querySelectorAll('.hex-pair') ?? [];
+  expect(pairs.length).toBe(3);
+  for (const pair of pairs) {
+    expect(pair.querySelectorAll('.hex-slot').length).toBe(2);
+    expect(pair.querySelectorAll('button.hex-dot').length).toBe(1);
+  }
+  expect(slotChars(el)).toEqual(['C', '0', 'F', 'F', 'E', 'E']);
+});
+
+test('<c0ffee-console> editing the Hex field updates the views and emits a composed colorchange', () => {
+  const el = mount('c0ffee-console', '000000');
+  let detail: ColorChangeDetail | null = null;
+  document.body.addEventListener('colorchange', (e) => {
+    detail = (e as CustomEvent<ColorChangeDetail>).detail;
+  });
+  typeHexField(el, 'FF6600');
+  expect(el.value).toEqual({ r: 255, g: 102, b: 0 });
+  // the other views read the same value on the same render pass
+  expect((el.shadowRoot?.getElementById('sl-r') as HTMLInputElement).value).toBe('255');
+  expect((el.shadowRoot?.getElementById('dec-g') as HTMLElement).textContent).toBe('102');
+  expect(detail!).toMatchObject({ r: 255, g: 102, b: 0, hex: 'FF6600' });
+});
+
+test('<c0ffee-console> Hex field strips junk the value dropped — the field never lies', () => {
+  const el = mount('c0ffee-console', '000000');
+  const field = typeHexField(el, '1g'); // 'g' is not a hex digit
+  expect(field.value).toBe('1');        // the field shows only what survived the filter
+  expect(el.value).toEqual({ r: 16, g: 0, b: 0 }); // '1' is R's 16s digit; the rest implied zeros
+});
+
+test('<c0ffee-console> Hex field drops a fully-invalid keystroke instead of silently swallowing it', () => {
+  const el = mount('c0ffee-console', '000000');
+  const field = typeHexField(el, 'g');
+  expect(field.value).toBe('');
+  expect(el.value).toEqual({ r: 0, g: 0, b: 0 });
+});
+
+test('<c0ffee-console> Hex field clamps an over-long paste to six digits', () => {
+  const el = mount('c0ffee-console', '000000');
+  const field = typeHexField(el, 'C0FFEE12');
+  expect(field.value).toBe('C0FFEE');
+  expect(el.hex).toBe('C0FFEE');
+});
+
+test('<c0ffee-console> pasting #00ccff lands clean — the # strips, the case folds', () => {
+  const el = mount('c0ffee-console', '000000');
+  const field = typeHexField(el, '#00ccff');
+  expect(field.value).toBe('00CCFF');
+  expect(el.value).toEqual({ r: 0, g: 204, b: 255 });
+});
+
+test('<c0ffee-console> a real paste sanitizes BEFORE the length clamp — the # never costs a digit', () => {
+  // Browser-found bug: a native paste honors maxlength on the RAW clipboard
+  // text, so 8-char '#00ccff' was clamped to '#00ccf' before sanitize ever ran
+  // and the last digit was lost. The paste handler must sanitize first.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const field = hexField(el);
+  field.setSelectionRange(0, field.value.length); // select-all, the common paste gesture
+  const paste = new Event('paste', { bubbles: true, cancelable: true }) as Event & {
+    clipboardData: { getData: (type: string) => string };
+  };
+  paste.clipboardData = { getData: () => '#00ccff' };
+  field.dispatchEvent(paste);
+  expect(field.value).toBe('00CCFF');
+  expect(el.value).toEqual({ r: 0, g: 204, b: 255 });
+});
+
+test('<c0ffee-console> a valid lowercase entry is left untouched (no caret-jumping rewrite)', () => {
+  const el = mount('c0ffee-console', '000000');
+  const field = typeHexField(el, 'c0ffee');
+  expect(field.value).toBe('c0ffee'); // the mirror shows it uppercase; the input keeps the user's chars
+  expect(el.hex).toBe('C0FFEE');
+});
+
+test('<c0ffee-console> partial input means implied zeros — the value stays total, empty slots dim', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const field = typeHexField(el, '1A2B');
+  expect(field.value).toBe('1A2B'); // not stomped to the padded form mid-edit
+  expect(el.value).toEqual({ r: 26, g: 43, b: 0 });
+  expect(slotChars(el)).toEqual(['1', 'A', '2', 'B', '0', '0']);
+  const slots = [...(el.shadowRoot?.querySelectorAll('.hex-slot') ?? [])];
+  expect(slots.map((s) => s.classList.contains('empty')))
+    .toEqual([false, false, false, false, true, true]);
+});
+
+test('<c0ffee-console> an edit from elsewhere re-syncs the Hex field to the canonical address', () => {
+  const el = mount('c0ffee-console', '000000');
+  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  slider.value = '255';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(hexField(el).value).toBe('FF0000');
+  expect(slotChars(el)).toEqual(['F', 'F', '0', '0', '0', '0']);
+});
+
+test('<c0ffee-console reflect> editing the Hex field writes the Color link to the URL', () => {
+  clearUrl();
+  history.replaceState(null, '', '#000000');
+  const el = mountReflect();
+  typeHexField(el, '3A7BD5');
+  expect(location.hash).toBe('#3A7BD5');
+  el.remove();
+});
+
+test('<c0ffee-console> tapping a channel dot opens the place-value popover for that pair', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  (el.shadowRoot?.getElementById('dot-r') as HTMLElement).click();
+  const pop = el.shadowRoot?.querySelector('.popover');
+  expect(pop).not.toBeNull();
+  expect(pop?.textContent).toContain('Red');
+  expect(pop?.textContent).toContain('C×16 + 0×1 = 192'); // the 16s-and-1s decomposition
+});
+
+test('<c0ffee-console> the popover tracks the pair: G of #C0FFEE decomposes F×16 + F×1 = 255', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  (el.shadowRoot?.getElementById('dot-g') as HTMLElement).click();
+  expect(el.shadowRoot?.querySelector('.popover')?.textContent).toContain('F×16 + F×1 = 255');
+});
+
+test('<c0ffee-console> only one popover is ever open; an outside pointerdown closes it', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  (el.shadowRoot?.getElementById('dot-r') as HTMLElement).click();
+  (el.shadowRoot?.getElementById('dot-g') as HTMLElement).click();
+  expect(el.shadowRoot?.querySelectorAll('.popover').length).toBe(1);
+  document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  expect(el.shadowRoot?.querySelector('.popover')).toBeNull();
+});
+
+test('<c0ffee-console> a dot tap hands focus back to the input — the input owns editing', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const field = hexField(el);
+  field.focus();
+  (el.shadowRoot?.getElementById('dot-r') as HTMLElement).click();
+  expect(el.shadowRoot?.activeElement).toBe(field);
+});
+
+test('<c0ffee-console> the Hex field carries the hero typography mechanism', () => {
+  // happy-dom does no layout; anchor the mechanism (the C0FFEE-23/47 precedent):
+  // if the hero type block is renamed or dropped, the centerpiece silently
+  // reverts to body scale while every other test stays green.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  const block = cssBlock(el, '.hexfield');
+  expect(block).toContain('clamp(34px, 8vw, 50px)');
+  expect(block).toContain('letter-spacing');
 });
