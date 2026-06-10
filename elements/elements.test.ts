@@ -696,3 +696,16 @@ test('<c0ffee-swatch> pill is the page bg + inset hairline, not a panel fill', (
   expect(pill).toContain('background: var(--c0ffee-bg');
   expect(pill).toContain('inset 0 0 0 1px rgba(255,255,255,.12)');
 });
+
+test('<c0ffee-console> slider rows pin the label gutter and value column — only the range absorbs a squeeze', () => {
+  // In the companion's narrow card the row overflows, and flex-shrink would
+  // otherwise eat the 52px gutter UNEVENLY — min-width:auto floors "Green" at
+  // its own text width while "Red"/"Blue" shrink further, drifting the sliders
+  // out of column (Caitlin spotted it on the lesson page). Both fixed columns
+  // are flex:none; the range is the one item allowed to shrink (min-width:0),
+  // and it shrinks the same in every row.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  expect(cssBlock(el, '.lbl')).toContain('flex: none');
+  expect(cssBlock(el, '.dec')).toContain('flex: none');
+  expect(cssBlock(el, 'input[type=range]')).toContain('min-width: 0');
+});
