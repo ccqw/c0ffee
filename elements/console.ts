@@ -190,33 +190,68 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           display: inline-block;
           font-family: var(--c0ffee-font, monospace);
           color: var(--c0ffee-fg, #eee);
-          --radius: var(--c0ffee-radius, 10px);
         }
+        /* Page-level box-sizing resets stop at the shadow boundary, so the
+           card's width must include its own padding here or max-width:100%
+           overflows a narrow viewport. */
+        *, *::before, *::after { box-sizing: border-box; }
+        /* Card surface (frugal-surfaces): the page bg dressed with an inset
+           hairline + drop shadow — NOT a lighter panel fill. --c0ffee-panel
+           stays the Menu-tile/Swatch surface; the console no longer reads it. */
         .card {
-          width: 320px;
-          background: var(--c0ffee-panel, #161616);
-          border-radius: var(--radius);
-          overflow: hidden;
+          width: 440px; max-width: 100%;
+          background: var(--c0ffee-bg, #0a0a0b);
+          border-radius: 18px;
+          padding: clamp(18px, 4vw, 26px);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 30px 70px -30px rgba(0,0,0,.8);
         }
-        .stage { display: flex; }
-        .swatch { flex: 1; min-height: 160px; transition: background .08s; }
-        .venn {
-          flex: 1; background: #0b0b0b;
-          display: flex; align-items: center; justify-content: center;
+        /* Hero head: the Additive Venn on top (the headline), Swatch beneath.
+           DOM order is swatch-then-venn; column-reverse stacks the venn first
+           so the companion presentation keeps its row with no markup change. */
+        .stage { display: flex; flex-direction: column-reverse; }
+        .swatch {
+          height: clamp(92px, 18vw, 116px);
+          border-radius: 12px;
+          /* hairline so a dark Color value still separates from the card */
+          box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55);
+          transition: background .08s;
         }
-        .venn-box { position: relative; width: 150px; height: 150px; }
-        /* Each circle is one Channel's light; screen-blend adds them, so overlaps
-           compute their own secondaries and the center equals the Color value. */
+        .venn { display: flex; justify-content: center; padding: 6px 0 20px; }
+        /* ── Blend correctness — load-bearing, not a style choice ──
+           Each circle is one Channel's light, combined with mix-blend-mode:
+           screen (1-(1-a)(1-b)). Over PURE BLACK the backdrop contributes 0,
+           so screen collapses to exact addition: overlaps compute their own
+           secondaries and the center tri-overlap equals the rendered Color
+           value EXACTLY — the console doesn't lie. Two invariants make it true:
+           - background #000: an inline constant, never a token — it's the
+             screen-blend identity (physics), not theme;
+           - isolation: isolate: walls the blend into its own stacking context
+             so the circles can never screen against the card behind them
+             (without it the sum drifts brighter by the card color).
+           CONTEXT.md (Additive Venn) records this as an implementation invariant. */
+        .venn-box {
+          position: relative;
+          width: clamp(232px, 60vw, 310px);
+          aspect-ratio: 1;
+          background: #000;
+          isolation: isolate;
+          border-radius: 50%;
+        }
+        /* Hero geometry: 70% circles on heavy-overlap centers, so the central
+           tri-intersection is the LARGEST region — the mixed color is the
+           headline, the primaries the supporting cast. "left" is each circle's
+           center-x (translateX(-50%)); "top" is its top edge. */
         .circle {
-          position: absolute; width: 95px; height: 95px; border-radius: 50%;
+          position: absolute; width: 70%; height: 70%; border-radius: 50%;
           mix-blend-mode: screen;
+          transform: translateX(-50%);
         }
-        #c-r { left: 28px; top: 5px; }
-        #c-g { left: 5px;  top: 50px; }
-        #c-b { left: 50px; top: 50px; }
+        #c-r { left: 50%; top: 0; }
+        #c-g { left: 37%; top: 23%; }
+        #c-b { left: 63%; top: 23%; }
         .boxes {
           display: flex; gap: 10px; justify-content: center;
-          align-items: flex-end; padding: 16px 16px 4px;
+          align-items: flex-end; padding: 16px 0 4px;
         }
         .hash { font-size: 26px; color: #888; align-self: center; padding-top: 28px; }
         .col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -226,7 +261,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           text-align: center; text-transform: uppercase; padding: 6px 0;
           border-radius: 7px; border: 2px solid; background: #0d0d0d; color: #eee;
         }
-        .sliders { padding: 8px 18px 20px; display: flex; flex-direction: column; gap: 13px; }
+        .sliders { padding: 8px 0 20px; display: flex; flex-direction: column; gap: 13px; }
         .row { display: flex; align-items: center; gap: 12px; }
         .lbl { width: 16px; font-weight: 700; }
         input[type=range] {
@@ -244,8 +279,13 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            Companion console. The HSV panel is dropped in JS (#hsv-panel[hidden]);
            the card narrows and the swatch shrinks so it reads as compact, not just
            shorter. Minimal by design — the rich reveal-drawer is C0FFEE-18. */
-        :host([presentation="companion"]) .card { width: 240px; }
-        :host([presentation="companion"]) .swatch { min-height: 110px; }
+        /* 292 border-box = C0FFEE-23's 240px content width + the new card padding,
+           so the compact band's parts keep their proven proportions. */
+        :host([presentation="companion"]) .card { width: 292px; }
+        :host([presentation="companion"]) .stage { flex-direction: row; gap: 12px; }
+        :host([presentation="companion"]) .swatch { flex: 1; height: auto; min-height: 110px; }
+        :host([presentation="companion"]) .venn { padding: 0; align-items: center; }
+        :host([presentation="companion"]) .venn-box { width: 104px; }
       </style>
       <div class="card">
         <div class="stage">

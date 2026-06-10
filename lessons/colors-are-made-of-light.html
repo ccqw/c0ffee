@@ -78,10 +78,13 @@
   <c0ffee-banner></c0ffee-banner>
 
   <div class="lesson">
-    <!-- Pinned Companion console (data-companion marks it for the runtime). -->
+    <!-- Pinned Companion console (data-companion marks it for the runtime).
+         presentation="companion" is the compact layout built for this spot
+         (C0FFEE-23): the hero-scale full presentation outgrows a 100vh sticky
+         stage, and this lesson never drives the HSV panel companion drops. -->
     <aside class="stage">
       <span class="kicker">the canvas</span>
-      <c0ffee-console data-companion hex="000000"></c0ffee-console>
+      <c0ffee-console data-companion presentation="companion" hex="000000"></c0ffee-console>
     </aside>
 
     <main class="prose">

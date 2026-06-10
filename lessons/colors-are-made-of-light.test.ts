@@ -24,8 +24,13 @@ describe('Lesson page (colors-are-made-of-light.html)', () => {
     expect(html).toMatch(/elements\/banner\.ts/);
   });
 
-  it('keeps the pinned Companion console intact', () => {
-    expect(html).toMatch(/<c0ffee-console\b[^>]*\bdata-companion\b[^>]*>/i);
+  it('pins the Companion console in the companion presentation', () => {
+    // C0FFEE-47: the hero redesign makes the full presentation taller than a
+    // 100vh sticky stage, so the Lesson pins the compact layout C0FFEE-23
+    // built for exactly this spot (ADR-0005).
+    expect(html).toMatch(
+      /<c0ffee-console\b[^>]*\bdata-companion\b[^>]*\bpresentation="companion"[^>]*>/i,
+    );
   });
 
   it('footer browses the Menu instead of the retired "toybox"', () => {
