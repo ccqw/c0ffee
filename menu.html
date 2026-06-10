@@ -40,14 +40,19 @@
       display: grid; gap: 18px; margin-top: 2.5rem; width: 100%;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
+    /* Tile surface (grill Q10, converged in C0FFEE-51): the page bg dressed
+       with a hairline + drop shadow — the console card's surface language.
+       The hairline is a real border (not an inset box-shadow like the console)
+       because the art bleeds to the tile edge and would paint over an inset. */
     .card {
       display: flex; flex-direction: column;
-      background: var(--c0ffee-panel, #161616);
-      border: 1px solid #222; border-radius: var(--c0ffee-radius, 10px);
+      background: var(--c0ffee-bg, #0a0a0b);
+      border: 1px solid rgba(255,255,255,.06); border-radius: var(--c0ffee-radius, 10px);
+      box-shadow: 0 18px 40px -20px rgba(0,0,0,.8);
       overflow: hidden; text-decoration: none; color: inherit;
       transition: transform .12s, border-color .12s;
     }
-    .card:hover { transform: translateY(-3px); border-color: #3a3a3a; }
+    .card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.16); }
     .card .art { height: 110px; }
     .card .body { padding: 16px 18px 18px; }
     .card .kind { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #667; }
@@ -64,7 +69,10 @@
         #050505;
     }
     .art.console {
-      background: linear-gradient(90deg, #c0392b 0 33%, #1e8449 33% 66%, #2471a3 66%);
+      background: linear-gradient(90deg,
+        var(--c0ffee-r, #FF0000) 0 33%,
+        var(--c0ffee-g, #00FF00) 33% 66%,
+        var(--c0ffee-b, #0000FF) 66%);
     }
 
     footer { padding: 3rem 6vw; color: #556; font-size: 12px; text-align: center; }
@@ -98,8 +106,8 @@
         <div class="body">
           <span class="kind">Color console</span>
           <h2>One color, every way at once</h2>
-          <p>A swatch, three channel swatches, and the Additive Venn —
-             editable from RGB or HSV, all kept in sync. Share any color by its link.</p>
+          <p>A swatch, the Additive Venn, and an editable hex field —
+             drive it from RGB or HSV, everything kept in sync. Share any color by its link.</p>
         </div>
       </a>
     </div>

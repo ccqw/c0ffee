@@ -201,8 +201,8 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            overflows a narrow viewport. */
         *, *::before, *::after { box-sizing: border-box; }
         /* Card surface (frugal-surfaces): the page bg dressed with an inset
-           hairline + drop shadow — NOT a lighter panel fill. --c0ffee-panel
-           stays the Menu-tile/Swatch surface; the console no longer reads it. */
+           hairline + drop shadow — NOT a lighter panel fill. The Menu tiles
+           and the Swatch pill speak the same language (C0FFEE-51). */
         .card {
           width: 440px; max-width: 100%;
           background: var(--c0ffee-bg, #0a0a0b);
@@ -331,8 +331,13 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            labels are neutral (ADR-0007: the pure channel color is reserved for
            where the light itself shows) — the active-solo name takes the pure
            color via inline style. */
+        /* flex: none pins the gutter: when the companion's narrow card squeezes
+           a row, flex-shrink would otherwise collapse it UNEVENLY (min-width:auto
+           floors "Green" at its own text width while "Red"/"Blue" shrink further)
+           and the sliders drift out of column. The range absorbs the squeeze
+           instead — it's the one row item allowed to shrink (min-width: 0). */
         .lbl {
-          width: 52px; font-weight: 700; text-align: left;
+          flex: none; width: 52px; font-weight: 700; text-align: left;
           color: color-mix(in srgb, var(--c0ffee-fg, #eee) 85%, transparent);
         }
         /* Channel names are buttons: click to solo that channel on the Venn. */
@@ -346,7 +351,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            bounded bar: the bright inset outline marks the min/max ends, so no
            numeric end-caps are needed. */
         input[type=range] {
-          flex: 1; -webkit-appearance: none; appearance: none;
+          flex: 1; min-width: 0; -webkit-appearance: none; appearance: none;
           height: 20px; border-radius: 6px;
           box-shadow: inset 0 0 0 2px rgba(255,255,255,.82), inset 0 2px 5px rgba(0,0,0,.5);
         }
@@ -389,7 +394,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         /* Value column: one type voice with the Hex field (DM Mono), left-aligned
            so RGB and HSV decimals share an edge. 48px fits the widest value (360°). */
         .dec {
-          width: 48px; text-align: left;
+          flex: none; width: 48px; text-align: left;
           font: 500 16px/1 var(--c0ffee-font, monospace);
           color: var(--c0ffee-fg, #eee);
         }

@@ -25,11 +25,11 @@ describe('tokens.css — redesign tokens (C0FFEE-45)', () => {
     expect(css).toContain('--c0ffee-b: #0000FF');
   });
 
-  it('nudges the background while leaving the panel surface untouched', () => {
+  it('nudges the background to #0a0a0b', () => {
+    // The bg is the whole surface story now: console card, Menu tiles, and the
+    // Swatch pill are all this color dressed with a hairline + shadow (grill
+    // Q10); --c0ffee-panel retired with its last consumers in C0FFEE-51.
     expect(css).toContain('--c0ffee-bg: #0a0a0b');
-    // Menu tiles and the Swatch read --c0ffee-panel; the frugal-surfaces
-    // decision (grill Q10) keeps it exactly where it was.
-    expect(css).toContain('--c0ffee-panel: #161616');
   });
 
   it('self-hosts DM Mono at weights 300, 400, 500 with font-display swap', () => {

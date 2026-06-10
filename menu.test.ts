@@ -47,6 +47,44 @@ describe('Menu page (/menu.html)', () => {
   });
 });
 
+// C0FFEE-51 — closeout: the Menu tiles converge to the console's surface
+// language (grill Q10), and the console tile catches up with the redesigned
+// console (faithful channel art per ADR-0007, Hex-field anatomy per CONTEXT.md).
+// happy-dom does no paint, so these pin the *mechanism* in the page CSS the same
+// way elements.test.ts pins the console card; the look is browser-verified.
+describe('Menu tiles — console surface language (C0FFEE-51)', () => {
+  const html = read('./menu.html');
+  // Pull one rule block out of the page stylesheet by selector.
+  const cssBlock = (selector: string): string =>
+    html.match(new RegExp(selector.replace(/[.#[\]]/g, '\\$&') + '\\s*{[^}]*}'))?.[0] ?? '';
+
+  it('tiles are the page bg dressed with a hairline + drop shadow, not a panel fill', () => {
+    const card = cssBlock('.card');
+    expect(card).toContain('background: var(--c0ffee-bg');
+    expect(card).toContain('border: 1px solid rgba(255,255,255,.06)');
+    expect(card).toMatch(/box-shadow:[^;]*rgba\(0,0,0,/);
+  });
+
+  it('tile hover brightens the hairline', () => {
+    expect(cssBlock('.card:hover')).toContain('border-color: rgba(255,255,255,');
+  });
+
+  it('console-tile art shows the faithful channel colors (ADR-0007 tokens)', () => {
+    const art = cssBlock('.art.console');
+    expect(art).toContain('var(--c0ffee-r');
+    expect(art).toContain('var(--c0ffee-g');
+    expect(art).toContain('var(--c0ffee-b');
+  });
+
+  it('console-tile copy names the redesigned anatomy — Swatch, Additive Venn, editable hex field', () => {
+    // The flagship anatomy (CONTEXT.md): the hex field is the part the
+    // pre-redesign copy could not have named — its presence dates the copy.
+    expect(html).toMatch(/swatch/i);
+    expect(html).toMatch(/additive venn/i);
+    expect(html).toMatch(/editable hex field/i);
+  });
+});
+
 describe('Home page (index.html)', () => {
   it('does not link to the Menu (unlinked until there is more to show)', () => {
     // Guard the intent — home points at no Menu — independent of URL shape:

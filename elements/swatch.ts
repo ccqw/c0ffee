@@ -66,14 +66,18 @@ class C0ffeeSwatch extends HTMLElement implements ColorInterface {
           transition: transform .1s, box-shadow .1s;
         }
         :host(:hover) .chip { transform: translateY(-1px); }
-        /* mode A: swatch box + hex on a subtle raised pill */
+        /* mode A: swatch box + hex on a subtle raised pill. Surface language
+           (grill Q10, converged in C0FFEE-51): the page bg + inset hairline +
+           drop shadow — same recipe as the console card, at pill scale. */
         .chip.a {
           padding: 2px 9px 2px 5px;
-          background: var(--c0ffee-panel, #1c1c1c);
-          box-shadow: 0 1px 2px rgba(0,0,0,.3);
+          background: var(--c0ffee-bg, #0a0a0b);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 1px 2px rgba(0,0,0,.3);
           color: var(--c0ffee-fg, #eee);
         }
-        :host(:hover) .chip.a { box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+        :host(:hover) .chip.a {
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 2px 6px rgba(0,0,0,.45);
+        }
         .box {
           width: 1em; height: 1em; border-radius: 4px;
           box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);

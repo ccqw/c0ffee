@@ -315,8 +315,9 @@ test('<c0ffee-console> Venn circles use the hero geometry — 70% of the box, he
 
 test('<c0ffee-console> card surface is the page bg + inset hairline + drop shadow', () => {
   // Frugal-surfaces decision (grill Q10): the card is --c0ffee-bg dressed with
-  // a hairline and shadow — not a lighter panel fill. (--c0ffee-panel staying
-  // #161616 for the Menu tiles + Swatch is asserted in tokens.test.ts.)
+  // a hairline and shadow — not a lighter panel fill. (The Menu tiles and the
+  // Swatch pill converged to the same language in C0FFEE-51; --c0ffee-panel
+  // retired with them.)
   const el = mount('c0ffee-console', 'C0FFEE');
   const card = cssBlock(el, '.card');
   expect(card).toContain('background: var(--c0ffee-bg');
@@ -682,4 +683,29 @@ test('<c0ffee-console> the value column reads in DM Mono 500/16 — one type voi
   const dec = cssBlock(el, '.dec');
   expect(dec).toContain('500 16px');
   expect(dec).toContain('var(--c0ffee-font');
+});
+
+// C0FFEE-51 — closeout: the standalone Swatch pill converges to the console's
+// surface language (grill Q10): the page bg dressed with an inset hairline,
+// not the retired --c0ffee-panel fill. The pill keeps its small drop shadow
+// (it floats over Lesson prose); the hairline rides along on hover.
+
+test('<c0ffee-swatch> pill is the page bg + inset hairline, not a panel fill', () => {
+  const el = mount('c0ffee-swatch', 'C0FFEE');
+  const pill = cssBlock(el, '.chip.a');
+  expect(pill).toContain('background: var(--c0ffee-bg');
+  expect(pill).toContain('inset 0 0 0 1px rgba(255,255,255,.12)');
+});
+
+test('<c0ffee-console> slider rows pin the label gutter and value column — only the range absorbs a squeeze', () => {
+  // In the companion's narrow card the row overflows, and flex-shrink would
+  // otherwise eat the 52px gutter UNEVENLY — min-width:auto floors "Green" at
+  // its own text width while "Red"/"Blue" shrink further, drifting the sliders
+  // out of column (Caitlin spotted it on the lesson page). Both fixed columns
+  // are flex:none; the range is the one item allowed to shrink (min-width:0),
+  // and it shrinks the same in every row.
+  const el = mount('c0ffee-console', 'C0FFEE');
+  expect(cssBlock(el, '.lbl')).toContain('flex: none');
+  expect(cssBlock(el, '.dec')).toContain('flex: none');
+  expect(cssBlock(el, 'input[type=range]')).toContain('min-width: 0');
 });

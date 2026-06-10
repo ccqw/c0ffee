@@ -37,8 +37,9 @@
 
   /* Brand */
   --c0ffee-accent: #C0FFEE;   /* the name, as a color */
-  --c0ffee-bg: #0a0a0b;       /* deep near-black (lets the Additive Venn glow) */
-  --c0ffee-panel: #161616;    /* surface for element cards, one step up from bg */
+  --c0ffee-bg: #0a0a0b;       /* deep near-black (lets the Additive Venn glow);
+                                 also every card surface — dressed with a
+                                 hairline + shadow, never a lighter fill (Q10) */
   --c0ffee-fg: #ededed;       /* default text on dark surfaces */
 
   /* Shape */
