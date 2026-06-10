@@ -201,8 +201,8 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            overflows a narrow viewport. */
         *, *::before, *::after { box-sizing: border-box; }
         /* Card surface (frugal-surfaces): the page bg dressed with an inset
-           hairline + drop shadow — NOT a lighter panel fill. --c0ffee-panel
-           stays the Menu-tile/Swatch surface; the console no longer reads it. */
+           hairline + drop shadow — NOT a lighter panel fill. The Menu tiles
+           and the Swatch pill speak the same language (C0FFEE-51). */
         .card {
           width: 440px; max-width: 100%;
           background: var(--c0ffee-bg, #0a0a0b);
