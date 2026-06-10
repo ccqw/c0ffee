@@ -191,6 +191,10 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           font-family: var(--c0ffee-font, monospace);
           color: var(--c0ffee-fg, #eee);
         }
+        /* Page-level box-sizing resets stop at the shadow boundary, so the
+           card's width must include its own padding here or max-width:100%
+           overflows a narrow viewport. */
+        *, *::before, *::after { box-sizing: border-box; }
         /* Card surface (frugal-surfaces): the page bg dressed with an inset
            hairline + drop shadow — NOT a lighter panel fill. --c0ffee-panel
            stays the Menu-tile/Swatch surface; the console no longer reads it. */
@@ -275,7 +279,9 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            Companion console. The HSV panel is dropped in JS (#hsv-panel[hidden]);
            the card narrows and the swatch shrinks so it reads as compact, not just
            shorter. Minimal by design — the rich reveal-drawer is C0FFEE-18. */
-        :host([presentation="companion"]) .card { width: 240px; }
+        /* 292 border-box = C0FFEE-23's 240px content width + the new card padding,
+           so the compact band's parts keep their proven proportions. */
+        :host([presentation="companion"]) .card { width: 292px; }
         :host([presentation="companion"]) .stage { flex-direction: row; gap: 12px; }
         :host([presentation="companion"]) .swatch { flex: 1; height: auto; min-height: 110px; }
         :host([presentation="companion"]) .venn { padding: 0; align-items: center; }
