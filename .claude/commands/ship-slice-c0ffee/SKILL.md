@@ -31,7 +31,7 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
 - **rAF gotcha:** `animateTo` / any `requestAnimationFrame`-driven behavior is **paused in a backgrounded automation tab** (`document.hidden === true`). Spy on the call (monkeypatch + assert it's invoked with the right value), don't assert the painted result.
 
 ### 5 — Commit & PR
-- Branch `c0ffee-N-slug`. Commit message ends with the `Co-Authored-By: Claude Opus 4.8` trailer.
+- Branch `c0ffee-N-slug`. Commit message ends with the Claude `Co-Authored-By` trailer (whatever model is driving — don't pin a stale model name here).
 - **Reference `C0FFEE-N`** in the body — **never `closes #N`** (GitHub doesn't know Linear issue numbers; PR# and C0FFEE-N drift apart — trust the number `gh pr create` returns).
 - DoR-style PR body: `## Summary` (≥30 words), `## Test plan` (≥3 checkboxes incl. the browser pass), `Size: XS|S|M|L`, `## Out of scope`, and `Refs C0FFEE-N`.
 - **PR CI gates the merge** (C0FFEE-10): `ci.yml` runs typecheck + tests + build on every PR; `deploy.yml` re-runs the same gate on `push: branches:[main]` before publishing. Still run **local `npm run typecheck && npm run test && npm run build` before pushing** — CI is the enforcement, not an excuse to push red.
