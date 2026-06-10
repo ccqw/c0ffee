@@ -18,11 +18,30 @@
 // Brand-only for now: the wordmark is the home link and there is NO nav
 // affordance — deferred until the Menu earns surfacing (the same "more than one
 // thing to show" trigger that un-hides the Menu).
+//
+// TEMPORARY EVAL SCAFFOLDING (C0FFEE-46): the banner has two variants while the
+// redesign lockup is evaluated against the live site — `classic` (the default;
+// with no flag the live site does not change) and `cup` (the redesign:
+// `#C0FFEE cafe` wordmark + pixel-cup badge). Flip via the `?banner=cup` QUERY
+// param — never the hash, which is the console's Color link. C0FFEE-51 picks
+// the winner and deletes the loser, the flag read, and this comment.
 
 class C0ffeeBanner extends HTMLElement {
   private root: ShadowRoot = this.attachShadow({ mode: 'open' });
 
   connectedCallback(): void {
+    // Eval-flag read (C0FFEE-46): a page can pin a variant via the attribute;
+    // otherwise `?banner=cup` flips a plain <c0ffee-banner> at view time.
+    const flagged = new URLSearchParams(window.location.search).get('banner');
+    const variant = this.getAttribute('variant') ?? flagged;
+    if (variant === 'cup') {
+      this.renderCup();
+    } else {
+      this.renderClassic();
+    }
+  }
+
+  private renderClassic(): void {
     this.root.innerHTML = `
       <style>
         :host {
@@ -64,6 +83,50 @@ class C0ffeeBanner extends HTMLElement {
         </svg>
         <span>c<span class="accent">0</span>ffee</span>
       </a>`;
+  }
+
+  // The redesign lockup (handoff, grill Q9): `#C0FFEE cafe` wordmark on the
+  // left, circular pixel-cup badge on the right. Same behavioral promises as
+  // classic — the wordmark is the single home link, quiet chrome, never sticky.
+  private renderCup(): void {
+    this.root.innerHTML = `
+      <style>
+        :host {
+          display: block;
+          font-family: var(--c0ffee-font, monospace);
+        }
+        .bar {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 16px;
+          /* the site's content gutter (6vw), not the handoff mock's 20px — the
+             eval should compare lockups, not misalignments */
+          padding: 14px 6vw;
+        }
+        a.wordmark {
+          font-weight: 400; font-size: 26px; letter-spacing: .01em;
+          color: var(--c0ffee-fg, #ededed);
+          text-decoration: none; white-space: nowrap;
+        }
+        /* quiet leading hash — present but receded, like an unfocused prompt */
+        .hash { color: color-mix(in srgb, var(--c0ffee-fg, #ededed) 52%, transparent); }
+        /* the "touch of #C0FFEE" lives on the zero, same as classic */
+        .zero { color: var(--c0ffee-accent, #C0FFEE); }
+        .cafe { margin-left: .5ch; }
+        .badge {
+          width: 60px; height: 60px; flex: none; border-radius: 50%;
+          background: #000; overflow: hidden;
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, .06);
+        }
+        .badge img {
+          width: 100%; height: 100%; object-fit: contain;
+          image-rendering: pixelated;
+        }
+      </style>
+      <div class="bar">
+        <a class="wordmark" href="/" aria-label="c0ffee — home"
+          ><span class="hash">#</span>C<span class="zero">0</span>FFEE<span class="cafe">cafe</span></a>
+        <span class="badge"><img src="/pixie-badge.png" alt=""></span>
+      </div>`;
   }
 }
 
