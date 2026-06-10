@@ -31,10 +31,10 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
 - **rAF gotcha:** `animateTo` / any `requestAnimationFrame`-driven behavior is **paused in a backgrounded automation tab** (`document.hidden === true`). Spy on the call (monkeypatch + assert it's invoked with the right value), don't assert the painted result.
 
 ### 5 — Commit & PR
-- Branch `c0ffee-N-slug`. Commit message ends with the `Co-Authored-By: Claude Opus 4.8` trailer.
+- Branch `c0ffee-N-slug`. Commit message ends with the Claude `Co-Authored-By` trailer (whatever model is driving — don't pin a stale model name here).
 - **Reference `C0FFEE-N`** in the body — **never `closes #N`** (GitHub doesn't know Linear issue numbers; PR# and C0FFEE-N drift apart — trust the number `gh pr create` returns).
 - DoR-style PR body: `## Summary` (≥30 words), `## Test plan` (≥3 checkboxes incl. the browser pass), `Size: XS|S|M|L`, `## Out of scope`, and `Refs C0FFEE-N`.
-- **There is NO PR-level CI** — `deploy.yml` runs only on `push: branches:[main]`. So **local `npm run typecheck && npm run test && npm run build` IS the gate.** A broken merge = a broken deploy, not a red check.
+- **PR CI gates the merge** (C0FFEE-10): `ci.yml` runs typecheck + tests + build on every PR; `deploy.yml` re-runs the same gate on `push: branches:[main]` before publishing. Still run **local `npm run typecheck && npm run test && npm run build` before pushing** — CI is the enforcement, not an excuse to push red.
 
 ### 6 — Audit (sequential)
 - Run **`/audit`** stages **one at a time**, each seeing prior findings (the cumulative context is the value — never parallel). Fix HIGH/CRITICAL, commit fixes (new commit, don't amend).
@@ -46,6 +46,7 @@ Tickets are **Linear team c0ffee** (`C0FFEE-N`), read via the linear MCP — **n
 - Skip for XS / docs-only.
 
 ### 8 — Merge (mind the classifier)
+- **Wait for CI green first:** `gh pr checks <N> --watch` must pass before the serve-and-eyeball + merge ask. A red check = fix and push, don't ask.
 - **Bring it up on the dev server FIRST, then ask.** Before requesting merge approval, start `npm run dev` (background) on the feature branch and hand Caitlin the local URL(s) to look at — the home/slice route plus any relevant state (e.g. a `/#hex` link to exercise). She will almost always want to *see* the slice in the real app before approving, so make serving-it part of the merge ask, not a thing she has to request. Keep the server running until the merge is done.
 - **Caitlin approves the merge** ("the code looks great, approved" counts). Don't auto-merge.
 - **CLASSIFIER GOTCHA — each external action is its OWN turn, after a plain verifying read.** Never bundle PR-create + merge + Linear-Done + verification into one batch — the auto-mode safety classifier reads it as fabrication.

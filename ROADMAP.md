@@ -43,6 +43,6 @@ These were scoped then shelved to protect the thin slice. Bring back next.
 
 ## Infrastructure backlog
 
-- **CI** — run `npm test` (Vitest) on push (GitHub Action) and/or a pre-commit hook, gating the functional core and the shell tests.
-- **Custom domain** — wire `c0ffee.cafe` to GitHub Pages (CNAME) when ready.
 - **DOM/interaction tests** — a lightweight harness for interactive behavior (beyond the pure-core unit tests), if/when interactives get complex enough to warrant it. (happy-dom shell tests, ADR-0006, already cover the basics.)
+
+(Shipped and gone from this list: custom domain — `c0ffee.cafe` CNAME + HTTPS; CI — `ci.yml` gates every PR with typecheck + tests + build, and `deploy.yml` re-runs the same gate on `main` before publishing `dist/`. C0FFEE-10.)
