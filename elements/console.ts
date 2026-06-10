@@ -471,7 +471,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
       // pull the caret back by however many chars the filter dropped before it
       const at = Math.max(0, (field.selectionStart ?? clean.length) - (raw.length - clean.length));
       field.value = clean;
-      try { field.setSelectionRange(at, at); } catch { /* unfocused — caret n/a */ }
+      field.setSelectionRange(at, at);
     }
     // 6 sanitized hex chars always parse; ?? keeps the value total without `!`.
     this._value = parseHex(clean.padEnd(6, '0')) ?? { ...DEFAULT };
@@ -572,7 +572,9 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     caret.hidden = !focused || field.selectionStart !== field.selectionEnd;
     if (caret.hidden) return;
     const mirror = this._el('hex-mirror').getBoundingClientRect();
-    if (!mirror.width) return; // no layout engine — nothing to measure
+    // Nothing to measure (happy-dom, or a zero-width edge like a hidden card):
+    // keep the caret hidden rather than visible at stale coordinates.
+    if (!mirror.width) { caret.hidden = true; return; }
     const ref = this._el(`slot-${Math.min(at, 5)}`).getBoundingClientRect();
     const x = at >= 6 ? ref.right - mirror.left : ref.left - mirror.left;
     caret.style.left = `${x}px`;
@@ -592,7 +594,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     const s = field.selectionStart ?? field.value.length;
     const en = field.selectionEnd ?? s;
     field.value = field.value.slice(0, s) + text + field.value.slice(en);
-    try { field.setSelectionRange(s + text.length, s + text.length); } catch { /* unfocused */ }
+    field.setSelectionRange(s + text.length, s + text.length);
     this._setHexField(field.value);
   };
 
@@ -613,7 +615,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
       const d = Math.abs(e.clientX - x);
       if (d < bestDist) { bestDist = d; best = i; }
     }
-    try { field.setSelectionRange(best, best); } catch { /* selection n/a */ }
+    field.setSelectionRange(best, best);
   };
 
   // Place-value popover (grill Q11): a pair's 16s-and-1s decomposition, e.g.
@@ -638,15 +640,18 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     const s = field.selectionStart;
     const en = field.selectionEnd;
     field.focus();
-    try { field.setSelectionRange(s, en); } catch { /* selection n/a */ }
+    field.setSelectionRange(s, en);
   }
 
   // Close on any outside pointerdown. A pointerdown on the popover itself or on
-  // a dot is not "outside" — the dot's click handler swaps the popover itself.
+  // one of THIS console's dots is not "outside" — the dot's click handler swaps
+  // the popover itself. (Scoped to this shadow root: another console's dot on
+  // the same page must read as outside.)
   private _closePop = (e?: Event): void => {
     if (!this._pop) return;
     if (e && e.composedPath().some((t) =>
-      t === this._pop || (t instanceof HTMLElement && t.classList.contains('hex-dot')))) return;
+      t === this._pop ||
+      (t instanceof HTMLElement && t.classList.contains('hex-dot') && this.root.contains(t)))) return;
     this._pop.remove();
     this._pop = null;
     document.removeEventListener('pointerdown', this._closePop);
