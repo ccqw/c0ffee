@@ -292,6 +292,10 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           color: transparent; caret-color: transparent;
           z-index: 2;
         }
+        /* GEOMETRY IS MEASURED: _paintHexCaret and _mapHexClick read these
+           boxes via getBoundingClientRect — restructuring the mirror/slot
+           layout moves the caret and click mapping with it (no type error
+           will catch a drift; re-verify in a browser). */
         .hex-mirror { display: flex; gap: .42ch; align-items: baseline; position: relative; z-index: 1; }
         .hex-pair { display: flex; position: relative; }
         .hex-slot { width: calc(1ch + var(--hex-ls)); text-align: center; }
