@@ -80,10 +80,15 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
 
   disconnectedCallback(): void {
     // The colorchange listener sits on `this` (GC'd with the element); the
-    // hashchange listener lives on window and the popover's pointerdown
-    // listener on document, so both must be detached explicitly.
+    // hashchange listener lives on window, the popover's pointerdown listener
+    // on document, and the copy-flash timer on the event loop — all three
+    // outlive the element unless detached explicitly.
     window.removeEventListener('hashchange', this._onHashChange);
     this._closePop();
+    if (this._copyTimer !== null) {
+      clearTimeout(this._copyTimer);
+      this._copyTimer = null;
+    }
   }
 
   attributeChangedCallback(name: string): void {
@@ -725,14 +730,24 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   private _copyTimer: number | null = null;
 
   private _copyHex = async (): Promise<void> => {
+    let ok = true;
     try {
-      // navigator.clipboard is undefined in insecure contexts — the resulting
-      // synchronous TypeError lands in the same catch as a rejected write.
+      // The try wraps ONLY the write, so a flash-side throw can never be
+      // misreported as a copy failure (or swallowed by the catch). In an
+      // insecure context navigator.clipboard is undefined — that synchronous
+      // TypeError lands in the same catch as a rejected write.
       await navigator.clipboard.writeText(formatColorLink(this._value));
-      this._flashCopy('copied', 'Copied');
-    } catch {
-      this._flashCopy('copy-failed', 'Copy failed');
+    } catch (err) {
+      // The flash flattens every failure into one state; keep the reason in
+      // the console — NotAllowedError (denied) vs TypeError (insecure
+      // context) is the difference between "expected" and "ship a fix".
+      console.warn('c0ffee-console: clipboard write failed', err);
+      ok = false;
     }
+    // The await opens a gap: if the element was removed mid-write, flashing
+    // now would re-arm the timer disconnectedCallback just cleared.
+    if (!this.isConnected) return;
+    this._flashCopy(ok ? 'copied' : 'copy-failed', ok ? 'Copied' : 'Copy failed');
   };
 
   // Swap the icon in place and announce via the live region; auto-return to
