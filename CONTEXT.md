@@ -100,6 +100,12 @@ _Avoid_: theme variables, css vars (informally), settings
 The specific set of `--c0ffee-*` tokens an interactive reads from inside its shadow root. Custom properties cross the shadow boundary, so tokens unify the look; ordinary CSS rules do not cross it, so an interactive's internals can never be collided with.
 _Avoid_: style API, css api
 
+### Telemetry
+
+**Telemetry**:
+Anonymous Datadog RUM (`@datadog/browser-rum-slim`) on the production hostname only — out-of-box page views, Core Web Vitals, JS errors, and interaction tracking, tagged with the release version; no Session Replay, no user identity, no consent UI, and dev/preview/fork hostnames send nothing (ADR-0008).
+_Avoid_: analytics, tracking (when meaning this posture)
+
 ### Color representation
 
 These three layers separate the abstract color from how it is written and transported. The layering is what makes future notations (RGB, HSV) cheap to add.
