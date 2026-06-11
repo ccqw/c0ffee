@@ -19,5 +19,5 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["lib", "elements", "lessons", "vite.config.ts"]
+  "include": ["lib", "elements", "lessons", "telemetry.ts", "vite.config.ts"]
 }
