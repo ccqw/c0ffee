@@ -80,10 +80,15 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
 
   disconnectedCallback(): void {
     // The colorchange listener sits on `this` (GC'd with the element); the
-    // hashchange listener lives on window and the popover's pointerdown
-    // listener on document, so both must be detached explicitly.
+    // hashchange listener lives on window, the popover's pointerdown listener
+    // on document, and the copy-flash timer on the event loop — all three
+    // outlive the element unless detached explicitly.
     window.removeEventListener('hashchange', this._onHashChange);
     this._closePop();
+    if (this._copyTimer !== null) {
+      clearTimeout(this._copyTimer);
+      this._copyTimer = null;
+    }
   }
 
   attributeChangedCallback(name: string): void {
@@ -312,6 +317,33 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           animation: hex-blink 1.06s step-end infinite;
         }
         @keyframes hex-blink { 50% { opacity: 0; } }
+        /* ── Copy button (C0FFEE-54) — quiet beside the Hex field ──
+           The hexfield row aligns on baseline for the type; an icon has no
+           baseline, so the button self-centers. Rest state is dim — the hero
+           glyphs keep the stage — and brightens on hover/focus. The flash
+           swaps the icon in place (no layout shift): check on success, cross
+           on a rejected write — the failed state exists so a denied clipboard
+           can never silently pass for a copy. */
+        .hex-copy {
+          align-self: center;
+          background: none; border: none; padding: 4px; margin: 0; cursor: pointer;
+          display: inline-flex;
+          color: color-mix(in srgb, var(--c0ffee-fg, #eee) 38%, transparent);
+          transition: color .15s;
+        }
+        .hex-copy:hover, .hex-copy:focus-visible {
+          color: color-mix(in srgb, var(--c0ffee-fg, #eee) 85%, transparent);
+        }
+        .hex-copy.copied { color: var(--c0ffee-accent, #C0FFEE); }
+        .hex-copy .ic-check, .hex-copy .ic-fail { display: none; }
+        .hex-copy.copied .ic-copy, .hex-copy.copy-failed .ic-copy { display: none; }
+        .hex-copy.copied .ic-check { display: block; }
+        .hex-copy.copy-failed .ic-fail { display: block; }
+        /* visually-hidden live region: screen readers hear the flash too */
+        .vh {
+          position: absolute; width: 1px; height: 1px; overflow: hidden;
+          clip-path: inset(50%); white-space: nowrap;
+        }
         /* place-value popover (grill Q11) — anchored inside its pair, so no
            geometry math; bg + hairline are deliberate one-offs (grill Q10). */
         .popover {
@@ -444,6 +476,23 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
                    autocomplete="off" autocapitalize="characters" spellcheck="false"
                    aria-label="Hex color address">
           </span>
+          <button type="button" class="hex-copy" id="hex-copy"
+                  title="Copy hex color address" aria-label="Copy hex color address">
+            <svg class="ic-copy" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <svg class="ic-check" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5"/>
+            </svg>
+            <svg class="ic-fail" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+          <span class="vh" id="copy-status" aria-live="polite"></span>
         </div>
         <div class="sliders">
           ${CHANNELS.map((c) => `
@@ -493,6 +542,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     const field = this._input('hex-input');
     field.addEventListener('input', () => this._setHexField(field.value));
     field.addEventListener('paste', this._onHexPaste);
+    this._el('hex-copy').addEventListener('click', this._copyHex);
     field.addEventListener('click', this._mapHexClick);
     for (const ev of ['keyup', 'click', 'select', 'focus', 'blur']) {
       field.addEventListener(ev, () => this._paintHexCaret());
@@ -670,6 +720,51 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     }
     field.setSelectionRange(best, best);
   };
+
+  // Copy (C0FFEE-54): one tap puts the canonical Hex color address on the
+  // clipboard. The payload is formatColorLink — the SAME codec that writes the
+  // URL hash — so the address bar, the share link, and the copy can never
+  // disagree. The flash only fires on a RESOLVED write: a denied clipboard
+  // (insecure context, permission policy) flashes the failed state instead of
+  // silently passing for a copy.
+  private _copyTimer: number | null = null;
+
+  private _copyHex = async (): Promise<void> => {
+    let ok = true;
+    try {
+      // The try wraps ONLY the write, so a flash-side throw can never be
+      // misreported as a copy failure (or swallowed by the catch). In an
+      // insecure context navigator.clipboard is undefined — that synchronous
+      // TypeError lands in the same catch as a rejected write.
+      await navigator.clipboard.writeText(formatColorLink(this._value));
+    } catch (err) {
+      // The flash flattens every failure into one state; keep the reason in
+      // the console — NotAllowedError (denied) vs TypeError (insecure
+      // context) is the difference between "expected" and "ship a fix".
+      console.warn('c0ffee-console: clipboard write failed', err);
+      ok = false;
+    }
+    // The await opens a gap: if the element was removed mid-write, flashing
+    // now would re-arm the timer disconnectedCallback just cleared.
+    if (!this.isConnected) return;
+    this._flashCopy(ok ? 'copied' : 'copy-failed', ok ? 'Copied' : 'Copy failed');
+  };
+
+  // Swap the icon in place and announce via the live region; auto-return to
+  // rest. A re-click mid-flash restarts cleanly (drop both states + the timer).
+  private _flashCopy(state: 'copied' | 'copy-failed', message: string): void {
+    const btn = this._el('hex-copy');
+    const status = this._el('copy-status');
+    if (this._copyTimer !== null) clearTimeout(this._copyTimer);
+    btn.classList.remove('copied', 'copy-failed');
+    btn.classList.add(state);
+    status.textContent = message;
+    this._copyTimer = window.setTimeout(() => {
+      btn.classList.remove(state);
+      status.textContent = '';
+      this._copyTimer = null;
+    }, 1400);
+  }
 
   // Place-value popover (grill Q11): a pair's 16s-and-1s decomposition, e.g.
   // C×16 + 0×1 = 192. Anchored inside its pair (position: relative), so no
