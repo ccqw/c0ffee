@@ -67,10 +67,11 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     if (this.hasAttribute('reflect')) {
       rejectedOnLoad = this._seedFromHash();
       window.addEventListener('hashchange', this._onHashChange);
-      // Arm the writer BEFORE _render(): the initial render's colorchange is what
-      // canonicalizes the just-seeded hash in the URL (#f60 -> #FF6600) — and, on
-      // a malformed share link, what heals it to the default's link. Registering
-      // after _render() would silently drop both.
+      // Arm the writer BEFORE _render(): _emitChange fires on EVERY render (not
+      // change-gated), so the initial render's colorchange is what canonicalizes
+      // the just-seeded hash in the URL (#f60 -> #FF6600) — and, on a malformed
+      // share link, what heals it to the default's link. Registering after
+      // _render() would silently drop both.
       this.addEventListener('colorchange', this._reflectToUrl);
     } else {
       this._seedFromAttribute();
@@ -173,16 +174,20 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   // hashchange = the address bar changed (the paste-and-enter the old page-level
   // reflection silently ignored). A valid fragment re-seeds live; an empty one
   // resets to the default. A malformed one is REJECTED like a filtered keystroke
-  // (C0FFEE-25 / ADR-0001 amendment 2026-06-10): the value stays put — no _render,
-  // whose colorchange would announce a change that didn't happen — the URL heals
-  // to the DISPLAYED color's canonical link (a non-change emits nothing, so write
-  // directly; replaceState fires no hashchange, so no reject/heal loop), and a
-  // transient hint at the Hex field says why.
+  // (C0FFEE-25 / ADR-0001 amendment 2026-06-10): the value stays put, the URL
+  // heals to the DISPLAYED color's canonical link, and a transient hint at the
+  // Hex field says why. The reject path must SKIP _render — _emitChange is not
+  // change-gated, so any render would fire a phantom colorchange — which is also
+  // why the heal calls _reflectToUrl directly instead of riding the event.
+  // (replaceState fires no hashchange, so the heal can't loop back here.)
   private _onHashChange = (): void => {
     const parsed = parseColorLink(location.hash);
     if (parsed === null && location.hash !== '') {
-      this._reflectToUrl();
+      // Hint BEFORE heal: replaceState is not total (Safari rate-limits the
+      // history API), and a throwing heal must not also cost the user the
+      // explanation. The hint has no dependency on the URL write.
       this._hintRejected();
+      this._reflectToUrl();
       return;
     }
     this._value = parsed ?? { ...DEFAULT };

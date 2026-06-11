@@ -907,6 +907,23 @@ test('<c0ffee-console reflect> a valid fragment still seeds, re-seeds and canoni
   el.remove();
 });
 
+test('<c0ffee-console reflect> editing away from the default and back still writes #C0FFEE — the empty-hash guard only protects an EMPTY hash', () => {
+  clearUrl();
+  const el = mountReflect(); // plain load: defaults, URL stays clean
+  expect(location.hash).toBe('');
+
+  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  slider.value = '255';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(location.hash).toBe('#FFFFEE'); // the first real edit writes the hash
+
+  slider.value = '192'; // C0 — back to the namesake exactly
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(el.hex).toBe('C0FFEE');
+  expect(location.hash).toBe('#C0FFEE'); // a non-empty hash always tracks, even at the default
+  el.remove();
+});
+
 test('<c0ffee-console reflect> the hint timer is cleared on disconnect — no callback outlives the element', () => {
   vi.useFakeTimers();
   try {
