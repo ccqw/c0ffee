@@ -63,7 +63,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     // play page sets `reflect`; a Lesson's Companion console deliberately does not.
     // (The ADR-0001 prose amendment already landed in C0FFEE-17; this is its behavior.)
     // Local, not a field: reflection is wired once here and never toggled post-connect.
-    let rejectedOnLoad = false;
+    let rejectedOnLoad: string | null = null;
     if (this.hasAttribute('reflect')) {
       rejectedOnLoad = this._seedFromHash();
       window.addEventListener('hashchange', this._onHashChange);
@@ -79,8 +79,10 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     this._build();
     this._applyPresentation(); // show/hide parts for the chosen presentation
     this._render();
-    // The hint needs the just-built shadow DOM, so it can't fire from the seed.
-    if (rejectedOnLoad) this._hintRejected();
+    // The hint needs the just-built shadow DOM, so it can't fire from the seed —
+    // and by now the render's colorchange has already HEALED the hash, which is
+    // why the rejected fragment was captured at seed time rather than re-read.
+    if (rejectedOnLoad !== null) this._hintRejected(rejectedOnLoad);
   }
 
   disconnectedCallback(): void {
@@ -162,13 +164,14 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
 
   // Connect-time seed from location.hash; empty/malformed -> the #C0FFEE default,
   // never a broken render (on first paint there is nothing to keep). Mirrors
-  // _seedFromAttribute's fresh-HSV reset. Returns whether a non-empty fragment was
-  // rejected, so connectedCallback can show the hint once the shadow DOM exists.
-  private _seedFromHash(): boolean {
+  // _seedFromAttribute's fresh-HSV reset. A rejected non-empty fragment is
+  // RETURNED (null when accepted/empty) so connectedCallback can echo it in the
+  // hint once the shadow DOM exists.
+  private _seedFromHash(): string | null {
     const parsed = parseColorLink(location.hash);
     this._value = parsed ?? { ...DEFAULT };
     this.hsv = rgbToHsv(this._value);
-    return parsed === null && location.hash !== '';
+    return parsed === null && location.hash !== '' ? location.hash.slice(1) : null;
   }
 
   // hashchange = the address bar changed (the paste-and-enter the old page-level
@@ -186,7 +189,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
       // Hint BEFORE heal: replaceState is not total (Safari rate-limits the
       // history API), and a throwing heal must not also cost the user the
       // explanation. The hint has no dependency on the URL write.
-      this._hintRejected();
+      this._hintRejected(location.hash.slice(1));
       this._reflectToUrl();
       return;
     }
@@ -809,15 +812,20 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   // Rejected-link hint (C0FFEE-25): a malformed Color link never moves the
   // value; this says why, at the Hex field. Same transient pattern as the copy
   // flash — auto-return to rest, a re-trigger mid-show restarts cleanly, and the
-  // timer is cleared on disconnect. The copy is STATIC: it never echoes the
-  // rejected fragment (no truncation/injection questions for zero benefit).
-  // The element doubles as the aria-live region, so the rejection is heard too.
+  // timer is cleared on disconnect. The copy ECHOES the rejected fragment
+  // (decided in the 2026-06-10 merge-ask eval, superseding the ticket's no-echo
+  // call): without it, "isn't a color address" reads as describing the valid
+  // address in the field below. The echo is inert — textContent never parses
+  // HTML — quoted as foreign material, and clamped to hex-address length so the
+  // truncation itself teaches the format. The element doubles as the aria-live
+  // region, so the rejection is heard too.
   private _hintTimer: number | null = null;
 
-  private _hintRejected(): void {
+  private _hintRejected(rejected: string): void {
     const hint = this._el('hex-hint');
     if (this._hintTimer !== null) clearTimeout(this._hintTimer);
-    hint.textContent = 'not a color address — try 6 hex digits (0–9, A–F)';
+    const shown = rejected.length > 6 ? rejected.slice(0, 6) + '…' : rejected;
+    hint.textContent = `“${shown}” isn’t a color address — try 6 hex digits (0–9, A–F)`;
     hint.classList.add('show');
     this._hintTimer = window.setTimeout(() => {
       hint.classList.remove('show');

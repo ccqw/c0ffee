@@ -847,7 +847,9 @@ test('<c0ffee-console reflect> live malformed hashchange is rejected — value s
     expect(changes).toBe(0); // a rejected edit is not a colorchange
     const hint = hexHint(el);
     expect(hint.classList.contains('show')).toBe(true);
-    expect(hint.textContent).toBe('not a color address — try 6 hex digits (0–9, A–F)');
+    // The echo names the rejected fragment, so the message can't be misread as
+    // describing the (valid) address sitting in the Hex field right above it.
+    expect(hint.textContent).toBe('“potato” isn’t a color address — try 6 hex digits (0–9, A–F)');
     expect(hint.getAttribute('aria-live')).toBe('polite'); // heard, not just seen
 
     vi.advanceTimersByTime(6000);
@@ -866,6 +868,22 @@ test('<c0ffee-console reflect> initial load of a malformed share link: mint defa
   expect(el.hex).toBe('C0FFEE'); // nothing to keep on first paint — the default
   expect(location.hash).toBe('#C0FFEE'); // healed to the displayed color's link
   expect(hexHint(el).classList.contains('show')).toBe(true);
+  // The URL heals BEFORE the hint fires on this path — the echo must carry the
+  // fragment captured at seed time, not a re-read of the already-healed hash.
+  expect(hexHint(el).textContent).toBe('“potato” isn’t a color address — try 6 hex digits (0–9, A–F)');
+  el.remove();
+});
+
+test('<c0ffee-console reflect> the echo clamps a long fragment to hex-address length — six characters and an ellipsis', () => {
+  clearUrl();
+  history.replaceState(null, '', '#FF6600');
+  const el = mountReflect();
+
+  history.replaceState(null, '', '#definitely-not-a-color');
+  window.dispatchEvent(new Event('hashchange'));
+
+  expect(el.hex).toBe('FF6600');
+  expect(hexHint(el).textContent).toBe('“defini…” isn’t a color address — try 6 hex digits (0–9, A–F)');
   el.remove();
 });
 
