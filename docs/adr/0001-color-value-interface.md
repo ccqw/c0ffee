@@ -31,3 +31,15 @@ The original points 1 and 4 framed URL seeding/reflection as a "Playground-only,
 - **Live, not initial-only.** Seeding re-runs on `hashchange` (and on cold load), so pasting a new hex into the address bar updates the color live. This extends point 1's "seed in" from initial-only.
 
 This supersedes point 4's page-type framing and narrows point 1 to hash-only.
+
+## Amendment — 2026-06-10 (C0FFEE-25)
+
+**On the live re-seed path, a malformed Color link is rejected — it never moves the value.**
+
+Point 1's "Malformed/missing → default" was written for seed-in, where there is no current value to keep, and it still holds there: on initial load a malformed or missing fragment renders the default, never a broken render. The live re-seed path (previous amendment) now diverges:
+
+- **Live `hashchange`, malformed (non-empty) fragment:** the edit is **rejected** — the Color value stays put, exactly like the Hex field dropping a filtered keystroke. No `colorchange` fires (nothing changed). The console then **heals the URL** (a `replaceState` of the displayed color's canonical link — no `hashchange` echo) and shows a **transient hint** at the Hex field saying why. A malformed fragment never leaves the address bar disagreeing with the render.
+- **Initial load, malformed:** default as before (nothing to keep), then the same heal + hint.
+- **Empty hash, load or live:** stays silent *and stays clean* — the default value is never written into an empty hash. An empty fragment showing the default color is the honest resting state, so a plain URL is left untouched until the user actually moves the color. (Previously connect-time canonicalization appended the default link to a plain URL; a *non-empty* hash still canonicalizes on connect, `#f60` → `#FF6600`.)
+
+`parseColorLink` is untouched — total, `null` on malformed. The reject/heal/hint policy lives in the console's reflection wiring, not the codec.

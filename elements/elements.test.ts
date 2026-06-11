@@ -819,3 +819,141 @@ test('<c0ffee-console> a rejected clipboard write flashes the failed state, neve
     vi.useRealTimers();
   }
 });
+
+// C0FFEE-25 — a malformed Color link never moves the Color value, never leaves a
+// lying URL, and always says why (ADR-0001 amendment 2026-06-10). Live re-seed
+// rejects like a filtered keystroke; initial load still defaults (nothing to
+// keep); an empty hash stays silent AND clean. One test per row of the ticket's
+// behavior table, plus the C0FFEE-54 disconnect lesson for the hint timer.
+
+const hexHint = (el: HTMLElement): HTMLElement =>
+  el.shadowRoot?.getElementById('hex-hint') as HTMLElement;
+
+test('<c0ffee-console reflect> live malformed hashchange is rejected — value stays, URL heals, hint shows then fades', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#FF6600');
+    const el = mountReflect();
+    let changes = 0;
+    el.addEventListener('colorchange', () => changes++);
+
+    // Simulate pasting junk into the address bar and pressing Enter.
+    history.replaceState(null, '', '#potato');
+    window.dispatchEvent(new Event('hashchange'));
+
+    expect(el.hex).toBe('FF6600'); // the edit was rejected — the value stayed put
+    expect(location.hash).toBe('#FF6600'); // the URL healed to the DISPLAYED color
+    expect(changes).toBe(0); // a rejected edit is not a colorchange
+    const hint = hexHint(el);
+    expect(hint.classList.contains('show')).toBe(true);
+    // The echo names the rejected fragment, so the message can't be misread as
+    // describing the (valid) address sitting in the Hex field right above it.
+    expect(hint.textContent).toBe('“potato” isn’t a color address — try 6 hex digits (0–9, A–F)');
+    expect(hint.getAttribute('aria-live')).toBe('polite'); // heard, not just seen
+
+    vi.advanceTimersByTime(6000);
+    expect(hint.classList.contains('show')).toBe(false); // transient — auto-fades
+    expect(hint.textContent).toBe('');
+    el.remove();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> initial load of a malformed share link: mint default, URL healed, hint shown', () => {
+  clearUrl();
+  history.replaceState(null, '', '#potato');
+  const el = mountReflect();
+  expect(el.hex).toBe('C0FFEE'); // nothing to keep on first paint — the default
+  expect(location.hash).toBe('#C0FFEE'); // healed to the displayed color's link
+  expect(hexHint(el).classList.contains('show')).toBe(true);
+  // The URL heals BEFORE the hint fires on this path — the echo must carry the
+  // fragment captured at seed time, not a re-read of the already-healed hash.
+  expect(hexHint(el).textContent).toBe('“potato” isn’t a color address — try 6 hex digits (0–9, A–F)');
+  el.remove();
+});
+
+test('<c0ffee-console reflect> the echo clamps a long fragment to hex-address length — six characters and an ellipsis', () => {
+  clearUrl();
+  history.replaceState(null, '', '#FF6600');
+  const el = mountReflect();
+
+  history.replaceState(null, '', '#definitely-not-a-color');
+  window.dispatchEvent(new Event('hashchange'));
+
+  expect(el.hex).toBe('FF6600');
+  expect(hexHint(el).textContent).toBe('“defini…” isn’t a color address — try 6 hex digits (0–9, A–F)');
+  el.remove();
+});
+
+test('<c0ffee-console reflect> an empty hash stays silent AND clean — the default is never written into it', () => {
+  clearUrl();
+  const el = mountReflect();
+  expect(el.hex).toBe('C0FFEE');
+  expect(location.hash).toBe(''); // a plain URL is left untouched
+  expect(hexHint(el).classList.contains('show')).toBe(false);
+  expect(hexHint(el).textContent).toBe(''); // nothing was typed, nothing to say
+  el.remove();
+});
+
+test('<c0ffee-console reflect> live hashchange to an empty hash: default, URL untouched, no hint', () => {
+  clearUrl();
+  history.replaceState(null, '', '#FF6600');
+  const el = mountReflect();
+
+  history.replaceState(null, '', location.pathname); // the user erased the fragment
+  window.dispatchEvent(new Event('hashchange'));
+
+  expect(el.hex).toBe('C0FFEE'); // empty = the default, exactly as today
+  expect(location.hash).toBe('');
+  expect(hexHint(el).classList.contains('show')).toBe(false);
+  el.remove();
+});
+
+test('<c0ffee-console reflect> a valid fragment still seeds, re-seeds and canonicalizes — and never hints (regression)', () => {
+  clearUrl();
+  history.replaceState(null, '', '#f60');
+  const el = mountReflect();
+  expect(el.hex).toBe('FF6600');
+  expect(location.hash).toBe('#FF6600'); // a NON-empty hash still canonicalizes on connect
+
+  history.replaceState(null, '', '#3A7BD5');
+  window.dispatchEvent(new Event('hashchange'));
+  expect(el.hex).toBe('3A7BD5'); // live re-seed unchanged
+  expect(hexHint(el).textContent).toBe('');
+  el.remove();
+});
+
+test('<c0ffee-console reflect> editing away from the default and back still writes #C0FFEE — the empty-hash guard only protects an EMPTY hash', () => {
+  clearUrl();
+  const el = mountReflect(); // plain load: defaults, URL stays clean
+  expect(location.hash).toBe('');
+
+  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  slider.value = '255';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(location.hash).toBe('#FFFFEE'); // the first real edit writes the hash
+
+  slider.value = '192'; // C0 — back to the namesake exactly
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(el.hex).toBe('C0FFEE');
+  expect(location.hash).toBe('#C0FFEE'); // a non-empty hash always tracks, even at the default
+  el.remove();
+});
+
+test('<c0ffee-console reflect> the hint timer is cleared on disconnect — no callback outlives the element', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#FF6600');
+    const el = mountReflect();
+    history.replaceState(null, '', '#potato');
+    window.dispatchEvent(new Event('hashchange'));
+    expect(vi.getTimerCount()).toBe(1); // the fade timer is armed
+    el.remove(); // disconnectedCallback must drop it
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});

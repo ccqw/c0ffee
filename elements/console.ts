@@ -63,12 +63,15 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     // play page sets `reflect`; a Lesson's Companion console deliberately does not.
     // (The ADR-0001 prose amendment already landed in C0FFEE-17; this is its behavior.)
     // Local, not a field: reflection is wired once here and never toggled post-connect.
+    let rejectedOnLoad: string | null = null;
     if (this.hasAttribute('reflect')) {
-      this._seedFromHash();
+      rejectedOnLoad = this._seedFromHash();
       window.addEventListener('hashchange', this._onHashChange);
-      // Arm the writer BEFORE _render(): the initial render's colorchange is what
-      // canonicalizes the just-seeded hash in the URL (#f60 -> #FF6600). Registering
-      // after _render() would silently drop connect-time canonicalization.
+      // Arm the writer BEFORE _render(): _emitChange fires on EVERY render (not
+      // change-gated), so the initial render's colorchange is what canonicalizes
+      // the just-seeded hash in the URL (#f60 -> #FF6600) — and, on a malformed
+      // share link, what heals it to the default's link. Registering after
+      // _render() would silently drop both.
       this.addEventListener('colorchange', this._reflectToUrl);
     } else {
       this._seedFromAttribute();
@@ -76,18 +79,26 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     this._build();
     this._applyPresentation(); // show/hide parts for the chosen presentation
     this._render();
+    // The hint needs the just-built shadow DOM, so it can't fire from the seed —
+    // and by now the render's colorchange has already HEALED the hash, which is
+    // why the rejected fragment was captured at seed time rather than re-read.
+    if (rejectedOnLoad !== null) this._hintRejected(rejectedOnLoad);
   }
 
   disconnectedCallback(): void {
     // The colorchange listener sits on `this` (GC'd with the element); the
     // hashchange listener lives on window, the popover's pointerdown listener
-    // on document, and the copy-flash timer on the event loop — all three
-    // outlive the element unless detached explicitly.
+    // on document, and the copy-flash + hint timers on the event loop — all
+    // of which outlive the element unless detached explicitly.
     window.removeEventListener('hashchange', this._onHashChange);
     this._closePop();
     if (this._copyTimer !== null) {
       clearTimeout(this._copyTimer);
       this._copyTimer = null;
+    }
+    if (this._hintTimer !== null) {
+      clearTimeout(this._hintTimer);
+      this._hintTimer = null;
     }
   }
 
@@ -151,26 +162,53 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   // Only wired when `reflect` is set. The hash is the sole URL form (the legacy
   // `?hex=` query is retired — read nowhere, written nowhere).
 
-  // Seed from location.hash; empty/malformed -> the #C0FFEE default, never a broken
-  // render. Mirrors _seedFromAttribute's fresh-HSV reset.
-  private _seedFromHash(): void {
-    this._value = parseColorLink(location.hash) || { ...DEFAULT };
+  // Connect-time seed from location.hash; empty/malformed -> the #C0FFEE default,
+  // never a broken render (on first paint there is nothing to keep). Mirrors
+  // _seedFromAttribute's fresh-HSV reset. A rejected non-empty fragment is
+  // RETURNED (null when accepted/empty) so connectedCallback can echo it in the
+  // hint once the shadow DOM exists.
+  private _seedFromHash(): string | null {
+    const parsed = parseColorLink(location.hash);
+    this._value = parsed ?? { ...DEFAULT };
     this.hsv = rgbToHsv(this._value);
+    return parsed === null && location.hash !== '' ? location.hash.slice(1) : null;
   }
 
   // hashchange = the address bar changed (the paste-and-enter the old page-level
-  // reflection silently ignored). Re-seed live.
+  // reflection silently ignored). A valid fragment re-seeds live; an empty one
+  // resets to the default. A malformed one is REJECTED like a filtered keystroke
+  // (C0FFEE-25 / ADR-0001 amendment 2026-06-10): the value stays put, the URL
+  // heals to the DISPLAYED color's canonical link, and a transient hint at the
+  // Hex field says why. The reject path must SKIP _render — _emitChange is not
+  // change-gated, so any render would fire a phantom colorchange — which is also
+  // why the heal calls _reflectToUrl directly instead of riding the event.
+  // (replaceState fires no hashchange, so the heal can't loop back here.)
   private _onHashChange = (): void => {
-    this._seedFromHash();
+    const parsed = parseColorLink(location.hash);
+    if (parsed === null && location.hash !== '') {
+      // Hint BEFORE heal: replaceState is not total (Safari rate-limits the
+      // history API), and a throwing heal must not also cost the user the
+      // explanation. The hint has no dependency on the URL write.
+      this._hintRejected(location.hash.slice(1));
+      this._reflectToUrl();
+      return;
+    }
+    this._value = parsed ?? { ...DEFAULT };
+    this.hsv = rgbToHsv(this._value);
     this._render();
   };
 
   // Write the live Color link back to the hash. replaceState (not `location.hash =`)
   // keeps history clean AND fires no hashchange, so there's no seed/echo loop; the
   // equality guard skips redundant writes and canonicalizes case/shorthand for free.
+  // An empty hash showing the default color is the honest resting state (a plain
+  // `/`), so the default is never written into an empty hash — the URL stays clean
+  // until the user actually moves the color (C0FFEE-25).
   private _reflectToUrl = (): void => {
     const next = formatColorLink(this._value);
-    if (location.hash !== next) history.replaceState(null, '', next);
+    if (location.hash === next) return;
+    if (location.hash === '' && next === formatColorLink(DEFAULT)) return;
+    history.replaceState(null, '', next);
   };
 
   // --- presentation (ADR-0002 / ADR-0005): which parts this one element shows ---
@@ -281,6 +319,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            including the two inside pair-gaps — no trailing-gap artifact). */
         .hexfield {
           display: flex; justify-content: center; align-items: baseline; gap: .14em;
+          position: relative; /* anchors the rejected-link hint */
           padding: 30px 0 10px;
           --hex-fs: clamp(34px, 8vw, 50px);
           --hex-ls: 0.12em;
@@ -344,6 +383,25 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           position: absolute; width: 1px; height: 1px; overflow: hidden;
           clip-path: inset(50%); white-space: nowrap;
         }
+        /* ── Rejected-link hint (C0FFEE-25) — transient, anchored under the
+           Hex field. Absolutely positioned so showing it never shifts layout
+           (it briefly overlays the slider row below, like the place-value
+           popover does); always rendered so the aria-live announcement fires,
+           visibility rides the .show class. Popover's one-off backdrop keeps
+           it legible over whatever it covers (grill Q10 precedent). */
+        .hex-hint {
+          position: absolute; z-index: 5; left: 50%; top: 100%;
+          transform: translate(-50%, -6px);
+          width: max-content; max-width: 280px;
+          background: rgba(18,18,20,.97); border: 1px solid rgba(255,255,255,.12);
+          border-radius: 9px; padding: 7px 11px;
+          font: 400 12.5px/1.4 var(--c0ffee-font, monospace);
+          letter-spacing: normal; text-transform: none; text-align: center;
+          color: color-mix(in srgb, var(--c0ffee-fg, #eee) 85%, transparent);
+          pointer-events: none;
+          opacity: 0; transition: opacity .15s;
+        }
+        .hex-hint.show { opacity: 1; }
         /* place-value popover (grill Q11) — anchored inside its pair, so no
            geometry math; bg + hairline are deliberate one-offs (grill Q10). */
         .popover {
@@ -493,6 +551,7 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
             </svg>
           </button>
           <span class="vh" id="copy-status" aria-live="polite"></span>
+          <span class="hex-hint" id="hex-hint" aria-live="polite"></span>
         </div>
         <div class="sliders">
           ${CHANNELS.map((c) => `
@@ -749,6 +808,31 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     if (!this.isConnected) return;
     this._flashCopy(ok ? 'copied' : 'copy-failed', ok ? 'Copied' : 'Copy failed');
   };
+
+  // Rejected-link hint (C0FFEE-25): a malformed Color link never moves the
+  // value; this says why, at the Hex field. Same transient pattern as the copy
+  // flash — auto-return to rest, a re-trigger mid-show restarts cleanly, and the
+  // timer is cleared on disconnect. The copy ECHOES the rejected fragment
+  // (decided in the 2026-06-10 merge-ask eval, superseding the ticket's no-echo
+  // call): without it, "isn't a color address" reads as describing the valid
+  // address in the field below. The echo is inert — textContent never parses
+  // HTML — quoted as foreign material, and clamped to hex-address length so the
+  // truncation itself teaches the format. The element doubles as the aria-live
+  // region, so the rejection is heard too.
+  private _hintTimer: number | null = null;
+
+  private _hintRejected(rejected: string): void {
+    const hint = this._el('hex-hint');
+    if (this._hintTimer !== null) clearTimeout(this._hintTimer);
+    const shown = rejected.length > 6 ? rejected.slice(0, 6) + '…' : rejected;
+    hint.textContent = `“${shown}” isn’t a color address — try 6 hex digits (0–9, A–F)`;
+    hint.classList.add('show');
+    this._hintTimer = window.setTimeout(() => {
+      hint.classList.remove('show');
+      hint.textContent = '';
+      this._hintTimer = null;
+    }, 4000);
+  }
 
   // Swap the icon in place and announce via the live region; auto-return to
   // rest. A re-click mid-flash restarts cleanly (drop both states + the timer).
