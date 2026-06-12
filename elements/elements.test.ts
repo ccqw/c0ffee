@@ -288,7 +288,7 @@ test('<c0ffee-console> keeps companion-specific styling so "compact" can never s
 // Pull one rule block out of the console's shadow stylesheet by selector.
 function cssBlock(el: HTMLElement, selector: string): string {
   const css = el.shadowRoot?.querySelector('style')?.textContent ?? '';
-  const match = css.match(new RegExp(selector.replace(/[.#[\]]/g, '\\$&') + '\\s*{[^}]*}'));
+  const match = css.match(new RegExp(selector.replace(/[.#[\]()]/g, '\\$&') + '\\s*{[^}]*}'));
   return match?.[0] ?? '';
 }
 
@@ -1158,6 +1158,65 @@ test('<c0ffee-console reflect> a malformed fragment while a trailing write is AL
   } finally {
     vi.useRealTimers();
   }
+});
+
+// C0FFEE-53 — companion presentation: wider, weightier slider tracks (mini view
+// only). The Lesson's pinned mini view trades the spelled-out labels and wide
+// value column for track length — single-letter R/G/B Channel labels (the HSV
+// panel's voice) in a narrow gutter, a 34px value column, a 330px card — and a
+// taller track with a proportionally scaled thumb for visual weight. The
+// full/solo console is explicitly unchanged. happy-dom does no layout, so these
+// anchor the mechanism (cssBlock contracts + the label-text boundary); the look
+// itself is browser-verified on the Lesson page at the eyeball gate.
+
+test('<c0ffee-console> the companion card widens to 330px — the track gets the room', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  expect(cssBlock(el, ':host([presentation="companion"]) .card')).toContain('width: 330px');
+});
+
+test('<c0ffee-console> companion narrows the label gutter and value column — single letters need no 52px', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  expect(cssBlock(el, ':host([presentation="companion"]) .lbl')).toContain('width: 14px');
+  expect(cssBlock(el, ':host([presentation="companion"]) .dec')).toContain('width: 34px');
+});
+
+test('<c0ffee-console> the companion track is taller with a proportionally scaled thumb — weight, not just length', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  expect(cssBlock(el, ':host([presentation="companion"]) input[type=range]')).toContain('height: 24px');
+  expect(cssBlock(el, ':host([presentation="companion"]) input[type=range]::-webkit-slider-thumb')).toContain('height: 31px');
+  // Firefox scales via its own pseudo-element, kept in sync with -webkit-
+  expect(cssBlock(el, ':host([presentation="companion"]) input[type=range]::-moz-range-thumb')).toContain('height: 31px');
+});
+
+test('<c0ffee-console presentation="companion"> labels its Channels R/G/B — the HSV panel voice', () => {
+  const el = mountPresentation('companion', 'C0FFEE');
+  expect(channelBtn(el, 'r').textContent).toBe('R');
+  expect(channelBtn(el, 'g').textContent).toBe('G');
+  expect(channelBtn(el, 'b').textContent).toBe('B');
+  // the visible text shrank to one letter; the accessible name must not
+  expect(channelBtn(el, 'r').getAttribute('aria-label')).toBe('Red');
+  expect(channelBtn(el, 'g').getAttribute('aria-label')).toBe('Green');
+  expect(channelBtn(el, 'b').getAttribute('aria-label')).toBe('Blue');
+  el.remove();
+});
+
+test('<c0ffee-console> the full presentation still spells out Red/Green/Blue', () => {
+  const el = mount('c0ffee-console', 'C0FFEE');
+  expect(channelBtn(el, 'r').textContent).toBe('Red');
+  expect(channelBtn(el, 'g').textContent).toBe('Green');
+  expect(channelBtn(el, 'b').textContent).toBe('Blue');
+});
+
+test('<c0ffee-console> switching presentation re-labels in place and never touches the Color value', () => {
+  const el = mount('c0ffee-console', '3A7BD5');
+  let changes = 0;
+  el.addEventListener('colorchange', () => changes++);
+  el.setAttribute('presentation', 'companion');
+  expect(channelBtn(el, 'r').textContent).toBe('R');
+  el.setAttribute('presentation', 'full');
+  expect(channelBtn(el, 'r').textContent).toBe('Red');
+  expect(el.hex).toBe('3A7BD5'); // ADR-0005's no-reseed promise at the new boundary
+  expect(changes).toBe(0); // a re-label is layout, not a color move
 });
 
 test('<c0ffee-console reflect> a persistent failure keeps retrying — numbered warns, then ONE console.error so RUM sees a recurrence', () => {

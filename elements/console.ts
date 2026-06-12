@@ -298,14 +298,21 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     return this.getAttribute('presentation') === 'companion' ? 'companion' : 'full';
   }
 
-  // Apply the current presentation by toggling part visibility only. `companion`
-  // drops the HSV panel (the secondary color model) for a compact band; `full`
-  // shows it. Uses `hidden` (not removal) so the panel's state stays live and
-  // correct underneath — switching back to full reveals the right HSV instantly,
-  // and the Color value is never disturbed. The narrower card width is pure CSS
+  // Apply the current presentation: toggle part visibility and swap the Channel
+  // label text. `companion` drops the HSV panel (the secondary color model) for
+  // a compact band and shortens the Channel names to single letters — R/G/B, the
+  // HSV panel's voice — so the slider tracks get the gutter's width (C0FFEE-53);
+  // the buttons' aria-label keeps the full name either way. Uses `hidden` (not
+  // removal) so the panel's state stays live and correct underneath — switching
+  // back to full reveals the right HSV instantly, and the Color value is never
+  // disturbed (ADR-0005). The sizing itself is pure CSS
   // (`:host([presentation="companion"])`).
   private _applyPresentation(): void {
-    this._el('hsv-panel').hidden = this._presentation === 'companion';
+    const companion = this._presentation === 'companion';
+    this._el('hsv-panel').hidden = companion;
+    for (const c of CHANNELS) {
+      this._el(`ch-${c.key}`).textContent = companion ? c.label[0] : c.label;
+    }
   }
 
   // --- one-time DOM construction ---
@@ -572,9 +579,11 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            Companion console. The HSV panel is dropped in JS (#hsv-panel[hidden]);
            the card narrows and the swatch shrinks so it reads as compact, not just
            shorter. Minimal by design — the rich reveal-drawer is C0FFEE-18. */
-        /* 292 border-box = C0FFEE-23's 240px content width + the new card padding,
-           so the compact band's parts keep their proven proportions. */
-        :host([presentation="companion"]) .card { width: 292px; }
+        /* 330 border-box (C0FFEE-53, was 292): the extra width goes straight to
+           the slider tracks. Still fits a 375px phone; past that max-width:100%
+           squeezes evenly because the gutters are flex:none and only the range
+           shrinks (C0FFEE-51). */
+        :host([presentation="companion"]) .card { width: 330px; }
         /* the hero type would outgrow the 292px band — companion keeps the
            field, at a fixed compact size */
         :host([presentation="companion"]) .hexfield { --hex-fs: 26px; padding: 22px 0 8px; }
@@ -582,6 +591,18 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         :host([presentation="companion"]) .swatch { flex: 1; height: auto; min-height: 110px; }
         :host([presentation="companion"]) .venn { padding: 0; align-items: center; }
         :host([presentation="companion"]) .venn-box { width: 104px; }
+        /* C0FFEE-53: the mini view trades the spelled-out labels and the wide
+           value column for track length — single-letter R/G/B (text swapped in
+           _applyPresentation; aria-label keeps the full name) in a narrow
+           gutter, and 34px fits "255", the widest value once the HSV panel
+           (with its 360°) is hidden. The track also gains height, its thumb
+           scaled to keep the knurled proportions, so the longer bar reads
+           weighty rather than stretched. */
+        :host([presentation="companion"]) .lbl { width: 14px; }
+        :host([presentation="companion"]) .dec { width: 34px; }
+        :host([presentation="companion"]) input[type=range] { height: 24px; border-radius: 7px; }
+        :host([presentation="companion"]) input[type=range]::-webkit-slider-thumb { width: 22px; height: 31px; }
+        :host([presentation="companion"]) input[type=range]::-moz-range-thumb { width: 22px; height: 31px; }
       </style>
       <div class="card">
         <div class="stage">
@@ -634,8 +655,8 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
         <div class="sliders">
           ${CHANNELS.map((c) => `
             <div class="row">
-              <button type="button" class="lbl" id="ch-${c.key}"
-                      title="solo ${c.label}" aria-pressed="false">${c.label}</button>
+              <button type="button" class="lbl" id="ch-${c.key}" title="solo ${c.label}"
+                      aria-label="${c.label}" aria-pressed="false">${c.label}</button>
               <input type="range" min="0" max="255" id="sl-${c.key}" aria-label="${c.label}"
                      style="background: linear-gradient(to right, #000, ${c.pure(255)});">
               <code class="dec" id="dec-${c.key}"></code>
