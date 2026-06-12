@@ -1,6 +1,6 @@
 {
   "name": "c0ffee",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "description": "Interactive color tools and lessons, with a love for hex. c0ffee.cafe",
