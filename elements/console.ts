@@ -20,6 +20,21 @@ import type { Rgb, Hsv, Hex, ColorInterface, ColorChangeDetail } from '../lib/co
 
 const DEFAULT: Rgb = { r: 192, g: 255, b: 238 }; // #C0FFEE — the namesake mint, when no/invalid hex given
 
+// URL-write pacing (C0FFEE-56 / ADR-0001 amendment 2026-06-11). WebKit rate-limits
+// the history API — ~100 calls per 10s in current builds, 100/30s in older ones —
+// and THROWS SecurityError past quota (Blink silently drops instead), so a 60Hz
+// slider drag exhausted it in under two seconds. 500ms ≈ 2 writes/s = 60 per 30s
+// window: safe under both quotas. The interval is load-shedding, not the
+// correctness argument — the quota is undocumented engine policy (it has already
+// changed once), which is why the write itself is also guarded and retried.
+const URL_WRITE_INTERVAL_MS = 500;
+const URL_RETRY_BACKOFF_MS = 2000;
+// Consecutive failed writes before the one console.error. RUM collects
+// console.error (not console.warn) as an error event, and it was RUM that
+// caught this bug — a recurrence must stay visible in production, as ONE
+// event per pathological session instead of an uncaught-error flood.
+const URL_RETRY_ESCALATE_AFTER = 5;
+
 type RgbKey = keyof Rgb; // 'r' | 'g' | 'b'
 type HsvKey = keyof Hsv; // 'h' | 's' | 'v'
 
@@ -99,6 +114,12 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
     if (this._hintTimer !== null) {
       clearTimeout(this._hintTimer);
       this._hintTimer = null;
+    }
+    // The armed URL write (trailing or retry) — a disconnected element never
+    // writes the URL (C0FFEE-56).
+    if (this._urlTimer !== null) {
+      clearTimeout(this._urlTimer);
+      this._urlTimer = null;
     }
   }
 
@@ -186,9 +207,10 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   private _onHashChange = (): void => {
     const parsed = parseColorLink(location.hash);
     if (parsed === null && location.hash !== '') {
-      // Hint BEFORE heal: replaceState is not total (Safari rate-limits the
-      // history API), and a throwing heal must not also cost the user the
-      // explanation. The hint has no dependency on the URL write.
+      // Hint BEFORE heal: the heal is not instant — replaceState can throw
+      // (Safari rate-limits the history API) and the C0FFEE-56 throttle may
+      // defer the write — and a delayed or failed heal must not also cost the
+      // user the explanation. The hint has no dependency on the URL write.
       this._hintRejected(location.hash.slice(1));
       this._reflectToUrl();
       return;
@@ -204,12 +226,68 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
   // An empty hash showing the default color is the honest resting state (a plain
   // `/`), so the default is never written into an empty hash — the URL stays clean
   // until the user actually moves the color (C0FFEE-25).
+  //
+  // Throttled (C0FFEE-56): a trailing-edge throttle paces every writer through this
+  // one funnel — drags, key autorepeat, animateTo, the C0FFEE-25 heal. The first
+  // write lands immediately (connect canonicalization and single edits stay live);
+  // calls inside the interval coalesce into ONE armed write that re-reads the value
+  // — and re-runs the guards — when the timer fires, so a burst always settles on
+  // the FINAL color and a value that circled back writes nothing.
+  private _urlTimer: number | null = null;
+  private _lastUrlWrite = 0; // epoch ms of the last successful replaceState
+
   private _reflectToUrl = (): void => {
+    if (this._urlTimer !== null) return; // an armed write will read the value at fire time
     const next = formatColorLink(this._value);
     if (location.hash === next) return;
     if (location.hash === '' && next === formatColorLink(DEFAULT)) return;
-    history.replaceState(null, '', next);
+    const wait = URL_WRITE_INTERVAL_MS - (Date.now() - this._lastUrlWrite);
+    if (wait <= 0) {
+      this._writeUrl();
+      return;
+    }
+    this._urlTimer = window.setTimeout(() => {
+      this._urlTimer = null;
+      this._writeUrl();
+    }, wait);
   };
+
+  // The write itself, guards re-checked at fire time. The try/catch is the real
+  // fix for the iOS "Script error." flood: past quota WebKit THROWS, and before
+  // C0FFEE-56 every drag frame's uncaught SecurityError hit window.onerror. On
+  // catch, arm a retry on a backoff — UNBOUNDED by design (ADR-0001 amendment
+  // 2026-06-11): the quota refills, so a write eventually lands and the URL
+  // stops lying even if the user walks away mid-drag. The loop ends when a
+  // write succeeds or when the NEXT attempt's guards find the URL already
+  // honest (the catch itself always re-arms).
+  private _urlRetryCount = 0; // consecutive failures; resets on a successful write
+
+  private _writeUrl(): void {
+    const next = formatColorLink(this._value);
+    if (location.hash === next) return;
+    if (location.hash === '' && next === formatColorLink(DEFAULT)) return;
+    try {
+      history.replaceState(null, '', next);
+      this._lastUrlWrite = Date.now();
+      this._urlRetryCount = 0;
+    } catch (err) {
+      // Expected under quota exhaustion (SecurityError); anything else rides
+      // the same retry. Warn per attempt — numbered, so a log shows transient
+      // vs stuck — then ONE console.error once the failure stops looking
+      // transient, because that's the escalation RUM actually collects (see
+      // URL_RETRY_ESCALATE_AFTER).
+      this._urlRetryCount++;
+      if (this._urlRetryCount === URL_RETRY_ESCALATE_AFTER) {
+        console.error(`c0ffee-console: Color link write still failing after ${URL_RETRY_ESCALATE_AFTER} attempts`, err);
+      } else {
+        console.warn(`c0ffee-console: Color link write rejected (attempt ${this._urlRetryCount}), retrying`, err);
+      }
+      this._urlTimer = window.setTimeout(() => {
+        this._urlTimer = null;
+        this._writeUrl();
+      }, URL_RETRY_BACKOFF_MS);
+    }
+  }
 
   // --- presentation (ADR-0002 / ADR-0005): which parts this one element shows ---
 
