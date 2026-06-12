@@ -926,20 +926,26 @@ test('<c0ffee-console reflect> a valid fragment still seeds, re-seeds and canoni
 });
 
 test('<c0ffee-console reflect> editing away from the default and back still writes #C0FFEE — the empty-hash guard only protects an EMPTY hash', () => {
-  clearUrl();
-  const el = mountReflect(); // plain load: defaults, URL stays clean
-  expect(location.hash).toBe('');
+  vi.useFakeTimers(); // the second edit rides the C0FFEE-56 trailing write
+  try {
+    clearUrl();
+    const el = mountReflect(); // plain load: defaults, URL stays clean
+    expect(location.hash).toBe('');
 
-  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
-  slider.value = '255';
-  slider.dispatchEvent(new Event('input', { bubbles: true }));
-  expect(location.hash).toBe('#FFFFEE'); // the first real edit writes the hash
+    const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+    slider.value = '255';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(location.hash).toBe('#FFFFEE'); // the first real edit writes the hash
 
-  slider.value = '192'; // C0 — back to the namesake exactly
-  slider.dispatchEvent(new Event('input', { bubbles: true }));
-  expect(el.hex).toBe('C0FFEE');
-  expect(location.hash).toBe('#C0FFEE'); // a non-empty hash always tracks, even at the default
-  el.remove();
+    slider.value = '192'; // C0 — back to the namesake exactly
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(el.hex).toBe('C0FFEE');
+    vi.advanceTimersByTime(500);
+    expect(location.hash).toBe('#C0FFEE'); // a non-empty hash always tracks, even at the default
+    el.remove();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test('<c0ffee-console reflect> the hint timer is cleared on disconnect — no callback outlives the element', () => {
@@ -953,6 +959,171 @@ test('<c0ffee-console reflect> the hint timer is cleared on disconnect — no ca
     expect(vi.getTimerCount()).toBe(1); // the fade timer is armed
     el.remove(); // disconnectedCallback must drop it
     expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// C0FFEE-56 — URL writes are throttled and guarded (ADR-0001 amendment 2026-06-11).
+// WebKit rate-limits the history API (~100 calls per 10s, SecurityError past quota),
+// so a 60Hz slider drag exhausted it in under two seconds and every later frame threw
+// — the iOS "Script error." flood. The fix funnels every writer through a trailing-edge
+// throttle (first write immediate, bursts coalesce into ONE deferred write that reads
+// the value when the timer fires) and wraps the replaceState itself in try/catch with
+// a self-rescheduling retry — the quota is undocumented engine policy, so the catch is
+// the correctness argument and the throttle is load-shedding.
+
+// Drive a console's red slider through value(s), one input event per value — the
+// 60Hz drag path, minus the 16ms waits.
+function dragRed(el: HTMLElement & ColorInterface, ...values: number[]): void {
+  const slider = el.shadowRoot?.getElementById('sl-r') as HTMLInputElement;
+  for (const v of values) {
+    slider.value = String(v);
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+test('<c0ffee-console reflect> a drag burst coalesces URL writes — one immediate, one trailing carrying the FINAL value', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+    const writes = vi.spyOn(history, 'replaceState');
+
+    dragRed(el, 10, 20, 30, 40, 250); // five frames inside one throttle window
+    expect(writes).toHaveBeenCalledTimes(1); // leading edge: the first frame lands at once
+    expect(location.hash).toBe('#0A0000');
+
+    vi.advanceTimersByTime(500);
+    expect(writes).toHaveBeenCalledTimes(2); // the burst collapsed into ONE trailing write
+    expect(location.hash).toBe('#FA0000'); // …carrying the value AT FIRE TIME, not frame #2
+
+    el.remove();
+  } finally {
+    vi.restoreAllMocks(); // the spy must die even on a failed assertion — it must not poison the next test
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> a throwing replaceState is caught and retried — the element keeps working and the URL eventually stops lying', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+
+    // WebKit past quota: replaceState THROWS. Stub the quota, keep the real write.
+    const realWrite = history.replaceState.bind(history);
+    let quotaExhausted = true;
+    vi.spyOn(history, 'replaceState').mockImplementation((data, unused, url) => {
+      if (quotaExhausted) throw new DOMException('Attempt to use history.replaceState() more than 100 times per 10 seconds', 'SecurityError');
+      realWrite(data, unused, url);
+    });
+
+    let changes = 0;
+    el.addEventListener('colorchange', () => changes++);
+    dragRed(el, 255); // the immediate write throws — and must be CAUGHT
+    expect(el.hex).toBe('FF0000'); // the Color value moved; the element survived the throw
+    expect(changes).toBe(1); // …and kept emitting
+    expect(location.hash).toBe('#000000'); // the write itself failed — URL stale for now
+
+    quotaExhausted = false; // the quota window refills
+    vi.advanceTimersByTime(2000); // retry backoff
+    expect(location.hash).toBe('#FF0000'); // the retry landed — the URL stopped lying
+
+    el.remove();
+  } finally {
+    vi.restoreAllMocks(); // the throwing stub must die even on a failed assertion
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> a pending trailing write dies with the element — disconnect clears the throttle timer', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+    dragRed(el, 10, 250); // immediate write + a trailing write armed
+    expect(location.hash).toBe('#0A0000');
+    expect(vi.getTimerCount()).toBe(1); // the trailing timer
+
+    el.remove();
+    expect(vi.getTimerCount()).toBe(0); // disconnectedCallback dropped it
+    vi.advanceTimersByTime(5000);
+    expect(location.hash).toBe('#0A0000'); // a disconnected element never writes the URL
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> the retry timer dies with the element too — no retry outlives a disconnect', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+    vi.spyOn(history, 'replaceState').mockImplementation(() => {
+      throw new DOMException('quota', 'SecurityError');
+    });
+
+    dragRed(el, 255); // immediate write throws → retry armed
+    expect(vi.getTimerCount()).toBe(1);
+    el.remove();
+    expect(vi.getTimerCount()).toBe(0);
+
+    vi.restoreAllMocks();
+    vi.advanceTimersByTime(5000);
+    expect(location.hash).toBe('#000000'); // no posthumous write
+  } finally {
+    vi.restoreAllMocks(); // idempotent; covers a failed assertion above
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> a value that circles back to the current hash skips the trailing write — equality is re-checked at fire time', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+    const writes = vi.spyOn(history, 'replaceState');
+
+    dragRed(el, 255); // immediate write: hash = #FF0000
+    dragRed(el, 0, 255); // wander off and back — at fire time the value EQUALS the hash
+    vi.advanceTimersByTime(500);
+
+    expect(writes).toHaveBeenCalledTimes(1); // the trailing write was skipped, not just deduped on schedule
+    expect(location.hash).toBe('#FF0000');
+
+    el.remove();
+  } finally {
+    vi.restoreAllMocks(); // the spy must die even on a failed assertion
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> the C0FFEE-25 heal rides the throttle — a malformed fragment mid-drag still hints at once and heals when the window opens', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+    dragRed(el, 255); // consume the leading-edge write: hash = #FF0000
+
+    // Junk pasted into the address bar right after a drag frame.
+    history.replaceState(null, '', '#potato');
+    window.dispatchEvent(new Event('hashchange'));
+
+    expect(el.hex).toBe('FF0000'); // rejected, value stays put
+    expect(hexHint(el).classList.contains('show')).toBe(true); // the hint never waits on the throttle
+    expect(location.hash).toBe('#potato'); // the heal coalesced into the trailing window…
+
+    vi.advanceTimersByTime(500);
+    expect(location.hash).toBe('#FF0000'); // …and landed when it opened
+
+    el.remove();
   } finally {
     vi.useRealTimers();
   }
