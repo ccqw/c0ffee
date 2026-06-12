@@ -1021,12 +1021,17 @@ test('<c0ffee-console reflect> a throwing replaceState is caught and retried —
       realWrite(data, unused, url);
     });
 
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     let changes = 0;
     el.addEventListener('colorchange', () => changes++);
     dragRed(el, 255); // the immediate write throws — and must be CAUGHT
     expect(el.hex).toBe('FF0000'); // the Color value moved; the element survived the throw
     expect(changes).toBe(1); // …and kept emitting
     expect(location.hash).toBe('#000000'); // the write itself failed — URL stale for now
+    // The failure is logged, not swallowed — the warn IS the failure path's content.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('Color link write rejected');
 
     quotaExhausted = false; // the quota window refills
     vi.advanceTimersByTime(2000); // retry backoff
@@ -1125,6 +1130,75 @@ test('<c0ffee-console reflect> the C0FFEE-25 heal rides the throttle — a malfo
 
     el.remove();
   } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> a malformed fragment while a trailing write is ALREADY armed — the armed write itself heals', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+    dragRed(el, 10, 250); // immediate write (#0A0000) + a trailing write armed for #FA0000
+
+    // Junk lands mid-drag, while the trailing timer is pending. The heal's
+    // _reflectToUrl call sees the armed timer and rightly does nothing new —
+    // the armed write re-reads the (kept) value at fire time, so it IS the heal.
+    history.replaceState(null, '', '#potato');
+    window.dispatchEvent(new Event('hashchange'));
+
+    expect(el.hex).toBe('FA0000'); // rejected — the dragged color is kept
+    expect(hexHint(el).classList.contains('show')).toBe(true);
+
+    vi.advanceTimersByTime(500);
+    expect(location.hash).toBe('#FA0000'); // healed by the write armed before the junk arrived
+
+    el.remove();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-console reflect> a persistent failure keeps retrying — numbered warns, then ONE console.error so RUM sees a recurrence', () => {
+  vi.useFakeTimers();
+  try {
+    clearUrl();
+    history.replaceState(null, '', '#000000');
+    const el = mountReflect();
+
+    const realWrite = history.replaceState.bind(history);
+    let quotaExhausted = true;
+    vi.spyOn(history, 'replaceState').mockImplementation((data, unused, url) => {
+      if (quotaExhausted) throw new DOMException('quota', 'SecurityError');
+      realWrite(data, unused, url);
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    dragRed(el, 255); // attempt 1 throws
+    // Attempts 2–4: each retry must RE-ARM from inside the retry callback —
+    // the "until a write lands" promise rests on this chain.
+    for (let attempt = 2; attempt <= 4; attempt++) {
+      expect(vi.getTimerCount()).toBe(1); // a retry is armed
+      vi.advanceTimersByTime(2000);
+    }
+    expect(error).not.toHaveBeenCalled(); // still looks transient — warns only
+    expect(warn).toHaveBeenCalledTimes(4);
+    expect(warn.mock.calls[3][0]).toContain('attempt 4'); // numbered: transient vs stuck is readable
+
+    vi.advanceTimersByTime(2000); // attempt 5 — stops looking transient
+    expect(error).toHaveBeenCalledTimes(1); // the ONE escalation RUM collects
+    expect(error.mock.calls[0][0]).toContain('still failing after 5 attempts');
+
+    quotaExhausted = false;
+    vi.advanceTimersByTime(2000); // attempt 6 lands
+    expect(location.hash).toBe('#FF0000'); // unbounded-by-design converged
+    expect(vi.getTimerCount()).toBe(0); // and the loop ended
+
+    el.remove();
+  } finally {
+    vi.restoreAllMocks(); // stubs must die even on a failed assertion
     vi.useRealTimers();
   }
 });
