@@ -573,8 +573,27 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
           font: 500 16px/1 var(--c0ffee-font, monospace);
           color: var(--c0ffee-fg, #eee);
         }
-        .divider { text-align: center; color: #555; font-size: 12px; padding: 2px 0 8px; }
-        .lbl.hsv { color: var(--c0ffee-accent, #C0FFEE); }
+        /* The Channel's hex pair, sitting just past its 0–255 value: the SAME two
+           digits this channel contributes to the Hex address (192 -> C0), so the
+           base-10 slider value and the base-16 address read as one fact — the
+           site's hex-intuition thesis, stated inline. Dimmed and neutral: it
+           ECHOES the address, it is not a fourth control, and ADR-0007 reserves
+           the pure channel color for where the light itself shows. Reserved as a
+           fixed column on EVERY row (empty on the HSV rows, which have no hex
+           pair) so all six slider tracks keep one shared right edge. */
+        .hexpair {
+          flex: none; width: 28px; text-align: left;
+          font: 500 16px/1 var(--c0ffee-font, monospace);
+          color: color-mix(in srgb, var(--c0ffee-fg, #eee) 46%, transparent);
+        }
+        /* The RGB/HSV seam (was the "↕ same color ↕" caption): a quiet hairline.
+           The two panels are the same Color value in two models; the rule marks
+           the boundary without spending words on it. */
+        .divider { height: 1px; background: rgba(255,255,255,.11); margin: 2px 0 12px; }
+        /* HSV labels share the RGB labels' neutral off-white (was the mint accent):
+           both panels are peers reading the same Color value, so they speak in one
+           voice. ADR-0007's pure colors stay reserved for where the light shows. */
+        .lbl.hsv { color: inherit; }
         /* companion presentation (C0FFEE-23): a compact band for a Lesson's pinned
            Companion console. The HSV panel is dropped in JS (#hsv-panel[hidden]);
            the card narrows and the swatch shrinks so it reads as compact, not just
@@ -600,6 +619,10 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
            weighty rather than stretched. */
         :host([presentation="companion"]) .lbl { width: 14px; }
         :host([presentation="companion"]) .dec { width: 34px; }
+        /* The hex pair is the solo view's hex-intuition flourish; the compact
+           companion already traded trailing columns for track length (C0FFEE-53),
+           so it drops the pair and reclaims that width. */
+        :host([presentation="companion"]) .hexpair { display: none; }
         :host([presentation="companion"]) input[type=range] { height: 24px; border-radius: 7px; }
         :host([presentation="companion"]) input[type=range]::-webkit-slider-thumb { width: 22px; height: 31px; }
         :host([presentation="companion"]) input[type=range]::-moz-range-thumb { width: 22px; height: 31px; }
@@ -660,26 +683,30 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
               <input type="range" min="0" max="255" id="sl-${c.key}" aria-label="${c.label}"
                      style="background: linear-gradient(to right, #000, ${c.pure(255)});">
               <code class="dec" id="dec-${c.key}"></code>
+              <code class="hexpair" id="hexpair-${c.key}" aria-hidden="true"></code>
             </div>`).join('')}
         </div>
         <div class="hsv-panel" id="hsv-panel">
-          <div class="divider">↕ same color ↕</div>
+          <div class="divider"></div>
           <div class="sliders">
             <label class="row">
-              <span class="lbl hsv">H</span>
+              <span class="lbl hsv">Hue</span>
               <input type="range" min="0" max="360" id="sl-h"
                      style="background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);">
               <code class="dec" id="dec-h"></code>
+              <span class="hexpair" aria-hidden="true"></span>
             </label>
             <label class="row">
-              <span class="lbl hsv">S</span>
+              <span class="lbl hsv">Sat</span>
               <input type="range" min="0" max="100" id="sl-s">
               <code class="dec" id="dec-s"></code>
+              <span class="hexpair" aria-hidden="true"></span>
             </label>
             <label class="row">
-              <span class="lbl hsv">V</span>
+              <span class="lbl hsv">Val</span>
               <input type="range" min="0" max="100" id="sl-v">
               <code class="dec" id="dec-v"></code>
+              <span class="hexpair" aria-hidden="true"></span>
             </label>
           </div>
         </div>
@@ -794,6 +821,9 @@ class C0ffeeConsole extends HTMLElement implements ColorInterface {
       this._el(`c-${c.key}`).style.background = c.pure(v);
       this._input(`sl-${c.key}`).value = String(v);
       this._el(`dec-${c.key}`).textContent = String(v);
+      // The hex pair == this channel's own byte in the address (formatHex pairs
+      // each channel independently), so derive it straight from the value.
+      this._el(`hexpair-${c.key}`).textContent = v.toString(16).toUpperCase().padStart(2, '0');
     }
     // Sync the Hex field to the canonical address — except while the user is
     // typing in it (a partial entry like '1A2B' must not snap to '1A2B00').
