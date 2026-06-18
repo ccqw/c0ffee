@@ -93,7 +93,7 @@ _Avoid_: link, tie, group, constraint (informally)
 ### Hex Color crossword
 
 **Hex Color crossword** (`<c0ffee-crossword>`):
-The site's first **game** interactive — an interlocking crossword whose **Slots** each hold one color's **Hex color address**, each **Clue**d by a **Swatch** of the target color. The solver types hex into a Slot's **Cells** and commits a **Guess**; per-digit feedback (each wrong digit reads *higher* or *lower*, each correct one **locks** and propagates to crossing Slots) homes them in. The **first interactive that holds many Color values**, so — unlike the **Color console** — it does **not** satisfy the **ADR-0001 Color value interface** and reflects no **Color link** (it has no single Color value to put in the URL). The concrete case foreseen when "**Toy**" was dissolved (a game has targets + guesses, not one value). Served at its own URL as a **solo interactive**; fits the **Color X** naming family.
+The site's first **game** interactive — an interlocking crossword whose **Slots** each hold one color's **Hex color address**, each **Clue**d by a **Swatch** of the target color. The solver types hex into a Slot's **Cells** and commits a **Guess**; per-**Channel** feedback (each channel's `00`-`FF` value reads *higher*, *lower*, or *correct*, a correct channel **locks** its two Cells and propagates to crossing Slots) homes them in. The **first interactive that holds many Color values**, so — unlike the **Color console** — it does **not** satisfy the **ADR-0001 Color value interface** and reflects no **Color link** (it has no single Color value to put in the URL). The concrete case foreseen when "**Toy**" was dissolved (a game has targets + guesses, not one value). Served at its own URL as a **solo interactive**; fits the **Color X** naming family.
 _Avoid_: hex game, color puzzle, "color crossword" (it is the *Hex Color* crossword).
 
 **Slot**:
@@ -111,6 +111,14 @@ _Avoid_: square, box; **Slot** (a Slot is the whole run, a Cell is one square).
 **Guess**:
 A committed six-digit attempt to fill a **Slot**. Feedback is **per Channel** — the two digits of red, of green, and of blue are each read as one value (`00`–`FF`, i.e. 0–255), and that whole value reads *higher*, *lower*, or *correct*, never digit-by-digit. The status glyphs are **achromatic** (they never read as color content — the same quiet-chrome posture as the **Site banner**). When a Channel reads *correct* its two **Cells** **lock**; a locked Cell that is shared carries over to the crossing **Slot**, where (dual-role) it is a single known digit of a *different* Channel. Guesses are unlimited and unscored.
 _Avoid_: try, attempt (informally), submission; "per-digit feedback" (feedback is per Channel, even though crossings still bind single digits).
+
+**Puzzle link**:
+A URL that reproduces a specific Hex Color crossword puzzle for another solver. It carries the puzzle's identity - its authored shape plus the generator seed - as a token in the URL hash fragment on the crossword route (`/crossword#<token>`). Parallel to the **Color link** in mechanism (both are state carried in the hash, never a query, so it never leaves the browser - ADR-0009), but distinct from it: a Color link is one **Hex color address** on a console route (ADR-0001); a Puzzle link is a seed token on the crossword route, and the puzzle's target colors stay **latent** (the answers are not in the URL - you must actually solve it). Shared from the quiet completion state via the native share sheet.
+_Avoid_: share link (too generic); seed (that is the payload the link carries, not the link itself); Color link (a different contract, on a different route).
+
+**Solve time**:
+The elapsed time from the solver's first **Cell** entry to the final **Slot** solved, paused while the tab is hidden. The crossword is otherwise **unscored**, so the Solve time is its only score-like signal - and because binary-search costs wall-clock seconds, the clock gently rewards hex intuition without needing guess-limits. Optional and opt-in: it rides in the shared message ("solved in 4:15 - can you beat me?") only if the solver includes it, and whether the running clock is shown during play is a **remembered preference** (a timer-less, zen solve is a first-class choice).
+_Avoid_: timer (that is the on-screen widget, not the measured value); score; par.
 
 ### Styling
 
@@ -168,7 +176,7 @@ _Avoid_: deep link, seed, permalink, hexlink
 - A mode-C **Inline swatch**'s label text color is chosen automatically for legibility against its background (by relative luminance) — a pure helper in the color core, and the same science as the future gamma/luminance lesson.
 - A **Lesson** is a sequence of **Beats**; scrolling the prose changes the **Active beat**, which owns the **Companion console**. Beats also invite direct interaction with the console (hands-on prompts), not only swatch clicks.
 - The **Hex Color crossword** is an **interactive** that holds **many Color values** — one target per **Slot** — so, unlike the **Color console**, it does **not** satisfy the **ADR-0001 Color value interface** and reflects no **Color link**.
-- A **Slot**'s target **Color value** is shown by its **Clue**'s **Swatch**; the solver's **Guess** fills the Slot's **Cells** with a **Hex color address**, with per-digit *higher/lower* feedback, and crossing Slots share **dual-role** Cells.
+- A **Slot**'s target **Color value** is shown by its **Clue**'s **Swatch**; the solver's **Guess** fills the Slot's **Cells** with a **Hex color address**, with per-**Channel** *higher/lower/correct* feedback (a correct channel locks its two Cells), and crossing Slots share **dual-role** Cells.
 
 ## Example dialogue
 
