@@ -9,7 +9,7 @@ A self-contained interactive element on the site (the console, a swatch, a futur
 _Avoid_: Toy, widget, gadget, component (component is a color-model axis)
 
 **solo interactive** (a page type — internal, not user-facing):
-A page that frames exactly one interactive, full-bleed, with no prose — the "just let me mess with it" view. The **thinnest page type**: the interactive owns the whole page. The site root (`/`) is the flagship console shown solo. One of the site's **page types** alongside **Lesson** and **Menu** (game/puzzle page types likely to follow). Like lowercase **interactive**, this is a planning/spec word users never see — they refer to the bare page by *the interactive's own name* ("the Color console"), never by the category, because you don't name an absence-of-prose. (Of the page types, **Menu** and **Lesson** are user-facing labels; **solo interactive** is not.) Whether such a page round-trips a Color link in the URL is a property of *the interactive's* ADR-0001 Color value interface — **not of the page type**: a console reflects its hex address, a guess game has no single hex address to reflect.
+A page that frames exactly one interactive, full-bleed, with no prose — the "just let me mess with it" view. The **thinnest page type**: the interactive owns the whole page. The site root (`/`) is the flagship console shown solo. One of the site's **page types** alongside **Lesson** and **Menu**. (The first **game**, the **Hex Color crossword**, is served this way too: a self-contained game element is just a **solo interactive**, not a new page type — a distinct game page type waits until a game needs genuinely page-level chrome.) Like lowercase **interactive**, this is a planning/spec word users never see — they refer to the bare page by *the interactive's own name* ("the Color console"), never by the category, because you don't name an absence-of-prose. (Of the page types, **Menu** and **Lesson** are user-facing labels; **solo interactive** is not.) Whether such a page round-trips a Color link in the URL is a property of *the interactive's* ADR-0001 Color value interface — **not of the page type**: a console reflects its hex address, a guess game has no single hex address to reflect.
 _Avoid_: playground, sandbox, bench, demo
 
 **Lesson**:
@@ -90,6 +90,36 @@ _Avoid_: hsv controls, hsb panel
 A constraint tying **two or more Components of the same color model** so they move together — on **any 2–3 components, not just pairs**. Two modes: an **Equal lock** holds the locked components at the same value (move one, the rest match); an **Offset lock** holds a constant difference between them (move one, the rest slide to keep the gap). Requires a **shared linear scale**: RGB's R/G/B all share 0–255, so any combination locks; in HSV only **Saturation and Value** (both 0–100%) qualify, and **Hue is unlockable** (its own unit — degrees — and it wraps). At a rail, an Offset lock is **squish-and-restore**: the trailing component clamps, the gap squishes, and the intended gap restores once there's room (Equal locks never squish — equal components reach the rail together). The first rung of the relationship ladder (roadmap l→m): **Equal is Offset-of-zero**, and Offset is the simplest fixed relationship between components.
 _Avoid_: link, tie, group, constraint (informally)
 
+### Hex Color crossword
+
+**Hex Color crossword** (`<c0ffee-crossword>`):
+The site's first **game** interactive — an interlocking crossword whose **Slots** each hold one color's **Hex color address**, each **Clue**d by a **Swatch** of the target color. The solver types hex into a Slot's **Cells** and commits a **Guess**; per-**Channel** feedback (each channel's `00`-`FF` value reads *higher*, *lower*, or *correct*, a correct channel **locks** its two Cells and propagates to crossing Slots) homes them in. The **first interactive that holds many Color values**, so — unlike the **Color console** — it does **not** satisfy the **ADR-0001 Color value interface** and reflects no **Color link** (it has no single Color value to put in the URL). The concrete case foreseen when "**Toy**" was dissolved (a game has targets + guesses, not one value). Served at its own URL as a **solo interactive**; fits the **Color X** naming family.
+_Avoid_: hex game, color puzzle, "color crossword" (it is the *Hex Color* crossword).
+
+**Slot**:
+A straight run of **Cells** (across or down) that holds one color's **Hex color address**, named by position and direction (`1-Across`, `2-Down`). The crossword-constructor's word for an answer's place in the grid. A Slot has a target **Color value** — shown by its **Clue**'s **Swatch** — and the solver's current **Guess**. One word does both jobs (the run *and* its `1-Across` handle); we do not separately name the filled answer an "entry".
+_Avoid_: entry, word, grid address; **light** (reserved — a **Channel** is light).
+
+**Clue**:
+A **Slot**'s prompt: the Slot's `1-Across` identifier together with a **Swatch** of the target color (small, click-to-enlarge). The Swatch is **an element of** the Clue, not the Clue itself.
+_Avoid_: hint (that names the per-digit feedback).
+
+**Cell**:
+One grid square holding a single hex digit (`0–F`). A Cell shared by a crossing pair of **Slots** is **dual-role**: both Slots require the same digit *value*, but it plays a different **Channel** and place-value in each direction (the across Slot's green-16s may be the down Slot's red-1s). Same value, two meanings — which is also what lets solving one color's channel hand you a digit in another color's *different* channel. The crossword therefore works at two sizes: it binds **Cells** (single digits) at its intersections, but its unit of feedback and meaning is the **Channel** (two digits) — intersection is per-digit, semantics per-Channel.
+_Avoid_: square, box; **Slot** (a Slot is the whole run, a Cell is one square).
+
+**Guess**:
+A committed six-digit attempt to fill a **Slot**. Feedback is **per Channel** — the two digits of red, of green, and of blue are each read as one value (`00`–`FF`, i.e. 0–255), and that whole value reads *higher*, *lower*, or *correct*, never digit-by-digit. The status glyphs are **achromatic** (they never read as color content — the same quiet-chrome posture as the **Site banner**). When a Channel reads *correct* its two **Cells** **lock**; a locked Cell that is shared carries over to the crossing **Slot**, where (dual-role) it is a single known digit of a *different* Channel. Guesses are unlimited and unscored.
+_Avoid_: try, attempt (informally), submission; "per-digit feedback" (feedback is per Channel, even though crossings still bind single digits).
+
+**Puzzle link**:
+A URL that reproduces a specific Hex Color crossword puzzle for another solver. It carries the puzzle's identity - its authored shape plus the generator seed - as a token in the URL hash fragment on the crossword route (`/crossword#<token>`). Parallel to the **Color link** in mechanism (both are state carried in the hash, never a query, so it never leaves the browser - ADR-0009), but distinct from it: a Color link is one **Hex color address** on a console route (ADR-0001); a Puzzle link is a seed token on the crossword route, and the puzzle's target colors stay **latent** (the answers are not in the URL - you must actually solve it). Shared from the quiet completion state via the native share sheet.
+_Avoid_: share link (too generic); seed (that is the payload the link carries, not the link itself); Color link (a different contract, on a different route).
+
+**Solve time**:
+The elapsed time from the solver's first **Cell** entry to the final **Slot** solved, paused while the tab is hidden. The crossword is otherwise **unscored**, so the Solve time is its only score-like signal - and because binary-search costs wall-clock seconds, the clock gently rewards hex intuition without needing guess-limits. Optional and opt-in: it rides in the shared message ("solved in 4:15 - can you beat me?") only if the solver includes it, and whether the running clock is shown during play is a **remembered preference** (a timer-less, zen solve is a first-class choice).
+_Avoid_: timer (that is the on-screen widget, not the measured value); score; par.
+
 ### Styling
 
 **Design tokens**:
@@ -145,6 +175,8 @@ _Avoid_: deep link, seed, permalink, hexlink
 - The flagship **console** renders one **Color value** as the **Swatch** and the **Additive Venn** (which can isolate one channel via **channel-solo**); it is edited via the **Hex field**, the **RGB panel** and the **HSV panel**, which stay in sync.
 - A mode-C **Inline swatch**'s label text color is chosen automatically for legibility against its background (by relative luminance) — a pure helper in the color core, and the same science as the future gamma/luminance lesson.
 - A **Lesson** is a sequence of **Beats**; scrolling the prose changes the **Active beat**, which owns the **Companion console**. Beats also invite direct interaction with the console (hands-on prompts), not only swatch clicks.
+- The **Hex Color crossword** is an **interactive** that holds **many Color values** — one target per **Slot** — so, unlike the **Color console**, it does **not** satisfy the **ADR-0001 Color value interface** and reflects no **Color link**.
+- A **Slot**'s target **Color value** is shown by its **Clue**'s **Swatch**; the solver's **Guess** fills the Slot's **Cells** with a **Hex color address**, with per-**Channel** *higher/lower/correct* feedback (a correct channel locks its two Cells), and crossing Slots share **dual-role** Cells.
 
 ## Example dialogue
 
