@@ -114,7 +114,7 @@ export function deriveLayout(grid: string[]): Layout {
       }
       if (aLen !== SLOT_LENGTH && dLen !== SLOT_LENGTH) {
         throw new Error(
-          `crossword-layout: Cell (${row},${col}) is an orphan — it belongs to no Slot`,
+          `crossword-layout: Cell (${row},${col}) is an orphan: it belongs to no Slot`,
         );
       }
     }
