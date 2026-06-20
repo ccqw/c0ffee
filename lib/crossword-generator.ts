@@ -53,8 +53,11 @@ const STEP_BUDGET = 600;
 
 // The three lightness *roles* cycled across the Slots so the realized set spans
 // value (tints and shades, not hue-only): a high-value tint, a mid, and a darker
-// shade. Saturation stays moderate-to-high so every clue is chromatic (hue stays
-// meaningful for colorDistance, which leans on hue).
+// shade. Saturation is kept moderate-to-high so the ideal each Slot aims at is
+// chromatic and hue stays meaningful for colorDistance (which leans on hue). This
+// biases toward chromatic clues rather than guaranteeing them: a Slot's crossing
+// pins can still pull its realized target toward neutral, so a near-gray clue is
+// rare but possible — and still a valid, guessable Color value.
 const ROLES: ReadonlyArray<{ s: number; v: number }> = [
   { s: 0.45, v: 0.95 }, // tint
   { s: 0.70, v: 0.75 }, // mid
