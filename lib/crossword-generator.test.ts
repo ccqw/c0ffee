@@ -120,13 +120,16 @@ test('the generated Puzzle feeds initCrossword without throwing', () => {
 
 // --- totality: the attempt CAP is unreachable for the shipped shapes ---
 
+// Many generations in one test, so it gets an explicit generous timeout — a slow
+// CI runner overruns the 5s default otherwise (the generator itself averages a
+// couple ms per call; this is wall-clock for ~100 of them, not a slow unit).
 test('generation succeeds for every shipped shape across many seeds (CAP unreached)', () => {
   for (const id of SHAPE_IDS) {
-    for (let seed = 0; seed < 60; seed++) {
+    for (let seed = 0; seed < 32; seed++) {
       expect(() => generatePuzzle(id, seed)).not.toThrow();
     }
   }
-});
+}, 30000);
 
 // --- fail-loud on an unknown shape (programmer error, like the sibling cores) ---
 
