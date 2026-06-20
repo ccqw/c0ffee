@@ -14,7 +14,7 @@
 // "all locked" is the honest completion test.
 
 import { gradeGuess, type GuessResult, type ChannelVerdict } from './crossword-guess.ts';
-import { SLOT_LENGTH, type Cell, type Direction, type Layout, type Slot } from './crossword-layout.ts';
+import { SLOT_LENGTH, type Cell, type Direction, type Layout, type Puzzle, type Slot } from './crossword-layout.ts';
 
 /** Names one Slot by its standard crossword number and direction (a number can
  *  name both an across and a down Slot, so direction disambiguates). */
@@ -37,16 +37,6 @@ export interface ChannelSolved {
   red: boolean;
   green: boolean;
   blue: boolean;
-}
-
-/** A playable puzzle: the derived `layout` plus one target Hex color address per
- *  Slot, keyed by `${number}-${direction}`. The generator (C0FFEE-60) produces
- *  the targets (crossing-consistent); the reducer treats them as the latent
- *  answers and never surfaces them in the URL (ADR-0001 is the Color link, not
- *  this). */
-export interface Puzzle {
-  layout: Layout;
-  targets: Record<string, string>;
 }
 
 /** The full game state. `cells` is keyed by `${row},${col}` and `verdicts` /
@@ -192,5 +182,8 @@ function cellAt(state: CrosswordState, cell: Cell): CellState {
 }
 
 // Re-export so the shell can size its keypad/grid to the one Slot length without
-// reaching back into the layout module.
+// reaching back into the layout module. `Puzzle` moved down into crossword-layout
+// (it is just Layout + targets) and is re-exported here so existing importers of
+// `Puzzle` from this module keep working (C0FFEE-60, decision 4).
 export { SLOT_LENGTH };
+export type { Puzzle };
