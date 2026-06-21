@@ -62,6 +62,18 @@ export interface Layout {
   crossings: Crossing[];
 }
 
+/** A playable puzzle: the derived `layout` plus one target Hex color address per
+ *  Slot, keyed by `${number}-${direction}`. The generator (C0FFEE-60) produces
+ *  the targets (crossing-consistent); the reducer (C0FFEE-61) treats them as the
+ *  latent answers and never surfaces them in the URL (ADR-0001 is the Color link,
+ *  not this). It lives here, beside `Layout` it wraps, so generator and state both
+ *  depend on layout without depending on each other — `crossword-state.ts`
+ *  re-exports it for back-compat. */
+export interface Puzzle {
+  layout: Layout;
+  targets: Record<string, string>;
+}
+
 // deriveLayout(grid) -> Layout
 // Takes an authored grid (one string per row; `#` is a Cell, anything else a
 // blank) and derives the Slots with standard crossword numbering, the full Cell
