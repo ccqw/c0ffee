@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>c0ffee — Hex Color crossword</title>
+  <meta name="description" content="A crossword whose answers are colors: every clue is a Swatch, every Slot a six-digit Hex color address. Reason the hex, fill the woven grid.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" sizes="any" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--c0ffee-bg);
+      color: var(--c0ffee-fg);
+      font-family: var(--c0ffee-font);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* The Hex Color crossword shown solo (a self-contained game served on its own
+       route — not a new page type, ADR-0006). The Site banner is quiet chrome at the
+       top of the document; the crossword owns its own centered, clamped column below.
+       Block layout (not flex) so the block-level <c0ffee-crossword> fills the width and
+       its inner column self-centers — a flex row would shrink-wrap the host and starve
+       the fluid board of width. The board is tall (a ladder shape), so the page scrolls
+       rather than clipping it. */
+    main {
+      flex: 1;
+      padding: 2vh 5vw 6vh;
+    }
+    c0ffee-crossword { display: block; max-width: 430px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <c0ffee-banner></c0ffee-banner>
+
+  <!-- The crossword shown solo. It opts OUT of ADR-0001 URL reflection (it holds many
+       Color values), so the host is a thin mount with no hash wiring — unlike the
+       console root. Slice 1 (C0FFEE-64) renders read-only; input arrives in later
+       slices on the same element. -->
+  <main>
+    <c0ffee-crossword></c0ffee-crossword>
+  </main>
+
+  <script type="module" src="./elements/banner.ts"></script>
+  <script type="module" src="./elements/crossword.ts"></script>
+  <script type="module" src="./telemetry.ts"></script>
+</body>
+</html>
