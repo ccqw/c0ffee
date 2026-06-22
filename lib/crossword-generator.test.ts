@@ -83,10 +83,17 @@ test('all chosen colors exceed MIN_DISTANCE (no two near-identical clues)', () =
   }
 });
 
+// These two aesthetic bounds scale with the COLOR COUNT: a shape with fewer Slots has
+// fewer target colors, so its realized lightness span is naturally narrower and its hue
+// wheel has wider gaps. The v1 shape (lattice-6) is five Slots, so the bounds are looser
+// than the earlier 14-16 Slot shapes needed (worst over 64 seeds: V span ~0.19, hue gap
+// ~175). They still guard a real collapse — a monochrome or single-lightness palette —
+// while allowing a clustered, harmonic five-color set. Re-tighten (toward 0.22 / 120) if
+// a denser shape returns.
 test('the color set spans a range of lightness (tints and shades, not hue-only)', () => {
   for (const { id, seed, puzzle } of CORPUS) {
     const vs = targetsOf(puzzle).map((h) => rgbToHsv(parseHex(h)!).v);
-    expect(Math.max(...vs) - Math.min(...vs), `${id}#${seed} V span`).toBeGreaterThanOrEqual(0.22);
+    expect(Math.max(...vs) - Math.min(...vs), `${id}#${seed} V span`).toBeGreaterThanOrEqual(0.15);
   }
 });
 
@@ -97,7 +104,7 @@ test('the chosen hues are spread around the wheel (no large empty arc)', () => {
       .sort((a, b) => a - b);
     let maxGap = 360 - (hues[hues.length - 1] - hues[0]); // the wrap-around arc
     for (let i = 1; i < hues.length; i++) maxGap = Math.max(maxGap, hues[i] - hues[i - 1]);
-    expect(maxGap, `${id}#${seed} max hue gap`).toBeLessThanOrEqual(120);
+    expect(maxGap, `${id}#${seed} max hue gap`).toBeLessThanOrEqual(185);
   }
 });
 

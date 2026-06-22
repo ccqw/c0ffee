@@ -28,7 +28,7 @@ import type { Cell, Layout, Slot } from '../lib/crossword-layout.ts';
 // test asserts stable counts and the design eyeball reviews the same board every load.
 // New-puzzle / the seeded Puzzle link (C0FFEE-67 / C0FFEE-57) are the future homes for
 // a varying seed; this is the only place one is chosen for now.
-const DEFAULT_SHAPE = 'ladder-14';
+const DEFAULT_SHAPE = 'lattice-6';
 const DEFAULT_SEED = 1;
 
 // Natural px per Cell — caps the board's max-width (cols * CELL_PX) and sets its

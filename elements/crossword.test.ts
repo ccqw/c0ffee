@@ -17,7 +17,7 @@ beforeAll(async () => {
 // the same pair to derive expected counts and values (the generator is the ADR-0009
 // deterministic seam, so this matches exactly what the element renders). Nothing is
 // hard-coded — the expectations track the core.
-const SHAPE = 'ladder-14';
+const SHAPE = 'lattice-6';
 const SEED = 1;
 const puzzle = () => generatePuzzle(SHAPE, SEED);
 
