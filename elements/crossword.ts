@@ -22,7 +22,7 @@
 
 import { generatePuzzle } from '../lib/crossword-generator.ts';
 import { initCrossword, crosswordReducer, type CrosswordState, type SlotRef } from '../lib/crossword-state.ts';
-import type { Cell, Layout } from '../lib/crossword-layout.ts';
+import type { Cell, Layout, Slot } from '../lib/crossword-layout.ts';
 
 // Slice 1 opens on a fixed shape + seed, so the puzzle is deterministic: the smoke
 // test asserts stable counts and the design eyeball reviews the same board every load.
@@ -60,9 +60,10 @@ const LOCK_SVG =
 // prototype (docs/design/crossword-face/prototype/CW-HexBoard.dc.html, the
 // `weaveCell` method). Pure geometry off the live-Cell set: Cells pair in 2s; inset
 // 2px on every closed side, 0 on open sides; corner radius 6 unless an adjacent edge
-// is open; a 1px hairline on each closed side; a 2px filler at an inner open notch.
-// The only change from the prototype is reading liveness from a `live(r,c)` predicate
-// (built from Layout.cells) instead of a `sol` string grid — the math is unchanged.
+// is open; a 1px hairline on each closed side; and a 2x2px L-shaped hairline patch in
+// the inner corner where two open sides meet. The only change from the prototype is
+// reading liveness from a `live(r,c)` predicate (built from Layout.cells) instead of a
+// `sol` string grid — the math is unchanged.
 function weaveCell(live: (r: number, c: number) => boolean, r: number, c: number) {
   const openR = c % 2 === 0 && live(r, c + 1);
   const openL = c % 2 === 1 && live(r, c - 1);
@@ -96,6 +97,8 @@ function weaveCell(live: (r: number, c: number) => boolean, r: number, c: number
 // design eyeball: the clue Swatch (contract #1) and the active-pair outlines (#2).
 // Selecting a Slot for display is a read-surface concern, not the input this slice omits.
 function firstSlot(layout: Layout): SlotRef {
+  // A generated layout always has at least one Slot (generatePuzzle would have thrown
+  // otherwise), so [0] is safe.
   const slot = [...layout.slots].sort(
     (a, b) => a.number - b.number || (a.direction < b.direction ? -1 : 1),
   )[0];
@@ -104,6 +107,9 @@ function firstSlot(layout: Layout): SlotRef {
 
 const cellKey = (cell: Cell): string => `${cell.row},${cell.col}`;
 const slotKey = (ref: SlotRef): string => `${ref.number}-${ref.direction}`;
+// A grid position as a percentage of an n-unit axis — the board's one geometry primitive,
+// shared by every percentage-positioned overlay (cells, pair outlines, clue numbers).
+const pct = (n: number, of: number): string => `${(n / of) * 100}%`;
 
 class C0ffeeCrossword extends HTMLElement {
   // attachShadow returns the root, so we never juggle a nullable shadowRoot.
@@ -135,6 +141,31 @@ class C0ffeeCrossword extends HTMLElement {
       </div>`;
   }
 
+  // Resolve the selected SlotRef to its full Slot, or null when nothing is selected.
+  // A non-null selection absent from the layout is impossible — the reducer's `select`
+  // validates against this same layout and throws otherwise — so it fails loud here
+  // rather than silently dropping the active-Slot outline.
+  private selectedSlot(): Slot | null {
+    const sel = this.state.selected;
+    if (!sel) return null;
+    const slot = this.state.puzzle.layout.slots.find(
+      (s) => s.number === sel.number && s.direction === sel.direction,
+    );
+    if (!slot) throw new Error(`c0ffee-crossword: selected Slot ${slotKey(sel)} not in rendered layout`);
+    return slot;
+  }
+
+  // The latent target Hex color address for a Slot, fail-loud on a miss (mirrors the
+  // core's cellAt). initCrossword validates every Slot has a six-digit target, so a miss
+  // means a key drift — surfaced loudly rather than painting `background:#undefined`.
+  private _target(ref: SlotRef): string {
+    const hex = this.state.puzzle.targets[slotKey(ref)];
+    if (typeof hex !== 'string') {
+      throw new Error(`c0ffee-crossword: no target Hex color address for Slot ${slotKey(ref)}`);
+    }
+    return hex;
+  }
+
   // The woven board: walk Layout.cells (row-major), position each by percentage of an
   // aspect-locked square, and dress it with the lifted weave geometry. Lays the active
   // Slot's channel-pair outlines and the clue-number labels over the top.
@@ -148,7 +179,7 @@ class C0ffeeCrossword extends HTMLElement {
       .map((cell) => {
         const g = weaveCell(live, cell.row, cell.col);
         const st = this.state.cells[cellKey(cell)];
-        const wrap = `position:absolute;left:${(cell.col / cols) * 100}%;top:${(cell.row / rows) * 100}%;width:${100 / cols}%;height:${100 / rows}%;`;
+        const wrap = `position:absolute;left:${pct(cell.col, cols)};top:${pct(cell.row, rows)};width:${pct(1, cols)};height:${pct(1, rows)};`;
         const base = `position:absolute;inset:${g.inset};border-radius:${g.radius};background:var(--c0ffee-bg, #0a0a0b);box-shadow:${g.shadow};`;
         return `<div class="cell" style="${wrap}">
           <div class="base" style="${base}"></div>
@@ -162,7 +193,7 @@ class C0ffeeCrossword extends HTMLElement {
     const boardStyle = `position:relative;width:100%;max-width:${cols * CELL_PX}px;aspect-ratio:${cols} / ${rows};margin:0 auto;`;
     return `<div class="board" style="${boardStyle}">
       ${cells}
-      ${this._outlines(layout, cols, rows)}
+      ${this._outlines(cols, rows)}
       ${this._clueNumbers(layout, cols, rows)}
     </div>`;
   }
@@ -170,11 +201,8 @@ class C0ffeeCrossword extends HTMLElement {
   // The active-Slot channel-pair outlines (ADR-0007 contract #2). Take the selected
   // Slot's six Cells in order and ring pairs [0,1]/[2,3]/[4,5], each over the two Cells'
   // bounding box (horizontal for across, vertical for down), in its pure channel primary.
-  private _outlines(layout: Layout, cols: number, rows: number): string {
-    if (!this.state.selected) return '';
-    const slot = layout.slots.find(
-      (s) => s.number === this.state.selected!.number && s.direction === this.state.selected!.direction,
-    );
+  private _outlines(cols: number, rows: number): string {
+    const slot = this.selectedSlot();
     if (!slot) return '';
     return PAIRS.map((pair, i) => {
       const a = slot.cells[i * 2];
@@ -184,8 +212,8 @@ class C0ffeeCrossword extends HTMLElement {
       const w = Math.abs(b.col - a.col) + 1;
       const h = Math.abs(b.row - a.row) + 1;
       const style =
-        `position:absolute;left:calc(${(c0 / cols) * 100}% + 2px);top:calc(${(r0 / rows) * 100}% + 2px);` +
-        `width:calc(${(w / cols) * 100}% - 4px);height:calc(${(h / rows) * 100}% - 4px);` +
+        `position:absolute;left:calc(${pct(c0, cols)} + 2px);top:calc(${pct(r0, rows)} + 2px);` +
+        `width:calc(${pct(w, cols)} - 4px);height:calc(${pct(h, rows)} - 4px);` +
         `border-radius:7px;background:${pair.bg};box-shadow:inset 0 0 0 1.4px ${pair.ring};pointer-events:none;`;
       return `<div class="pair" style="${style}"></div>`;
     }).join('');
@@ -208,7 +236,7 @@ class C0ffeeCrossword extends HTMLElement {
     return [...numberAt.entries()]
       .map(([key, number]) => {
         const [row, col] = key.split(',').map(Number);
-        return `<span class="num" style="left:calc(${(col / cols) * 100}% + 3px);top:calc(${(row / rows) * 100}% + 2px);">${number}</span>`;
+        return `<span class="num" style="left:calc(${pct(col, cols)} + 3px);top:calc(${pct(row, rows)} + 2px);">${number}</span>`;
       })
       .join('');
   }
@@ -218,9 +246,9 @@ class C0ffeeCrossword extends HTMLElement {
   // input yet, so the mix is the empty "?" placeholder ringed in accent (the mix is
   // painted once the keypad lands in C0FFEE-65).
   private _compare(): string {
-    const sel = this.state.selected;
-    const clueStyle = sel
-      ? `background:#${this.state.puzzle.targets[slotKey(sel)]};`
+    const slot = this.selectedSlot();
+    const clueStyle = slot
+      ? `background:#${this._target(slot)};`
       : 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);';
     return `<div class="compare">
       <div class="stage clue" style="${clueStyle}"></div>
@@ -238,7 +266,7 @@ class C0ffeeCrossword extends HTMLElement {
         .filter((s) => s.direction === direction)
         .sort((a, b) => a.number - b.number)
         .map((slot) => {
-          const hex = this.state.puzzle.targets[slotKey(slot)];
+          const hex = this._target(slot);
           return `<li class="cluerow">
             <span class="cnum">${slot.number}</span>
             <span class="box" style="background:#${hex};"></span>
