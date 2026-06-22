@@ -24,6 +24,7 @@ export default defineConfig({
       input: {
         index: resolve(root, 'index.html'),
         menu: resolve(root, 'menu.html'),
+        crossword: resolve(root, 'crossword.html'),
         lessonLight: resolve(root, 'lessons/colors-are-made-of-light.html'),
       },
     },
