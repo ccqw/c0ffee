@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<span style="display:inline-flex;align-items:center;gap:11px;font-family:'DM Mono',ui-monospace,monospace;">
+  <span style="display:inline-flex;align-items:center;gap:3px;">
+    <span style="font:500 11.5px/1 'DM Mono',monospace;color:#ff6a6a;">R</span>
+    <sc-if value="{{ rMatch }}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+    <sc-if value="{{ rUp }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></sc-if>
+    <sc-if value="{{ rDown }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></sc-if>
+  </span>
+  <span style="display:inline-flex;align-items:center;gap:3px;">
+    <span style="font:500 11.5px/1 'DM Mono',monospace;color:#46e87f;">G</span>
+    <sc-if value="{{ gMatch }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+    <sc-if value="{{ gUp }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></sc-if>
+    <sc-if value="{{ gDown }}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></sc-if>
+  </span>
+  <span style="display:inline-flex;align-items:center;gap:3px;">
+    <span style="font:500 11.5px/1 'DM Mono',monospace;color:#7aa6ff;">B</span>
+    <sc-if value="{{ bMatch }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+    <sc-if value="{{ bUp }}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></sc-if>
+    <sc-if value="{{ bDown }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></sc-if>
+  </span>
+</span>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:180,&quot;height&quot;:40},&quot;r&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;match&quot;,&quot;up&quot;,&quot;down&quot;],&quot;default&quot;:&quot;match&quot;,&quot;tsType&quot;:&quot;'match'|'up'|'down'&quot;},&quot;g&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;match&quot;,&quot;up&quot;,&quot;down&quot;],&quot;default&quot;:&quot;down&quot;,&quot;tsType&quot;:&quot;'match'|'up'|'down'&quot;},&quot;b&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;match&quot;,&quot;up&quot;,&quot;down&quot;],&quot;default&quot;:&quot;up&quot;,&quot;tsType&quot;:&quot;'match'|'up'|'down'&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const r = this.props.r ?? 'match', g = this.props.g ?? 'down', b = this.props.b ?? 'up';
+    return {
+      rMatch: r === 'match', rUp: r === 'up', rDown: r === 'down',
+      gMatch: g === 'match', gUp: g === 'up', gDown: g === 'down',
+      bMatch: b === 'match', bUp: b === 'up', bDown: b === 'down',
+    };
+  }
+}
+</script>
+</body>
+</html>

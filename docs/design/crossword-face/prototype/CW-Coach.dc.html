@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="height:100%;box-sizing:border-box;padding:18px;border-radius:16px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 16px 34px -20px rgba(0,0,0,.85);display:flex;flex-direction:column;">
+  <div style="display:flex;align-items:center;gap:9px;margin-bottom:18px;flex:none;">
+    <span style="width:24px;height:24px;border-radius:6px;background:#C0FFEE;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);flex:none;"></span>
+    <span style="font:500 13px/1 'DM Mono',monospace;color:rgba(255,255,255,.78);letter-spacing:.02em;">How to play</span>
+    <button onClick="{{ skip }}" style="margin-left:auto;min-height:44px;padding:0 6px;margin-right:-6px;background:none;border:none;color:rgba(255,255,255,.7);font:400 11px/1 'DM Mono',monospace;cursor:pointer;letter-spacing:.02em;">Skip</button>
+  </div>
+  <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;">
+    <sc-if value="{{ coachStep0 }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="font:400 21px/1.25 'DM Mono',monospace;color:#ededed;letter-spacing:-.01em;margin-bottom:10px;">Every clue is a colour.</div>
+        <p style="margin:0 0 22px;font:400 13px/1.6 'DM Mono',monospace;color:rgba(255,255,255,.7);text-wrap:pretty;">Fill the six hex digits &mdash; <b style="color:#ededed;font-weight:500;">#RRGGBB</b> &mdash; that build the swatch. Two digits per channel: red, green, blue.</p>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;margin-bottom:6px;">
+          <div style="width:52px;height:52px;border-radius:12px;background:#3A7BD5;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);flex:none;"></div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="m13 6 6 6-6 6"/></svg>
+          <div style="display:flex;gap:7px;flex:none;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="display:flex;border-radius:6px;box-shadow:0 0 0 1.5px #FF0000;"><div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:400 20px/1 'DM Mono',monospace;color:#ededed;background:rgba(255,0,0,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.22),inset 1px 0 0 rgba(255,255,255,.22);border-radius:6px 0 0 6px;">3</div><div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:400 20px/1 'DM Mono',monospace;color:#ededed;background:rgba(255,0,0,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.22),inset -1px 0 0 rgba(255,255,255,.22);border-radius:0 6px 6px 0;">A</div></div><span style="font:500 11px/1 'DM Mono',monospace;color:#ff6a6a;">R</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="display:flex;border-radius:6px;box-shadow:0 0 0 1.5px #00FF00;"><div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:400 20px/1 'DM Mono',monospace;color:#ededed;background:rgba(0,255,0,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.22),inset 1px 0 0 rgba(255,255,255,.22);border-radius:6px 0 0 6px;">7</div><div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:400 20px/1 'DM Mono',monospace;color:#ededed;background:rgba(0,255,0,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.22),inset -1px 0 0 rgba(255,255,255,.22);border-radius:0 6px 6px 0;">B</div></div><span style="font:500 11px/1 'DM Mono',monospace;color:#46e87f;">G</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="display:flex;border-radius:6px;box-shadow:0 0 0 1.5px #0000FF;"><div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:400 20px/1 'DM Mono',monospace;color:#ededed;background:rgba(0,0,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.22),inset 1px 0 0 rgba(255,255,255,.22);border-radius:6px 0 0 6px;">D</div><div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:400 20px/1 'DM Mono',monospace;color:#ededed;background:rgba(0,0,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.22),inset -1px 0 0 rgba(255,255,255,.22);border-radius:0 6px 6px 0;">5</div></div><span style="font:500 11px/1 'DM Mono',monospace;color:#7aa6ff;">B</span></div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ coachStep1 }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="font:400 21px/1.25 'DM Mono',monospace;color:#ededed;letter-spacing:-.01em;margin-bottom:10px;">Read the channel hints.</div>
+        <p style="margin:0 0 16px;font:400 13px/1.6 'DM Mono',monospace;color:rgba(255,255,255,.7);text-wrap:pretty;">Check a guess and each channel tells you which way to go. The arrow points where to <b style="color:#ededed;font-weight:500;">nudge your next guess</b>.</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;gap:11px;padding:7px 12px;border-radius:10px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);">
+            <span style="width:18px;font:500 14px/1 'DM Mono',monospace;color:#ff6a6a;">R</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            <span style="font:400 12px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);">matched &mdash; leave it</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:11px;padding:7px 12px;border-radius:10px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);">
+            <span style="width:18px;font:500 14px/1 'DM Mono',monospace;color:#46e87f;">G</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+            <span style="font:400 12px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);">too high &mdash; go lower</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:11px;padding:7px 12px;border-radius:10px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);">
+            <span style="width:18px;font:500 14px/1 'DM Mono',monospace;color:#7aa6ff;">B</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            <span style="font:400 12px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);">too low &mdash; go higher</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;flex:none;">
+    <div style="display:flex;gap:7px;">
+      <span style="width:7px;height:7px;border-radius:50%;background:{{ dot0 }};"></span>
+      <span style="width:7px;height:7px;border-radius:50%;background:{{ dot1 }};"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <sc-if value="{{ coachStep1 }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ coachBack }}" style="height:44px;padding:0 16px;border-radius:11px;background:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);color:rgba(255,255,255,.8);font:400 13px/1 'DM Mono',monospace;border:none;cursor:pointer;">Back</button>
+      </sc-if>
+      <sc-if value="{{ coachStep0 }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ coachNext }}" style="display:flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:11px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(192,255,238,.45);color:#C0FFEE;font:400 13px/1 'DM Mono',monospace;border:none;cursor:pointer;">Next<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      </sc-if>
+      <sc-if value="{{ coachStep1 }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ done }}" style="display:flex;align-items:center;gap:8px;height:44px;padding:0 22px;border-radius:11px;background:#C0FFEE;color:#06281f;font:500 13px/1 'DM Mono',monospace;border:none;cursor:pointer;">Got it</button>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:460},&quot;onSkip&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onDone&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  state = { step: 0 };
+  renderVals() {
+    const step = this.state.step;
+    return {
+      coachStep0: step === 0,
+      coachStep1: step === 1,
+      coachNext: () => this.setState({ step: 1 }),
+      coachBack: () => this.setState({ step: 0 }),
+      skip: () => { if (this.props.onSkip) this.props.onSkip(); else this.setState({ step: 0 }); },
+      done: () => { if (this.props.onDone) this.props.onDone(); else this.setState({ step: 0 }); },
+      dot0: step === 0 ? '#C0FFEE' : 'rgba(255,255,255,.22)',
+      dot1: step === 1 ? '#C0FFEE' : 'rgba(255,255,255,.22)',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  /* ---- token layer (handoff: map these to your theme; literals in markup mirror them) ---- */
+  :root {
+    --cw-bg: #0a0a0b;            /* app surface, panels, keys */
+    --cw-page: #161619;          /* showcase bg */
+    --cw-menu: #161618;          /* dropdown surface */
+    --cw-ink: #ededed;           /* primary text */
+    --cw-accent: #C0FFEE;        /* brand / "you" / primary action */
+    --cw-accent-ink: #06281f;    /* text on a mint fill */
+    --cw-hair: rgba(255,255,255,.22);   /* grid weave hairline */
+    --cw-stroke: rgba(255,255,255,.18); /* panel + control outlines */
+    --cw-faint: rgba(255,255,255,.08);  /* subtle dividers */
+    --cw-ch-r: #ff6a6a; --cw-ch-g: #46e87f; --cw-ch-b: #7aa6ff; /* channel labels */
+  }
+  /* ---- visible keyboard focus ring (a11y) ---- */
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--cw-accent); outline-offset: 2px; border-radius: 8px; }
+  button:focus:not(:focus-visible) { outline: none; }
+  @keyframes cw-bloom { 0% { opacity:.76; } 34% { opacity:1; } 100% { opacity:.76; } }
+  .cw-cell { animation: cw-bloom 1.7s .55s ease-in-out; }
+  @keyframes cw-twinkle { 0%,100% { opacity:.45; transform:scale(.78) rotate(0deg); } 50% { opacity:1; transform:scale(1.2) rotate(45deg); } }
+  @keyframes cw-glow { 0%,100% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 0 6px -1px rgba(192,255,238,.32); } 50% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.64), 0 0 13px 0 rgba(192,255,238,.6); } }
+  .cw-spark { animation: cw-twinkle 2.3s ease-in-out infinite; }
+  .cw-match { animation: cw-glow 2.4s ease-in-out infinite; }
+  *{box-sizing:border-box;} body{margin:0;}
+</style>
+</helmet>
+
+<div style="min-width:100%;width:max-content;min-height:100vh;box-sizing:border-box;padding:48px;background:#161619;color:#ededed;font-family:'DM Mono',ui-monospace,'SF Mono',Menlo,monospace;-webkit-font-smoothing:antialiased;">
+  <div style="margin-bottom:34px;">
+    <div style="display:flex;align-items:center;gap:10px;font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:rgba(255,255,255,.7);">
+      <span style="width:18px;height:18px;border-radius:5px;background:#C0FFEE;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);"></span>
+      c0ffee &middot; modular build
+    </div>
+    <h1 style="margin:14px 0 6px;font:300 34px/1.05 'DM Mono',monospace;letter-spacing:-.01em;">Crosshatch &mdash; component system</h1>
+    <p style="margin:0;max-width:780px;font:400 14px/1.6 'DM Mono',monospace;color:rgba(255,255,255,.78);">Seven scenes, rebuilt from reusable parts: <b style="color:rgba(192,255,238,.9);font-weight:500;">CW-TopBar</b>, <b style="color:rgba(192,255,238,.9);font-weight:500;">CW-HexBoard</b> (data-driven woven grid), <b style="color:rgba(192,255,238,.9);font-weight:500;">CW-InputDock</b> (clue-nav + guess band + keypad), <b style="color:rgba(192,255,238,.9);font-weight:500;">CW-CluePanel</b>, <b style="color:rgba(192,255,238,.9);font-weight:500;">CW-ChannelHints</b>, <b style="color:rgba(192,255,238,.9);font-weight:500;">CW-ConfirmDialog</b>, <b style="color:rgba(192,255,238,.9);font-weight:500;">CW-PauseOverlay</b>. Every puzzle value &mdash; grid, colours, crossings, channel verdicts &mdash; is derived from one engine, <b style="color:rgba(192,255,238,.9);font-weight:500;">puzzle.js</b>. Frame <span style="color:rgba(192,255,238,.75);">06</span> is live &mdash; type a guess, then Check.</p>
+  </div>
+  <div style="display:flex;gap:48px;align-items:flex-start;">
+
+    <!-- ============ 01 · Fresh puzzle ============ -->
+    <div style="flex:none;width:402px;">
+      <div style="font:400 12.5px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);margin-bottom:14px;"><span style="color:#C0FFEE;">01</span> &nbsp;Fresh puzzle</div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;background:#0a0a0b;padding-top:50px;box-sizing:border-box;font-family:'DM Mono',ui-monospace,monospace;color:#ededed;">
+          <div style="position:relative;width:100%;background:#0a0a0b;overflow:hidden;">
+            <dc-import name="CW-TopBar" mode="play" timer-text="{{ timerText }}" timer-hidden="{{ timerHidden }}" menu-open="{{ menuOpen1 }}" on-toggle-timer="{{ toggleTimer }}" on-pause="{{ pauseGame }}" on-check-all="{{ checkAll }}" on-toggle-menu="{{ toggleMenu1 }}" on-close-menu="{{ closeMenu }}" on-clear="{{ askClear1 }}" on-new="{{ askNew1 }}" hint-size="100%,58px"></dc-import>
+            <dc-import name="CW-HexBoard" variant="weave" solution="{{ solution }}" hint-size="100%,300px"></dc-import>
+            <dc-import name="CW-CluePanel" across="{{ cluesPending.across }}" down="{{ cluesPending.down }}" hint-size="100%,320px"></dc-import>
+            <dc-import name="CW-ConfirmDialog" shown="{{ confirmShown1 }}" title="{{ confirmTitle }}" desc="{{ confirmDesc }}" cta="{{ confirmCta }}" on-cancel="{{ cancelConfirm }}" on-confirm="{{ doConfirm }}" hint-size="100%,1px"></dc-import>
+            <dc-import name="CW-PauseOverlay" shown="{{ paused }}" elapsed="{{ timerTextPlain }}" on-resume="{{ resumeGame }}" hint-size="100%,1px"></dc-import>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ 02 · Active slot · mid-solve ============ -->
+    <div style="flex:none;width:402px;">
+      <div style="font:400 12.5px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);margin-bottom:14px;"><span style="color:#C0FFEE;">02</span> &nbsp;Active slot &middot; mid-solve</div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;background:#0a0a0b;padding-top:50px;box-sizing:border-box;font-family:'DM Mono',ui-monospace,monospace;color:#ededed;">
+          <div style="position:relative;width:100%;background:#0a0a0b;overflow:hidden;">
+            <dc-import name="CW-TopBar" mode="play" timer-text="{{ timerText }}" timer-hidden="{{ timerHidden }}" menu-open="{{ menuOpen2 }}" on-toggle-timer="{{ toggleTimer }}" on-pause="{{ pauseGame }}" on-check-all="{{ checkAll }}" on-toggle-menu="{{ toggleMenu2 }}" on-close-menu="{{ closeMenu }}" on-clear="{{ askClear2 }}" on-new="{{ askNew2 }}" hint-size="100%,58px"></dc-import>
+            <dc-import name="CW-HexBoard" variant="weave" solution="{{ solution }}" cells="{{ f2cells }}" channel-slot="0,0,across" hint-size="100%,300px"></dc-import>
+            <dc-import name="CW-InputDock" band="big" clue-label="1-Across" clue-color="#3A7BD5" mix-color="#3A8040" mix-badge="{{ true }}" ch-r="match" ch-g="down" ch-b="up" check-label="Check guess" hint-size="100%,392px"></dc-import>
+            <dc-import name="CW-ConfirmDialog" shown="{{ confirmShown2 }}" title="{{ confirmTitle }}" desc="{{ confirmDesc }}" cta="{{ confirmCta }}" on-cancel="{{ cancelConfirm }}" on-confirm="{{ doConfirm }}" hint-size="100%,1px"></dc-import>
+            <dc-import name="CW-PauseOverlay" shown="{{ paused }}" elapsed="{{ timerTextPlain }}" on-resume="{{ resumeGame }}" hint-size="100%,1px"></dc-import>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ 03 · Cross-propagation ============ -->
+    <div style="flex:none;width:402px;">
+      <div style="font:400 12.5px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);margin-bottom:14px;"><span style="color:#C0FFEE;">03</span> &nbsp;Cross-propagation</div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;background:#0a0a0b;padding-top:50px;box-sizing:border-box;font-family:'DM Mono',ui-monospace,monospace;color:#ededed;">
+          <div style="position:relative;width:100%;background:#0a0a0b;overflow:hidden;">
+            <dc-import name="CW-TopBar" mode="play" timer-text="{{ timerText }}" timer-hidden="{{ timerHidden }}" menu-open="{{ menuOpen3 }}" on-toggle-timer="{{ toggleTimer }}" on-pause="{{ pauseGame }}" on-check-all="{{ checkAll }}" on-toggle-menu="{{ toggleMenu3 }}" on-close-menu="{{ closeMenu }}" on-clear="{{ askClear3 }}" on-new="{{ askNew3 }}" hint-size="100%,58px"></dc-import>
+            <dc-import name="CW-HexBoard" variant="weave" solution="{{ solution }}" cells="{{ f3cells }}" spotlight="0,2" hint-size="100%,300px"></dc-import>
+            <!-- behind layer: compact dock, dimmed under the popover -->
+            <dc-import name="CW-InputDock" band="compact" clue-label="2-Down" clue-color="#72B81F" mix-color="#7AB422" mix-badge="{{ true }}" ch-r="match" ch-g="down" ch-b="up" check-label="Check guess" hint-size="100%,360px"></dc-import>
+            <!-- lock hint popover (parent positions the mount; component owns the card) -->
+            <dc-import name="CW-LockCallout" arrow-style="{{ popoverArrowStyle }}" value="7" a-label="1-Across" a-hue="green" a-ring="#00FF00" b-label="2-Down" b-hue="red" b-ring="#FF0000" style="position:absolute;left:18px;right:18px;top:193px;z-index:42;" hint-size="100%,300px"></dc-import>
+            <dc-import name="CW-ConfirmDialog" shown="{{ confirmShown3 }}" title="{{ confirmTitle }}" desc="{{ confirmDesc }}" cta="{{ confirmCta }}" on-cancel="{{ cancelConfirm }}" on-confirm="{{ doConfirm }}" hint-size="100%,1px"></dc-import>
+            <dc-import name="CW-PauseOverlay" shown="{{ paused }}" elapsed="{{ timerTextPlain }}" on-resume="{{ resumeGame }}" hint-size="100%,1px"></dc-import>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ 04 · Completion ============ -->
+    <div style="flex:none;width:402px;">
+      <div style="font:400 12.5px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);margin-bottom:14px;"><span style="color:#C0FFEE;">04</span> &nbsp;Completion</div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;background:#0a0a0b;padding-top:50px;box-sizing:border-box;font-family:'DM Mono',ui-monospace,monospace;color:#ededed;">
+          <div style="position:relative;width:100%;background:#0a0a0b;overflow:hidden;">
+            <dc-import name="CW-TopBar" mode="done" done-time="{{ doneTime }}" hint-size="100%,58px"></dc-import>
+            <div style="isolation:isolate;">
+              <dc-import name="CW-HexBoard" variant="solved" solution="{{ solution }}" cells="{{ f4cells }}" show-numbers="{{ false }}" hint-size="100%,300px"></dc-import>
+            </div>
+            <dc-import name="CW-CompletionCard" swatches="{{ solvedSwatches }}" count="{{ solvedCount }}" hint-size="100%,300px"></dc-import>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ 05 · First-run explainer ============ -->
+    <div style="flex:none;width:402px;">
+      <div style="font:400 12.5px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);margin-bottom:14px;"><span style="color:#C0FFEE;">05</span> &nbsp;First-run explainer &middot; <span style="color:rgba(192,255,238,.7);">tap Next</span></div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;display:flex;flex-direction:column;background:#0a0a0b;padding-top:50px;box-sizing:border-box;font-family:'DM Mono',ui-monospace,monospace;color:#ededed;">
+          <div style="flex:1;position:relative;width:100%;display:flex;flex-direction:column;background:#0a0a0b;overflow:hidden;">
+            <dc-import name="CW-TopBar" mode="play" timer-text="{{ timerText }}" timer-hidden="{{ timerHidden }}" menu-open="{{ menuOpen4 }}" on-toggle-timer="{{ toggleTimer }}" on-pause="{{ pauseGame }}" on-check-all="{{ checkAll }}" on-toggle-menu="{{ toggleMenu4 }}" on-close-menu="{{ closeMenu }}" on-clear="{{ askClear4 }}" on-new="{{ askNew4 }}" hint-size="100%,58px"></dc-import>
+            <dc-import name="CW-HexBoard" variant="weave" solution="{{ solution }}" hint-size="100%,300px"></dc-import>
+            <div style="flex:1;min-height:0;display:grid;grid-template-rows:1fr;padding:6px 18px 42px;box-sizing:border-box;">
+              <dc-import name="CW-Coach" hint-size="100%,100%"></dc-import>
+            </div>
+            <dc-import name="CW-ConfirmDialog" shown="{{ confirmShown4 }}" title="{{ confirmTitle }}" desc="{{ confirmDesc }}" cta="{{ confirmCta }}" on-cancel="{{ cancelConfirm }}" on-confirm="{{ doConfirm }}" hint-size="100%,1px"></dc-import>
+            <dc-import name="CW-PauseOverlay" shown="{{ paused }}" elapsed="{{ timerTextPlain }}" on-resume="{{ resumeGame }}" hint-size="100%,1px"></dc-import>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ 06 · Live ============ -->
+    <div style="flex:none;width:402px;">
+      <div style="font:400 12.5px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);margin-bottom:14px;"><span style="color:#C0FFEE;">06</span> &nbsp;Live &middot; <span style="color:rgba(192,255,238,.7);">type a guess, then Check &mdash; tap directly in frame</span></div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;background:#0a0a0b;padding-top:50px;box-sizing:border-box;font-family:'DM Mono',ui-monospace,monospace;color:#ededed;">
+          <div style="position:relative;width:100%;background:#0a0a0b;overflow:hidden;">
+            <dc-import name="CW-TopBar" mode="play" timer-text="{{ timerText }}" timer-hidden="{{ timerHidden }}" menu-open="{{ menuOpen5 }}" on-toggle-timer="{{ toggleTimer }}" on-pause="{{ pauseGame }}" on-check-all="{{ checkAll }}" on-toggle-menu="{{ toggleMenu5 }}" on-close-menu="{{ closeMenu }}" on-clear="{{ askClear5 }}" on-new="{{ askNew5 }}" hint-size="100%,58px"></dc-import>
+            <dc-import name="CW-HexBoard" variant="weave" solution="{{ solution }}" cells="{{ f6cells }}" channel-slot="0,0,across" hint-size="100%,300px"></dc-import>
+            <dc-import name="CW-InputDock" band="big" clue-label="1-Across" clue-color="#3A7BD5" mix-color="{{ mixColor06 }}" mix-check="{{ mixRight }}" count-text="{{ countText06 }}" ch-r="{{ chR06 }}" ch-g="{{ chG06 }}" ch-b="{{ chB06 }}" toast-kind="{{ toastKind }}" toast-vis="{{ toastVis }}" toast-shift="{{ toastShift }}" press="{{ press }}" on-delete="{{ delHex }}" on-check="{{ check }}" check-label="Check guess" hint-size="100%,400px"></dc-import>
+            <dc-import name="CW-ConfirmDialog" shown="{{ confirmShown5 }}" title="{{ confirmTitle }}" desc="{{ confirmDesc }}" cta="{{ confirmCta }}" on-cancel="{{ cancelConfirm }}" on-confirm="{{ doConfirm }}" hint-size="100%,1px"></dc-import>
+            <dc-import name="CW-PauseOverlay" shown="{{ paused }}" elapsed="{{ timerTextPlain }}" on-resume="{{ resumeGame }}" hint-size="100%,1px"></dc-import>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ 07 · Solved so far ============ -->
+    <div style="flex:none;width:402px;">
+      <div style="font:400 12.5px/1.4 'DM Mono',monospace;color:rgba(255,255,255,.78);margin-bottom:14px;"><span style="color:#C0FFEE;">07</span> &nbsp;Solved so far &middot; <span style="color:rgba(192,255,238,.75);">clue vs you</span></div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;background:#0a0a0b;padding-top:50px;box-sizing:border-box;font-family:'DM Mono',ui-monospace,monospace;color:#ededed;">
+          <div style="position:relative;width:100%;background:#0a0a0b;overflow:hidden;">
+            <dc-import name="CW-TopBar" mode="play" timer-text="{{ timerText }}" timer-hidden="{{ timerHidden }}" menu-open="{{ menuOpen6 }}" on-toggle-timer="{{ toggleTimer }}" on-pause="{{ pauseGame }}" on-check-all="{{ checkAll }}" on-toggle-menu="{{ toggleMenu6 }}" on-close-menu="{{ closeMenu }}" on-clear="{{ askClear6 }}" on-new="{{ askNew6 }}" hint-size="100%,58px"></dc-import>
+            <dc-import name="CW-HexBoard" variant="weave" solution="{{ solution }}" cells="{{ f7cells }}" hint-size="100%,300px"></dc-import>
+            <dc-import name="CW-CluePanel" across="{{ cluesStatus.across }}" down="{{ cluesStatus.down }}" hint-size="100%,320px"></dc-import>
+            <dc-import name="CW-ConfirmDialog" shown="{{ confirmShown6 }}" title="{{ confirmTitle }}" desc="{{ confirmDesc }}" cta="{{ confirmCta }}" on-cancel="{{ cancelConfirm }}" on-confirm="{{ doConfirm }}" hint-size="100%,1px"></dc-import>
+            <dc-import name="CW-PauseOverlay" shown="{{ paused }}" elapsed="{{ timerTextPlain }}" on-resume="{{ resumeGame }}" hint-size="100%,1px"></dc-import>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { t: 42, paused: false, timerHidden: false, openMenu: null, confirm: null, guess: ['3', 'A', '7'], checked: false, toast: null };
+
+  // ---- shared engine: single source of truth, loaded from ./puzzle.js ----
+  get P() { return (typeof window !== 'undefined' && window.HexPuzzle) || null; }
+  componentDidMount() {
+    // puzzle.js is a classic script exposing window.HexPuzzle. Inject once, then
+    // re-render when it lands (same-origin — a frame at most). Until then renderVals
+    // returns {} and the boards/docks paint their hint placeholders.
+    if (this.P) return;
+    const id = 'cw-puzzle-engine';
+    const ping = () => { if (this.P) this.forceUpdate(); };
+    let s = document.getElementById(id);
+    if (s) { s.addEventListener('load', ping); return; }
+    s = document.createElement('script');
+    s.id = id;
+    s.src = './puzzle.js';
+    s.addEventListener('load', ping);
+    s.addEventListener('error', () => console.error('[crosshatch] puzzle.js failed to load'));
+    document.head.appendChild(s);
+  }
+  componentWillUnmount() { this.clearToast(); }
+
+  // the live demo (frame 06) solves 1-Across
+  demoAnswer() { const P = this.P; const e = P.ENTRIES.across.find(x => x.num === 1) || P.ENTRIES.across[0]; return e.answer; }
+
+  // ---- chrome: menu / confirm ----
+  toggleMenu(id) { this.setState(s => ({ openMenu: s.openMenu === id ? null : id })); }
+  closeMenu() { this.setState({ openMenu: null }); }
+  askConfirm(kind, frame) { this.setState({ confirm: { kind, frame }, openMenu: null }); }
+  cancelConfirm() { this.setState({ confirm: null }); }
+  doConfirm() { const c = this.state.confirm; this.setState({ confirm: null }); if (!c) return; if (c.kind === 'clear') this.clearGuess(); else if (c.kind === 'new') this.newPuzzle(); }
+
+  // ---- timer / pause ----
+  pauseGame() { this.setState({ paused: true }); }
+  resumeGame() { this.setState({ paused: false }); }
+  toggleTimer() { this.setState(s => ({ timerHidden: !s.timerHidden })); }
+
+  // ---- frame 06 live guess ----
+  typeHex(ch) {
+    this.setState(
+      s => (s.guess.length >= 6 ? null : { guess: [...s.guess, ch], checked: false }),
+      () => { if (this.state.guess.length === 6 && !this.state.checked) this.check(); }
+    );
+  }
+  delHex() { this.setState(s => ({ guess: s.guess.slice(0, -1), checked: false })); }
+  clearGuess() { this.clearToast(); this.setState({ guess: [], checked: false, toast: null }); }
+  newPuzzle() { this.clearGuess(); }
+
+  clearToast() { clearTimeout(this._tIn); clearTimeout(this._tFade); clearTimeout(this._tClear); }
+  showToast(kind) {
+    this.clearToast();
+    this.setState({ toast: { kind, on: false } });
+    this._tIn = setTimeout(() => this.setState(s => s.toast ? { toast: { ...s.toast, on: true } } : null), 30);
+    this._tFade = setTimeout(() => this.setState(s => s.toast ? { toast: { ...s.toast, on: false } } : null), 2700);
+    this._tClear = setTimeout(() => this.setState({ toast: null }), 3100);
+  }
+
+  // single check model (was the identical checkGuess + checkAll pair)
+  check() {
+    const P = this.P; if (!P) return;
+    if (!P.isComplete(this.state.guess)) { this.showToast('warn'); return; }
+    const correct = P.matchesAnswer(this.state.guess, this.demoAnswer());
+    this.setState({ checked: true });
+    this.showToast(correct ? 'win' : 'wrong');
+  }
+
+  // completion board: value + per-crossing colour layers, all DERIVED from the solution
+  solvedCells() {
+    const P = this.P, out = {};
+    const arow = P.acrossRowColors(), dcol = P.downColColors();
+    for (let r = 0; r < P.SIZE; r++) for (let c = 0; c < P.SIZE; c++) if (P.live(r, c)) {
+      const layers = [];
+      if (arow[r]) layers.push(arow[r]);
+      if (dcol[c]) layers.push(dcol[c]);
+      out[r + ',' + c] = { v: P.SOLUTION[r][c], layers };
+    }
+    return out;
+  }
+
+  // Lock-callout arrow (frame 03). Geometry from the board's own cell metrics in
+  // HexPuzzle (CELL / BOARD) — no magic pixels. Single assumption: the popover spans
+  // symmetric insets, so its centre == the centred board's centre, and the cell centre
+  // is (col*CELL + CELL/2 - BOARD/2) from there. In a real app, anchor the popover to
+  // the cell's DOM rect instead of relying on this centring identity.
+  lockGeom(row, col) {
+    const P = this.P, CELL = P.CELL, HALF = P.BOARD / 2;
+    const dx = -HALF + col * CELL + CELL / 2;
+    const calc = (off) => 'calc(50% ' + (off < 0 ? '- ' + (-off) : '+ ' + off) + 'px)';
+    return { popoverArrowStyle: `position:absolute;left:${calc(dx)};top:-6px;width:12px;height:12px;background:#0a0a0b;box-shadow:inset 1px 1px 0 rgba(255,255,255,.22);transform:translateX(-50%) rotate(45deg);` };
+  }
+
+  renderVals() {
+    const P = this.P;
+    if (!P) return {}; // pre-load: boards/docks paint their hint placeholders; re-renders on load
+    const timerText = P.fmtTime(this.state.t);
+
+    // menu + confirm wiring for the 6 non-completion frames
+    const menu = {};
+    for (let i = 1; i <= 6; i++) {
+      menu['menuOpen' + i] = this.state.openMenu === i;
+      menu['toggleMenu' + i] = () => this.toggleMenu(i);
+      menu['askClear' + i] = () => this.askConfirm('clear', i);
+      menu['askNew' + i] = () => this.askConfirm('new', i);
+      menu['confirmShown' + i] = !!(this.state.confirm && this.state.confirm.frame === i);
+    }
+
+    // frame 06 live derivations (all via the engine)
+    const g = this.state.guess;
+    const checked = this.state.checked && P.isComplete(g);
+    const liveMix = P.mixColor(g);
+    const verdict = checked ? P.channelVerdict(g.join(''), this.demoAnswer()) : null;
+    const chR = verdict ? verdict[0] : null, chG = verdict ? verdict[1] : null, chB = verdict ? verdict[2] : null;
+    const allRight = checked && chR === 'match' && chG === 'match' && chB === 'match';
+    const press = {};
+    '0123456789ABCDEF'.split('').forEach(ch => { press['k' + ch] = () => this.typeHex(ch); });
+
+    // Active-cell wash is neutral (opacity off --c0ffee-fg), not channel green:
+    // cells/chrome stay achromatic; channel identity lives only on the pair outlines.
+    const GREEN_TINT = 'rgba(237,237,237,.08)';
+
+    // completion summary — swatches + count DERIVED from the engine's entries (was a
+    // hand-listed row of five hex literals).
+    const solvedSwatches = [...P.ENTRIES.across.map(e => e.color), ...P.ENTRIES.down.map(e => e.color)];
+
+    return {
+      // the one operative solution every board renders from
+      solution: P.SOLUTION,
+      solvedSwatches, solvedCount: solvedSwatches.length,
+      doneTime: P.fmtTime(55),
+
+      // ---- chrome ----
+      ...menu,
+      closeMenu: () => this.closeMenu(),
+      cancelConfirm: () => this.cancelConfirm(),
+      doConfirm: () => this.doConfirm(),
+      confirmTitle: (this.state.confirm && this.state.confirm.kind === 'new') ? 'Start a new puzzle?' : 'Clear your entries?',
+      confirmDesc: (this.state.confirm && this.state.confirm.kind === 'new') ? 'This loads a fresh puzzle and discards what you have so far.' : 'This wipes the digits you have filled in - you can not undo it.',
+      confirmCta: (this.state.confirm && this.state.confirm.kind === 'new') ? 'Start new' : 'Clear all',
+      timerText, timerTextPlain: timerText, timerHidden: this.state.timerHidden,
+      toggleTimer: () => this.toggleTimer(),
+      pauseGame: () => this.pauseGame(), resumeGame: () => this.resumeGame(),
+      paused: this.state.paused,
+      checkAll: () => this.check(),
+
+      // ---- clue panels ----
+      cluesPending: {
+        across: [{ num: 1, clue: '#3A7BD5', you: 'q' }, { num: 4, clue: '#FA8C00', you: 'q' }],
+        down: [{ num: 1, clue: '#3C9F6E', you: 'q' }, { num: 2, clue: '#72B81F', you: 'q' }, { num: 3, clue: '#D4509C', you: 'q' }],
+      },
+      cluesStatus: {
+        across: [{ num: 1, clue: '#3A7BD5', you: 'match', connector: 'spark' }, { num: 4, clue: '#FA8C00', you: '#F08A30', wrong: true }],
+        down: [{ num: 1, clue: '#3C9F6E', you: 'match', connector: 'spark' }, { num: 2, clue: '#72B81F', you: 'q' }, { num: 3, clue: '#D4509C', you: '#C060A0', wrong: true }],
+      },
+
+      // ---- board cell maps per frame (demo fixtures; real state derives from guess[] + crossings) ----
+      f2cells: { '0,0': { v: '3' }, '0,1': { v: 'A' }, '0,2': { v: '8', tint: GREEN_TINT }, '0,3': { v: '0' }, '0,4': { v: '4' }, '1,0': { v: 'C' }, '1,2': { v: '2' } },
+      f3cells: { '0,0': { v: '3' }, '0,1': { v: 'A' }, '0,2': { v: '7', lock: true }, '0,3': { v: 'B' }, '3,4': { v: '0' } },
+      f4cells: this.solvedCells(),
+      f6cells: { '0,0': { v: '3' }, '0,1': { v: 'A' }, '0,2': { v: '7', tint: GREEN_TINT }, '1,0': { v: 'C' }, '1,2': { v: '2' } },
+      f7cells: {
+        '0,0': { v: '3' }, '0,1': { v: 'A' }, '0,2': { v: '7' }, '0,3': { v: 'B' }, '0,4': { v: 'D' }, '0,5': { v: '5' },
+        '1,0': { v: 'C' }, '1,4': { v: '4' },
+        '2,0': { v: '9' }, '2,4': { v: '5' },
+        '3,0': { v: 'F' }, '3,1': { v: 'A' }, '3,2': { v: '8' }, '3,3': { v: 'C' }, '3,4': { v: '0' }, '3,5': { v: '9' },
+        '4,0': { v: '6' }, '4,4': { v: '8' },
+        '5,0': { v: 'E' }, '5,4': { v: 'C' },
+      },
+
+      // ---- frame 06 live dock (CW-InputDock) ----
+      press,
+      delHex: () => this.delHex(),
+      check: () => this.check(),
+      mixColor06: checked ? liveMix : null,
+      mixRight: !!allRight,
+      countText06: checked ? null : (g.length + ' / 6'),
+      chR06: chR, chG06: chG, chB06: chB,
+      toastKind: this.state.toast ? this.state.toast.kind : null,
+      toastVis: (this.state.toast && this.state.toast.on) ? '1' : '0',
+      toastShift: (this.state.toast && this.state.toast.on) ? '0px' : '7px',
+
+      // ---- frame 03 lock callout, geometry derived from the locked cell ----
+      ...this.lockGeom(0, 2),
+    };
+  }
+}
+</script>
+</body>
+</html>
