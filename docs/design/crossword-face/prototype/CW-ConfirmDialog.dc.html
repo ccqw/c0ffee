@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<sc-if value="{{ shown }}" hint-placeholder-val="{{ true }}">
+  <div style="position:absolute;inset:0;z-index:70;background:rgba(8,8,10,.93);backdrop-filter:blur(9px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;padding:0 30px;text-align:center;font-family:'DM Mono',ui-monospace,monospace;">
+    <div style="width:60px;height:60px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,178,122,.45);display:flex;align-items:center;justify-content:center;color:#ffb27a;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
+    <div style="font:500 19px/1.2 'DM Mono',monospace;color:#ededed;letter-spacing:.01em;">{{ title }}</div>
+    <div style="font:400 13px/1.5 'DM Mono',monospace;color:rgba(255,255,255,.7);max-width:250px;">{{ desc }}</div>
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button onClick="{{ onCancel }}" style="height:44px;padding:0 20px;border-radius:11px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);color:rgba(255,255,255,.82);font:400 14px/1 'DM Mono',monospace;border:none;cursor:pointer;">Cancel</button>
+      <button onClick="{{ onConfirm }}" style="height:44px;padding:0 20px;border-radius:11px;background:#2a1410;box-shadow:inset 0 0 0 1px rgba(255,140,90,.5);color:#ffb27a;font:400 14px/1 'DM Mono',monospace;border:none;cursor:pointer;">{{ cta }}</button>
+    </div>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:560},&quot;shown&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Clear your entries?&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;desc&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;This wipes the digits you have filled in - you can not undo it.&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;cta&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Clear all&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onCancel&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onConfirm&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}"></script>
+</body>
+</html>

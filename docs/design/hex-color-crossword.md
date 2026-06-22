@@ -84,3 +84,12 @@ blue `40`(64) vs `D5`(213) -> *higher*.
   stays neutral for now.
 - **Site nav / Menu / banner** changes - separate work (C0FFEE-15).
 - **Any logic** - the generator, guess-grading, game state. Hard-code the scenes above.
+
+## Design pass returned -> `crossword-face/`
+
+This directive is the **outbound** brief. The Claude Design pass returned its answer in
+[`crossword-face/`](./crossword-face/) - the inbound build directive for the
+`<c0ffee-crossword>` shell (shadow-root markup + scoped CSS, the seven scenes as element
+states, the `weaveCell` board geometry, the per-component token table). Start at
+`crossword-face/README.md`; `CROSSWORD-FACE-HANDOFF.md` is the source of truth for the build.
+The open questions above are resolved or carried forward there (see its sections 6-7).

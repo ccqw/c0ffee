@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="margin:6px 18px 22px;padding:18px;border-radius:16px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 16px 34px -20px rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;gap:6px;font-family:'DM Mono',ui-monospace,monospace;">
+  <div style="display:flex;align-items:center;gap:9px;">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="#C0FFEE" stroke="#C0FFEE" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2.5 14.85 8.27 21.2 9.2 16.6 13.68 17.69 20 12 17.02 6.31 20 7.4 13.68 2.8 9.2 9.15 8.27"/></svg>
+    <span style="font:400 18px/1 'DM Mono',monospace;color:#ededed;letter-spacing:.02em;">Solved</span>
+  </div>
+  <span style="font:400 12px/1.5 'DM Mono',monospace;color:rgba(255,255,255,.72);margin-bottom:14px;text-align:center;text-wrap:balance;">{{ summary }}</span>
+  <div style="display:flex;gap:7px;margin-bottom:18px;">
+    <sc-for list="{{ swatchList }}" as="sw" hint-placeholder-count="5">
+      <span style="{{ sw.style }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+    </sc-for>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:240px;">
+    <button onClick="{{ onNew }}" style="display:flex;align-items:center;justify-content:center;gap:9px;height:46px;padding:0 22px;border-radius:11px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(192,255,238,.45);color:#C0FFEE;font:400 14px/1 'DM Mono',monospace;letter-spacing:.03em;white-space:nowrap;border:none;cursor:pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3c.4 4 2.6 6.2 6.5 6.5-3.9.3-6.1 2.5-6.5 6.5-.4-4-2.6-6.2-6.5-6.5C8.4 9.2 10.6 7 11 3Z"/><path d="M18.5 13.5c.13 1.7 1 2.55 2.7 2.7-1.7.13-2.55 1-2.7 2.7-.13-1.7-1-2.55-2.7-2.7 1.7-.13 2.55-1 2.7-2.7Z"/></svg>
+      {{ newLabel }}
+    </button>
+    <button onClick="{{ onShare }}" title="Share result" style="display:flex;align-items:center;justify-content:center;gap:9px;height:46px;padding:0 22px;border-radius:11px;background:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);color:rgba(255,255,255,.82);font:400 14px/1 'DM Mono',monospace;letter-spacing:.03em;white-space:nowrap;border:none;cursor:pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+      {{ shareLabel }}
+    </button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:340},&quot;swatches&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string[]&quot;},&quot;count&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:5,&quot;tsType&quot;:&quot;number&quot;},&quot;summary&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;newLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;New puzzle&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;shareLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Share&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onNew&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onShare&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  // Completion summary card. Swatches + count come from the engine (parent derives
+  // them from ENTRIES), so nothing about the puzzle is hand-listed here.
+  renderVals() {
+    const swatches = this.props.swatches || ['#3A7BD5', '#FA8C00', '#3C9F6E', '#72B81F', '#D4509C'];
+    const count = this.props.count ?? swatches.length;
+    const summary = this.props.summary ?? (count + ' colors placed \u00B7 all channels matched');
+    return {
+      summary,
+      swatchList: swatches.map(c => ({
+        style: `width:26px;height:26px;border-radius:6px;background:${c};box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;`,
+      })),
+      newLabel: this.props.newLabel ?? 'New puzzle',
+      shareLabel: this.props.shareLabel ?? 'Share',
+      onNew: this.props.onNew,
+      onShare: this.props.onShare,
+    };
+  }
+}
+</script>
+</body>
+</html>

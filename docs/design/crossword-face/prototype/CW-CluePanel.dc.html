@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  /* Self-contained: the spark + match-glow animations travel with the clue panel. */
+  @keyframes cw-twinkle { 0%,100% { opacity:.45; transform:scale(.78) rotate(0deg); } 50% { opacity:1; transform:scale(1.2) rotate(45deg); } }
+  @keyframes cw-glow { 0%,100% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 0 6px -1px rgba(192,255,238,.32); } 50% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.64), 0 0 13px 0 rgba(192,255,238,.6); } }
+  .cw-spark { animation: cw-twinkle 2.3s ease-in-out infinite; }
+  .cw-match { animation: cw-glow 2.4s ease-in-out infinite; }
+</style>
+</helmet>
+<div style="margin:6px 18px 22px;padding:18px;border-radius:16px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15),0 16px 34px -20px rgba(0,0,0,.85);font-family:'DM Mono',ui-monospace,monospace;">
+  <div style="display:flex;gap:26px;">
+    <div style="flex:1;">
+      <div style="font:400 14px/1 'DM Mono',monospace;color:#ededed;margin-bottom:10px;">Across</div>
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:5px;padding:0 8px;"><span style="width:12px;flex:none;"></span><span style="display:flex;align-items:center;gap:8px;"><span style="width:30px;text-align:center;font:400 9.5px/1 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.74);flex:none;">clue</span><span style="width:16px;flex:none;"></span><span style="width:30px;text-align:center;font:400 9.5px/1 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.74);flex:none;">you</span></span></div>
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <sc-for list="{{ acrossRows }}" as="row" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:11px;min-height:44px;padding:6px 8px;border-radius:8px;">
+            <span style="font:400 13px/1 'DM Mono',monospace;color:rgba(255,255,255,.7);width:12px;text-align:right;flex:none;">{{ row.num }}</span>
+            <span style="display:flex;align-items:center;gap:8px;">
+              <sc-if value="{{ row.clueMatch }}" hint-placeholder-val="{{ false }}"><span class="cw-match" style="width:30px;height:30px;border-radius:7px;background:{{ row.clueColor }};display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 0 8px -1px rgba(192,255,238,.45);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+              <sc-if value="{{ row.cluePlain }}" hint-placeholder-val="{{ true }}"><span style="width:30px;height:30px;border-radius:7px;background:{{ row.clueColor }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);flex:none;"></span></sc-if>
+              <sc-if value="{{ row.spark }}" hint-placeholder-val="{{ false }}"><span class="cw-spark" style="display:inline-block;width:16px;text-align:center;color:#C0FFEE;font-size:13px;line-height:1;flex:none;">&#10022;</span></sc-if>
+              <sc-if value="{{ row.arrow }}" hint-placeholder-val="{{ true }}"><span style="width:16px;text-align:center;font:400 12px/1 'DM Mono',monospace;color:rgba(255,255,255,.62);flex:none;">&rarr;</span></sc-if>
+              <sc-if value="{{ row.youQ }}" hint-placeholder-val="{{ true }}"><span title="no guess yet" style="width:30px;height:30px;border-radius:7px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font:500 16px/1 'DM Mono',monospace;color:rgba(255,255,255,.46);">?</span></span></sc-if>
+              <sc-if value="{{ row.youMatch }}" hint-placeholder-val="{{ false }}"><span title="checked - correct" class="cw-match" style="width:30px;height:30px;border-radius:7px;background:{{ row.clueColor }};display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 0 8px -1px rgba(192,255,238,.45);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+              <sc-if value="{{ row.youWrong }}" hint-placeholder-val="{{ false }}"><span title="checked - wrong" style="position:relative;width:30px;height:30px;border-radius:7px;background:{{ row.youCol }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span></sc-if>
+              <sc-if value="{{ row.youColor }}" hint-placeholder-val="{{ false }}"><span style="width:30px;height:30px;border-radius:7px;background:{{ row.youCol }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);flex:none;"></span></sc-if>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;">
+      <div style="font:400 14px/1 'DM Mono',monospace;color:#ededed;margin-bottom:10px;">Down</div>
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:5px;padding:0 8px;"><span style="width:12px;flex:none;"></span><span style="display:flex;align-items:center;gap:8px;"><span style="width:30px;text-align:center;font:400 9.5px/1 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.74);flex:none;">clue</span><span style="width:16px;flex:none;"></span><span style="width:30px;text-align:center;font:400 9.5px/1 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.74);flex:none;">you</span></span></div>
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <sc-for list="{{ downRows }}" as="row" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:11px;min-height:44px;padding:6px 8px;border-radius:8px;">
+            <span style="font:400 13px/1 'DM Mono',monospace;color:rgba(255,255,255,.7);width:12px;text-align:right;flex:none;">{{ row.num }}</span>
+            <span style="display:flex;align-items:center;gap:8px;">
+              <sc-if value="{{ row.clueMatch }}" hint-placeholder-val="{{ false }}"><span class="cw-match" style="width:30px;height:30px;border-radius:7px;background:{{ row.clueColor }};display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 0 8px -1px rgba(192,255,238,.45);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+              <sc-if value="{{ row.cluePlain }}" hint-placeholder-val="{{ true }}"><span style="width:30px;height:30px;border-radius:7px;background:{{ row.clueColor }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);flex:none;"></span></sc-if>
+              <sc-if value="{{ row.spark }}" hint-placeholder-val="{{ false }}"><span class="cw-spark" style="display:inline-block;width:16px;text-align:center;color:#C0FFEE;font-size:13px;line-height:1;flex:none;">&#10022;</span></sc-if>
+              <sc-if value="{{ row.arrow }}" hint-placeholder-val="{{ true }}"><span style="width:16px;text-align:center;font:400 12px/1 'DM Mono',monospace;color:rgba(255,255,255,.62);flex:none;">&rarr;</span></sc-if>
+              <sc-if value="{{ row.youQ }}" hint-placeholder-val="{{ true }}"><span title="no guess yet" style="width:30px;height:30px;border-radius:7px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font:500 16px/1 'DM Mono',monospace;color:rgba(255,255,255,.46);">?</span></span></sc-if>
+              <sc-if value="{{ row.youMatch }}" hint-placeholder-val="{{ false }}"><span title="checked - correct" class="cw-match" style="width:30px;height:30px;border-radius:7px;background:{{ row.clueColor }};display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 0 8px -1px rgba(192,255,238,.45);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+              <sc-if value="{{ row.youWrong }}" hint-placeholder-val="{{ false }}"><span title="checked - wrong" style="position:relative;width:30px;height:30px;border-radius:7px;background:{{ row.youCol }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span></sc-if>
+              <sc-if value="{{ row.youColor }}" hint-placeholder-val="{{ false }}"><span style="width:30px;height:30px;border-radius:7px;background:{{ row.youCol }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);flex:none;"></span></sc-if>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:340},&quot;across&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;{num:number,clue:string,you:'q'|'match'|string,connector?:'arrow'|'spark'}&gt;&quot;},&quot;down&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;{num:number,clue:string,you:'q'|'match'|string,connector?:'arrow'|'spark'}&gt;&quot;}}">
+class Component extends DCLogic {
+  map(rows) {
+    return (rows || []).map(row => {
+      const youMatch = row.you === 'match';
+      const youQ = row.you === 'q' || row.you == null;
+      const youWrong = !youMatch && !youQ && !!row.wrong;
+      const youColor = !youMatch && !youQ && !row.wrong;
+      return {
+        num: row.num,
+        clueColor: row.clue,
+        clueMatch: youMatch,
+        cluePlain: !youMatch,
+        spark: row.connector === 'spark',
+        arrow: row.connector !== 'spark',
+        youQ, youMatch, youWrong, youColor,
+        youCol: (youColor || youWrong) ? row.you : 'transparent',
+      };
+    });
+  }
+  renderVals() {
+    const defAcross = [{ num: 1, clue: '#3A7BD5', you: 'q', connector: 'arrow' }, { num: 4, clue: '#FA8C00', you: 'q', connector: 'arrow' }];
+    const defDown = [{ num: 1, clue: '#3C9F6E', you: 'q', connector: 'arrow' }, { num: 2, clue: '#72B81F', you: 'q', connector: 'arrow' }, { num: 3, clue: '#D4509C', you: 'q', connector: 'arrow' }];
+    return {
+      acrossRows: this.map(this.props.across || defAcross),
+      downRows: this.map(this.props.down || defDown),
+    };
+  }
+}
+</script>
+</body>
+</html>

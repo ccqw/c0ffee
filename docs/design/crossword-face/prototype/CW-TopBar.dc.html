@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;font-family:'DM Mono',ui-monospace,monospace;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px 13px;min-height:58px;box-sizing:border-box;box-shadow:inset 0 -1px 0 rgba(255,255,255,.07);">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <span style="width:18px;height:18px;border-radius:5px;background:#C0FFEE;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);flex:none;"></span>
+      <div style="font:500 16px/1 'DM Mono',monospace;color:#ededed;letter-spacing:-.01em;white-space:nowrap;">Crosshatch</div>
+    </div>
+    <sc-if value="{{ playMode }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onClick="{{ onToggleTimer }}" title="Show / hide timer" style="display:flex;align-items:center;min-height:44px;background:none;border:none;padding:0 4px;margin:0 -4px;cursor:pointer;color:rgba(255,255,255,.74);font:400 13px/1 'DM Mono',monospace;letter-spacing:.01em;"><sc-if value="{{ timerShown }}" hint-placeholder-val="{{ true }}"><span style="min-width:28px;text-align:right;">{{ timerText }}</span></sc-if><sc-if value="{{ timerHidden }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></sc-if></button>
+          <button onClick="{{ onPause }}" title="Pause" style="display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;margin:0 -7px;background:none;border:none;padding:0;cursor:pointer;color:rgba(255,255,255,.55);"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+        </div>
+        <button onClick="{{ onCheckAll }}" title="Check every clue at once" style="display:flex;align-items:center;min-height:44px;gap:5px;background:none;border:none;padding:0 4px;margin:0 -4px;cursor:pointer;color:#C0FFEE;font:400 13px/1 'DM Mono',monospace;letter-spacing:.02em;white-space:nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>Check</button>
+        <button onClick="{{ onToggleMenu }}" title="Game menu" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;background:none;border:none;margin:0 -7px;cursor:pointer;color:rgba(255,255,255,.7);"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ doneMode }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:7px;color:rgba(255,255,255,.7);font:400 13px/1 'DM Mono',monospace;letter-spacing:.01em;">
+        <span>{{ doneTime }}</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01"/><path d="M22 8h.01"/><path d="M15 2h.01"/><path d="M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82 0-2.18.82-.18.42-.55.73-1 .73H17"/><path d="m11 2 .33.82c.34.86 0 1.82-.82 2.18-.42.18-.73.55-.73 1V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></svg>
+      </div>
+    </sc-if>
+  </div>
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ onCloseMenu }}" style="position:absolute;inset:0;z-index:64;"></div>
+    <div style="position:absolute;top:52px;right:14px;z-index:65;min-width:176px;border-radius:13px;background:#161618;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1),0 18px 42px -16px rgba(0,0,0,.85);padding:6px;display:flex;flex-direction:column;gap:2px;">
+      <button onClick="{{ onClear }}" style="display:flex;align-items:center;gap:11px;width:100%;padding:10px 11px;border-radius:9px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.86);font:400 13px/1 'DM Mono',monospace;text-align:left;" style-hover="background:rgba(255,255,255,.06);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3a2 2 0 0 1 0-2.8l9.6-9.6a2 2 0 0 1 2.8 0l5.6 5.6a2 2 0 0 1 0 2.8L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>Clear entries</button>
+      <button onClick="{{ onNew }}" style="display:flex;align-items:center;gap:11px;width:100%;padding:10px 11px;border-radius:9px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.86);font:400 13px/1 'DM Mono',monospace;text-align:left;" style-hover="background:rgba(255,255,255,.06);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3c.4 4 2.6 6.2 6.5 6.5-3.9.3-6.1 2.5-6.5 6.5-.4-4-2.6-6.2-6.5-6.5C8.4 9.2 10.6 7 11 3Z"/><path d="M18.5 13.5c.13 1.7 1 2.55 2.7 2.7-1.7.13-2.55 1-2.7 2.7-.13-1.7-1-2.55-2.7-2.7 1.7-.13 2.55-1 2.7-2.7Z"/></svg>New puzzle</button>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:120},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;play&quot;,&quot;done&quot;],&quot;default&quot;:&quot;play&quot;,&quot;tsType&quot;:&quot;'play'|'done'&quot;},&quot;timerText&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;0:42&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;timerHidden&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;doneTime&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;0:55&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;menuOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onToggleTimer&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onPause&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onCheckAll&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onToggleMenu&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onCloseMenu&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onClear&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onNew&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'play';
+    const hidden = !!this.props.timerHidden;
+    return {
+      playMode: mode !== 'done',
+      doneMode: mode === 'done',
+      timerShown: !hidden,
+      timerHidden: hidden,
+      timerText: this.props.timerText ?? '0:42',
+      doneTime: this.props.doneTime ?? '0:55',
+      menuOpen: !!this.props.menuOpen,
+      onToggleTimer: this.props.onToggleTimer,
+      onPause: this.props.onPause,
+      onCheckAll: this.props.onCheckAll,
+      onToggleMenu: this.props.onToggleMenu,
+      onCloseMenu: this.props.onCloseMenu,
+      onClear: this.props.onClear,
+      onNew: this.props.onNew,
+    };
+  }
+}
+</script>
+</body>
+</html>

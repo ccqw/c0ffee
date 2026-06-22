@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="margin:6px 18px 0;background:#0a0a0b;border-radius:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 16px 34px -20px rgba(0,0,0,.85);overflow:hidden;font-family:'DM Mono',ui-monospace,monospace;">
+  <!-- clue-nav header (identical across every dock instance) -->
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px 0 12px;">
+    <button onClick="{{ onClueList }}" title="Back to the clue list" style="display:flex;align-items:center;min-height:44px;gap:6px;background:none;border:none;border-radius:8px;padding:4px 6px;margin:0 -6px;cursor:pointer;color:rgba(255,255,255,.82);font:400 11px/1 'DM Mono',monospace;letter-spacing:.02em;white-space:nowrap;flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Clue list</button>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button onClick="{{ onPrev }}" title="Previous clue" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);border:none;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.82);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+      <button onClick="{{ onNext }}" title="Next clue" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(192,255,238,.4);border:none;border-radius:8px;cursor:pointer;color:#C0FFEE;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+  </div>
+
+  <!-- comparison band — BIG (frames 02/06): label + meta over two stacked swatches -->
+  <sc-if value="{{ bandBig }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:6px 14px 10px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px;min-height:16px;position:relative;">
+        <span style="font:400 14px/1 'DM Mono',monospace;color:#ededed;white-space:nowrap;">{{ clueLabel }}</span>
+        <sc-if value="{{ showCount }}" hint-placeholder-val="{{ false }}">
+          <span style="margin-left:auto;font:400 10.5px/1 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.62);">{{ countText }}</span>
+        </sc-if>
+        <sc-if value="{{ showHints }}" hint-placeholder-val="{{ false }}">
+          <span style="margin-left:auto;display:inline-flex;align-items:center;gap:9px;">
+            <dc-import name="CW-ChannelHints" r="{{ chR }}" g="{{ chG }}" b="{{ chB }}" hint-size="120px,16px"></dc-import>
+            <button onClick="{{ onToggleLegend }}" title="What do these mean?" aria-label="Show channel hint key" style="position:relative;z-index:1;width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;padding:0;border:none;border-radius:50%;cursor:pointer;background:#0a0a0b;box-shadow:inset 0 0 0 1px {{ legendRing }};color:{{ legendInk }};font:500 11px/1 'DM Mono',monospace;" style-after="content:'';position:absolute;left:-8px;right:-4px;top:-2px;bottom:-17px;">?</button>
+          <sc-if value="{{ legendOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;top:calc(100% + 10px);right:0;z-index:30;display:flex;flex-direction:column;gap:6px;width:208px;padding:11px 13px;border-radius:11px;background:#0a0a0b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),0 18px 40px -16px rgba(0,0,0,.94);">
+              <div style="position:absolute;top:-5px;right:8px;width:10px;height:10px;background:#0a0a0b;box-shadow:inset 1px 1px 0 rgba(255,255,255,.16);transform:rotate(45deg);"></div>
+              <div style="display:flex;align-items:center;gap:10px;font:400 11.5px/1.3 'DM Mono',monospace;color:rgba(255,255,255,.74);">
+                <span style="width:15px;display:inline-flex;justify-content:center;flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>matched &mdash; leave it</div>
+              <div style="display:flex;align-items:center;gap:10px;font:400 11.5px/1.3 'DM Mono',monospace;color:rgba(255,255,255,.74);">
+                <span style="width:15px;display:inline-flex;justify-content:center;flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>too low &mdash; go higher</div>
+              <div style="display:flex;align-items:center;gap:10px;font:400 11.5px/1.3 'DM Mono',monospace;color:rgba(255,255,255,.74);">
+                <span style="width:15px;display:inline-flex;justify-content:center;flex:none;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span>too high &mdash; go lower</div>
+            </div>
+          </sc-if>
+          </span>
+        </sc-if>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;">
+          <div style="width:100%;height:72px;border-radius:12px;background:{{ clueColor }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);"></div>
+          <span style="font:400 10.5px/1 'DM Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.74);">the clue</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;">
+          <sc-if value="{{ mixFilled }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative;width:100%;height:72px;border-radius:12px;background:{{ mixColor }};box-shadow:inset 0 0 0 2px #C0FFEE;display:flex;align-items:center;justify-content:center;">
+              <sc-if value="{{ mixCheck }}" hint-placeholder-val="{{ false }}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+              <sc-if value="{{ mixBadge }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-7px;right:-6px;background:#C0FFEE;color:#06281f;font:500 7px/1 'DM Mono',monospace;letter-spacing:.06em;text-transform:uppercase;padding:2px 3px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.5);">you</span></sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ mixEmpty }}" hint-placeholder-val="{{ true }}">
+            <div style="width:100%;height:72px;border-radius:12px;background:#0a0a0b;box-shadow:inset 0 0 0 2px rgba(192,255,238,.45);display:flex;align-items:center;justify-content:center;"><span style="font:300 34px/1 'DM Mono',monospace;color:rgba(192,255,238,.5);">?</span></div>
+          </sc-if>
+          <span style="font:400 10.5px/1 'DM Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#C0FFEE;">your mix</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- comparison band — COMPACT (frame 03): single inline row, sits dimmed behind a callout -->
+  <sc-if value="{{ bandCompact }}" hint-placeholder-val="{{ false }}">
+    <div style="margin:8px 14px 6px;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:13px;box-shadow:inset 0 0 0 1px rgba(192,255,238,.32);">
+      <span style="display:flex;align-items:center;gap:6px;">
+        <span title="The clue colour" style="width:22px;height:22px;border-radius:5px;background:{{ clueColor }};box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);opacity:.8;flex:none;"></span>
+        <span style="position:relative;flex:none;line-height:0;">
+          <span title="Your guess" style="display:block;width:30px;height:30px;border-radius:8px;background:{{ mixColor }};box-shadow:inset 0 0 0 2px #C0FFEE,0 0 0 3px rgba(192,255,238,.16);"></span>
+          <span style="position:absolute;top:-7px;right:-8px;background:#C0FFEE;color:#06281f;font:500 7px/1 'DM Mono',monospace;letter-spacing:.06em;text-transform:uppercase;padding:2px 3px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.5);">you</span>
+        </span>
+      </span>
+      <span style="font:400 14px/1 'DM Mono',monospace;color:#ededed;white-space:nowrap;">{{ clueLabel }}</span>
+      <span style="margin-left:auto;flex:none;"><dc-import name="CW-ChannelHints" r="{{ chR }}" g="{{ chG }}" b="{{ chB }}" hint-size="120px,16px"></dc-import></span>
+    </div>
+  </sc-if>
+
+  <!-- keypad (+ transient toast anchored above it) -->
+  <div style="position:relative;padding:0 16px 12px;">
+    <sc-if value="{{ toastShown }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;left:14px;right:14px;bottom:100%;margin-bottom:10px;display:flex;justify-content:center;pointer-events:none;opacity:{{ toastVis }};transform:translateY({{ toastShift }});transition:opacity .32s ease, transform .32s ease;z-index:5;">
+        <sc-if value="{{ toastWarn }}" hint-placeholder-val="{{ true }}">
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:#241c0c;box-shadow:inset 0 0 0 1px rgba(240,180,80,.5),0 10px 24px -10px rgba(0,0,0,.7);font:400 11.5px/1.3 'DM Mono',monospace;color:#f1c074;white-space:nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>Fill in all six digits before checking.</div>
+        </sc-if>
+        <sc-if value="{{ toastWin }}" hint-placeholder-val="{{ false }}">
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:#0d2417;box-shadow:inset 0 0 0 1px rgba(60,235,120,.55),0 10px 24px -10px rgba(0,0,0,.7);font:400 11.5px/1.3 'DM Mono',monospace;color:#7be8a5;white-space:nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M20 6 9 17l-5-5"/></svg>Solved &mdash; every clue matches.</div>
+        </sc-if>
+        <sc-if value="{{ toastWrong }}" hint-placeholder-val="{{ false }}">
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;background:#2a1212;box-shadow:inset 0 0 0 1px rgba(255,80,80,.5),0 10px 24px -10px rgba(0,0,0,.7);font:400 11.5px/1.3 'DM Mono',monospace;color:#ff8b8b;white-space:nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><path d="M18 6 6 18M6 6l12 12"/></svg>At least one clue is wrong.</div>
+        </sc-if>
+      </div>
+    </sc-if>
+    <dc-import name="CW-Keypad" press="{{ press }}" on-delete="{{ onDelete }}" on-check="{{ onCheck }}" check-label="{{ checkLabel }}" hint-size="100%,280px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:380},&quot;band&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;big&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;big&quot;,&quot;tsType&quot;:&quot;'big'|'compact'&quot;},&quot;clueLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;1-Across&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;clueColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#3A7BD5&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mixColor&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string|null&quot;},&quot;mixBadge&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;mixCheck&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;countText&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string|null&quot;},&quot;chR&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;match&quot;,&quot;up&quot;,&quot;down&quot;],&quot;default&quot;:&quot;match&quot;,&quot;tsType&quot;:&quot;'match'|'up'|'down'&quot;},&quot;chG&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;match&quot;,&quot;up&quot;,&quot;down&quot;],&quot;default&quot;:&quot;down&quot;,&quot;tsType&quot;:&quot;'match'|'up'|'down'&quot;},&quot;chB&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;match&quot;,&quot;up&quot;,&quot;down&quot;],&quot;default&quot;:&quot;up&quot;,&quot;tsType&quot;:&quot;'match'|'up'|'down'&quot;},&quot;checkLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Check guess&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;toastKind&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;'warn'|'win'|'wrong'|null&quot;},&quot;toastVis&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;toastShift&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;press&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Record&lt;string,()=&gt;void&gt;&quot;},&quot;onDelete&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;()=&gt;void&quot;},&quot;onCheck&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;()=&gt;void&quot;},&quot;onClueList&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;()=&gt;void&quot;},&quot;onPrev&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;()=&gt;void&quot;},&quot;onNext&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;()=&gt;void&quot;}}">
+class Component extends DCLogic {
+  state = { legendOpen: false };
+  renderVals() {
+    const band = this.props.band ?? 'big';
+    const countText = this.props.countText;
+    const chR = this.props.chR, chG = this.props.chG, chB = this.props.chB;
+    const hasCount = countText != null && countText !== '';
+    const hasHints = chR != null && chR !== '';
+    const mix = this.props.mixColor;
+    const mixFilled = mix != null && mix !== '';
+    const toastKind = this.props.toastKind;
+    return {
+      bandBig: band !== 'compact',
+      bandCompact: band === 'compact',
+
+      // channel-hint legend disclosure
+      legendOpen: this.state.legendOpen,
+      onToggleLegend: () => this.setState(s => ({ legendOpen: !s.legendOpen })),
+      legendRing: this.state.legendOpen ? 'rgba(192,255,238,.55)' : 'rgba(255,255,255,.22)',
+      legendInk: this.state.legendOpen ? '#C0FFEE' : 'rgba(255,255,255,.6)',
+      clueLabel: this.props.clueLabel ?? '',
+      clueColor: this.props.clueColor ?? '#3A7BD5',
+
+      // meta line: count XOR channel hints
+      showCount: hasCount,
+      showHints: hasHints && !hasCount,
+      countText: countText ?? '',
+      chR: chR ?? 'match', chG: chG ?? 'down', chB: chB ?? 'up',
+
+      // "your mix" swatch
+      mixColor: mixFilled ? mix : '#0a0a0b',
+      mixFilled,
+      mixEmpty: !mixFilled,
+      mixBadge: !!this.props.mixBadge,
+      mixCheck: !!this.props.mixCheck,
+
+      // transient toast (frame 06 only)
+      toastShown: toastKind != null && toastKind !== '',
+      toastWarn: toastKind === 'warn',
+      toastWin: toastKind === 'win',
+      toastWrong: toastKind === 'wrong',
+      toastVis: this.props.toastVis ?? '0',
+      toastShift: this.props.toastShift ?? '7px',
+
+      // passthrough → keypad + clue-nav
+      press: this.props.press,
+      onDelete: this.props.onDelete,
+      onCheck: this.props.onCheck,
+      checkLabel: this.props.checkLabel ?? 'Check guess',
+      onClueList: this.props.onClueList,
+      onPrev: this.props.onPrev,
+      onNext: this.props.onNext,
+    };
+  }
+}
+</script>
+</body>
+</html>

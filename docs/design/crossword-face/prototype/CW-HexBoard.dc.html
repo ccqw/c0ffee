@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  /* Self-contained: the bloom flourish travels with the board, so the animation
+     survives when this component is imported, previewed standalone, or ported out. */
+  @keyframes cw-bloom { 0% { opacity:.76; } 34% { opacity:1; } 100% { opacity:.76; } }
+  .cw-cell { animation: cw-bloom 1.7s .55s ease-in-out; }
+</style>
+</helmet>
+<div style="display:flex;justify-content:center;padding:26px 0 20px;font-family:'DM Mono',ui-monospace,monospace;">
+  <div style="{{ boardStyle }}">
+    <sc-for list="{{ cellList }}" as="cell" hint-placeholder-count="20">
+      <div style="{{ cell.wrapStyle }}">
+        <sc-if value="{{ cell.live }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ cell.baseStyle }}"></div>
+          <sc-if value="{{ cell.tint }}" hint-placeholder-val="{{ false }}"><div style="{{ cell.tintStyle }}"></div></sc-if>
+          <sc-for list="{{ cell.layers }}" as="layer" hint-placeholder-count="0"><div class="cw-cell" style="position:absolute;inset:2px;border-radius:6px;background:{{ layer }};opacity:.76;"></div></sc-for>
+          <sc-if value="{{ cell.hasValue }}" hint-placeholder-val="{{ false }}"><span style="position:relative;z-index:3;font:400 21px/1 'DM Mono',monospace;color:#ededed;">{{ cell.value }}</span></sc-if>
+          <sc-if value="{{ cell.lock }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:3px;right:4px;line-height:0;opacity:.65;z-index:5;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ededed" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span></sc-if>
+          <sc-if value="{{ cell.hasCorner }}" hint-placeholder-val="{{ false }}"><div style="{{ cell.cornerStyle }}"></div></sc-if>
+        </sc-if>
+      </div>
+    </sc-for>
+    <sc-for list="{{ overlayList }}" as="ov" hint-placeholder-count="0">
+      <div style="{{ ov.style }}">
+        <sc-if value="{{ ov.iconCheck }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:3px;bottom:1px;line-height:0;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ededed" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+        <sc-if value="{{ ov.iconDown }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:3px;bottom:1px;line-height:0;"><svg width="11" height="13" viewBox="0 0 24 24" fill="none" stroke="#ededed" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15"/><path d="m6 13 6 6 6-6"/></svg></span></sc-if>
+        <sc-if value="{{ ov.iconUp }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:3px;bottom:1px;line-height:0;"><svg width="11" height="13" viewBox="0 0 24 24" fill="none" stroke="#ededed" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V5"/><path d="m6 11 6-6 6 6"/></svg></span></sc-if>
+      </div>
+    </sc-for>
+    <sc-if value="{{ showNumbers }}" hint-placeholder-val="{{ true }}">
+      <sc-for list="{{ labelList }}" as="lab" hint-placeholder-count="5"><span style="{{ lab.style }}">{{ lab.text }}</span></sc-for>
+    </sc-if>
+    <sc-if value="{{ hasSpotlight }}" hint-placeholder-val="{{ false }}"><div style="{{ spotlightStyle }}"></div></sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:300},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;weave&quot;,&quot;solved&quot;],&quot;default&quot;:&quot;weave&quot;,&quot;tsType&quot;:&quot;'weave'|'solved'&quot;},&quot;cells&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Record&lt;string,{v?:string,tint?:string,lock?:boolean,layers?:string[]}&gt;&quot;},&quot;overlays&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;{left:number,top:number,width:number,height:number,bg?:string,ring:string,icon?:'check'|'up'|'down'}&gt;&quot;},&quot;spotlight&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;channelSlot&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showNumbers&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;solution&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string[]&quot;},&quot;cell&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:42,&quot;tsType&quot;:&quot;number&quot;},&quot;numbers&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;{n:number,row:number,col:number,dir:'across'|'down'}&gt;&quot;}}">
+class Component extends DCLogic {
+  // Canonical puzzle solution — standalone-preview default; the composition always
+  // feeds the engine's SOLUTION via the `solution` prop.
+  static SOLUTION = ['3A7BD5', 'C.2.4.', '9.B.5.', 'FA8C00', '6.1.9.', 'E.F.C.'];
+  static HAIR = 'rgba(255,255,255,.22)';
+
+  live(sol, r, c) {
+    const rows = sol.length, cols = sol[0] ? sol[0].length : 0;
+    return r >= 0 && r < rows && c >= 0 && c < cols && sol[r][c] !== '.';
+  }
+
+  weaveCell(sol, r, c) {
+    const openR = c % 2 === 0 && this.live(sol, r, c + 1);
+    const openL = c % 2 === 1 && this.live(sol, r, c - 1);
+    const openD = r % 2 === 0 && this.live(sol, r + 1, c);
+    const openU = r % 2 === 1 && this.live(sol, r - 1, c);
+    const inset = `${openU ? 0 : 2}px ${openR ? 0 : 2}px ${openD ? 0 : 2}px ${openL ? 0 : 2}px`;
+    const tl = (openU || openL) ? 0 : 6, tr = (openU || openR) ? 0 : 6, br = (openD || openR) ? 0 : 6, bl = (openD || openL) ? 0 : 6;
+    const radius = `${tl}px ${tr}px ${br}px ${bl}px`;
+    const sh = [];
+    const H = Component.HAIR;
+    if (!openU) sh.push(`inset 0 1px 0 ${H}`);
+    if (!openR) sh.push(`inset -1px 0 0 ${H}`);
+    if (!openD) sh.push(`inset 0 -1px 0 ${H}`);
+    if (!openL) sh.push(`inset 1px 0 0 ${H}`);
+    let corner = null;
+    if (openR && openD) corner = `position:absolute;right:0;bottom:0;width:2px;height:2px;border-top:1px solid ${H};border-left:1px solid ${H};pointer-events:none;`;
+    else if (openL && openD) corner = `position:absolute;left:0;bottom:0;width:2px;height:2px;border-top:1px solid ${H};border-right:1px solid ${H};pointer-events:none;`;
+    else if (openR && openU) corner = `position:absolute;right:0;top:0;width:2px;height:2px;border-bottom:1px solid ${H};border-left:1px solid ${H};pointer-events:none;`;
+    else if (openL && openU) corner = `position:absolute;left:0;top:0;width:2px;height:2px;border-bottom:1px solid ${H};border-right:1px solid ${H};pointer-events:none;`;
+    return { inset, radius, shadow: sh.join(','), corner };
+  }
+
+  // Clue-number labels, DERIVED from entry starts. Prefer an explicit `numbers` prop;
+  // otherwise read the global engine (window.HexPuzzle.ENTRIES); otherwise the static
+  // fallback for the canonical puzzle. across → left-side label, down → top label.
+  clueNumbers() {
+    if (Array.isArray(this.props.numbers)) return this.props.numbers;
+    const P = (typeof window !== 'undefined') ? window.HexPuzzle : null;
+    if (P && P.ENTRIES) {
+      const out = [];
+      P.ENTRIES.across.forEach(e => out.push({ n: e.num, row: e.row, col: e.col, dir: 'across' }));
+      P.ENTRIES.down.forEach(e => out.push({ n: e.num, row: e.row, col: e.col, dir: 'down' }));
+      return out;
+    }
+    return [
+      { n: 1, row: 0, col: 0, dir: 'across' }, { n: 4, row: 3, col: 0, dir: 'across' },
+      { n: 1, row: 0, col: 0, dir: 'down' }, { n: 2, row: 0, col: 2, dir: 'down' }, { n: 3, row: 0, col: 4, dir: 'down' },
+    ];
+  }
+
+  renderVals() {
+    const sol = this.props.solution || Component.SOLUTION;
+    const ROWS = sol.length, COLS = sol[0] ? sol[0].length : 0;
+    const CELL = this.props.cell ?? 42;       // natural px per cell (caps the board's max-width)
+    const variant = this.props.variant ?? 'weave';
+    const cells = this.props.cells || {};
+    const solved = variant === 'solved';
+
+    // Fluid geometry: the board fills its container up to its natural size, and every
+    // cell is positioned as a PERCENTAGE of the board — so it scales to any phone width
+    // with no JS, no magic pixels. CELL only sets the natural cap + aspect ratio.
+    const px = (c) => (c / COLS * 100);   // x %
+    const py = (r) => (r / ROWS * 100);   // y %
+    const cw = 100 / COLS, chh = 100 / ROWS;
+    const boardStyle = `position:relative;width:100%;max-width:${COLS * CELL}px;aspect-ratio:${COLS} / ${ROWS};margin:0 auto;`;
+
+    const cellList = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const key = r + ',' + c;
+        const isLive = this.live(sol, r, c);
+        const disp = cells[key] || {};
+        const wrapStyle = `position:absolute;left:${px(c)}%;top:${py(r)}%;width:${cw}%;height:${chh}%;display:flex;align-items:center;justify-content:center;`;
+        let baseStyle, corner = null, hasCorner = false;
+        if (!isLive) {
+          cellList.push({ key, live: false, wrapStyle, baseStyle: '', tint: false, tintStyle: '', layers: [], hasValue: false, value: '', lock: false, hasCorner: false, cornerStyle: '' });
+          continue;
+        }
+        // A cell tint is a contained rounded inset layer - NOT the woven base fill, so it
+        // never bleeds into the cell's weave connections.
+        let tintStyle = '';
+        if (solved) {
+          baseStyle = `position:absolute;inset:2px;border-radius:6px;background:${disp.tint || 'transparent'};box-shadow:inset 0 0 0 1px rgba(255,255,255,.20);`;
+        } else {
+          const g = this.weaveCell(sol, r, c);
+          baseStyle = `position:absolute;inset:${g.inset};border-radius:${g.radius};background:#0a0a0b;box-shadow:${g.shadow};`;
+          corner = g.corner; hasCorner = !!corner;
+          if (disp.tint) tintStyle = `position:absolute;inset:2px;border-radius:6px;background:${disp.tint};`;
+        }
+        const value = disp.v != null ? disp.v : '';
+        cellList.push({
+          key, live: true, wrapStyle, baseStyle,
+          tint: !!tintStyle, tintStyle,
+          layers: disp.layers || [],
+          hasValue: value !== '', value,
+          lock: !!disp.lock,
+          hasCorner, cornerStyle: corner || '',
+        });
+      }
+    }
+
+    // Spotlight ring: trace the spotlighted cell's OWN rendered box — same inset and
+    // corner radii the cell itself uses — so the ring lands exactly on the cell every
+    // time. (The wrapper is the full grid square; the woven cell is inset asymmetrically,
+    // so ringing the wrapper drifts up-left by the inset. Tracing the cell box is durable
+    // across any cell / weave config.) The 9999px shadow dims the rest of the screen.
+    let hasSpotlight = false, spotlightStyle = '';
+    const sp = this.props.spotlight;
+    if (sp != null && sp !== '') {
+      const [sr, sc] = String(sp).split(',').map(Number);
+      if (Number.isFinite(sr) && Number.isFinite(sc) && this.live(sol, sr, sc)) {
+        hasSpotlight = true;
+        let inT = 2, inR = 2, inB = 2, inL = 2, rad = '6px';
+        if (!solved) {
+          const g = this.weaveCell(sol, sr, sc);
+          const m = g.inset.match(/-?\d+(?:\.\d+)?/g);   // [top, right, bottom, left]
+          if (m && m.length === 4) { inT = +m[0]; inR = +m[1]; inB = +m[2]; inL = +m[3]; }
+          rad = g.radius;
+        }
+        spotlightStyle = `position:absolute;left:calc(${px(sc)}% + ${inL}px);top:calc(${py(sr)}% + ${inT}px);width:calc(${cw}% - ${inL + inR}px);height:calc(${chh}% - ${inT + inB}px);border-radius:${rad};box-shadow:0 0 0 1.5px #C0FFEE,0 0 16px 3px rgba(192,255,238,.5),0 0 0 9999px rgba(6,7,9,.78);pointer-events:none;z-index:40;`;
+      }
+    }
+
+    // channel-bar / highlight overlays (raw rects passed by parent, in px on the natural
+    // COLS*CELL board — converted to % so they scale with the fluid board).
+    const NW = COLS * CELL, NH = ROWS * CELL;
+    const overlayList = (this.props.overlays || []).map(ov => ({
+      style: `position:absolute;left:${ov.left / NW * 100}%;top:${ov.top / NH * 100}%;width:${ov.width / NW * 100}%;height:${ov.height / NH * 100}%;border-radius:7px;background:${ov.bg || 'transparent'};box-shadow:inset 0 0 0 1.4px ${ov.ring};z-index:3;`,
+      iconCheck: ov.icon === 'check',
+      iconUp: ov.icon === 'up',
+      iconDown: ov.icon === 'down',
+    }));
+
+    // R/G/B channel bars over the active word, DERIVED from cell coordinates (percentage),
+    // so they scale with the board. `channelSlot` = "row,col[,dir]" (dir = across|down).
+    const cs = this.props.channelSlot;
+    if (cs != null && cs !== '') {
+      const parts = String(cs).split(',');
+      const r0 = Number(parts[0]), c0 = Number(parts[1]), dir = (parts[2] || 'across').trim();
+      // Active-Slot channel-pair outlines = pure channel primaries (--c0ffee-r/-g/-b).
+      // The dots' replacement and the crossword's ONLY channel signifier (ADR-0007):
+      // identity colored, never softened; status/feedback stays achromatic.
+      const CH = [
+        { bg: 'rgba(255,0,0,.08)', ring: '#FF0000' },
+        { bg: 'rgba(0,255,0,.08)', ring: '#00FF00' },
+        { bg: 'rgba(0,0,255,.10)', ring: '#0000FF' },
+      ];
+      const PAD = 2, horiz = dir !== 'down';
+      if (Number.isFinite(r0) && Number.isFinite(c0)) {
+        for (let i = 0; i < 3; i++) {
+          const r = horiz ? r0 : r0 + i * 2;
+          const c = horiz ? c0 + i * 2 : c0;
+          const wPct = horiz ? (2 / COLS * 100) : cw;
+          const hPct = horiz ? chh : (2 / ROWS * 100);
+          overlayList.push({
+            style: `position:absolute;left:calc(${px(c)}% + ${PAD}px);top:calc(${py(r)}% + ${PAD}px);width:calc(${wPct}% - ${PAD * 2}px);height:calc(${hPct}% - ${PAD * 2}px);border-radius:7px;background:${CH[i].bg};box-shadow:inset 0 0 0 1.4px ${CH[i].ring};z-index:3;`,
+            iconCheck: false, iconUp: false, iconDown: false,
+          });
+        }
+      }
+    }
+
+    // clue-number labels: along-axis position is a percentage; the outside offset stays px.
+    const lbase = "position:absolute;font:400 10px/1 'DM Mono',monospace;color:rgba(255,255,255,.74);z-index:6;";
+    const labelList = this.clueNumbers().map(d => {
+      if (d.dir === 'down') {
+        return { text: String(d.n), style: lbase + `top:-15px;left:${px(d.col) + cw / 2}%;transform:translateX(-50%);` };
+      }
+      return { text: String(d.n), style: lbase + `left:-14px;top:${py(d.row) + chh / 2}%;transform:translateY(-50%);` };
+    });
+
+    return { boardStyle, cellList, overlayList, labelList, hasSpotlight, spotlightStyle, showNumbers: this.props.showNumbers ?? true };
+  }
+}
+</script>
+</body>
+</html>
