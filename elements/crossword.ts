@@ -32,6 +32,7 @@ import {
   crosswordReducer,
   cellKey,
   slotKey,
+  SLOT_LENGTH,
   type CrosswordState,
   type CrosswordAction,
   type CellState,
@@ -508,22 +509,22 @@ class C0ffeeCrossword extends HTMLElement {
     }).join('');
   }
 
-  // Clue-number labels: one per starting Cell, in the Cell's top-left corner — the
-  // standard crossword convention, and robust to multi-block layouts (e.g. lattice-6).
-  // A Cell that starts both an across and a down Slot shares one number. Neutral
-  // (contract #6). pointer-events:none so the label never eats a Cell tap.
+  // Clue-number labels on the board PERIPHERY (the handoff design): a down Slot's number
+  // sits centered ABOVE its starting column on the top edge; an across Slot's number sits
+  // centered to the LEFT of its starting row on the left edge — outside the cells, never
+  // inside the first Cell. One label per Slot, so a corner that starts both an across and
+  // a down shows its number on BOTH edges (position disambiguates which clue it names).
+  // Neutral (contract #6); pointer-events:none so a label never eats a Cell tap. The
+  // boardwrap padding reserves the room these negative offsets need.
   private _clueNumbers(layout: Layout, cols: number, rows: number): string {
-    const numberAt = new Map<string, number>();
-    for (const slot of layout.slots) {
-      const start = cellKey(slot.cells[0]);
-      // a shared start Cell keeps the lower number (the across/down pair share it)
-      const existing = numberAt.get(start);
-      if (existing === undefined || slot.number < existing) numberAt.set(start, slot.number);
-    }
-    return [...numberAt.entries()]
-      .map(([key, number]) => {
-        const [row, col] = key.split(',').map(Number);
-        return `<span class="num" style="left:calc(${pct(col, cols)} + 3px);top:calc(${pct(row, rows)} + 2px);">${number}</span>`;
+    return layout.slots
+      .map((slot) => {
+        const { row, col } = slot.cells[0];
+        const style =
+          slot.direction === 'down'
+            ? `top:-15px;left:calc(${pct(col, cols)} + ${50 / cols}%);transform:translateX(-50%);`
+            : `left:-14px;top:calc(${pct(row, rows)} + ${50 / rows}%);transform:translateY(-50%);`;
+        return `<span class="num" style="${style}">${slot.number}</span>`;
       })
       .join('');
   }
@@ -548,11 +549,12 @@ class C0ffeeCrossword extends HTMLElement {
       ? `background:#${this._target(ref)};`
       : 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);';
 
-    // The live mix: paint from the typed digits (implied trailing zeros for any not yet
-    // typed), or the empty "?" placeholder until the solver types the first digit.
+    // Your-mix: a Guess is a WHOLE six-digit color address, so the mix Swatch only
+    // resolves to a color once every Cell of the Slot is filled. Until then it stays the
+    // empty "?" placeholder (no half-typed color masquerading as a guess).
     const mix =
-      typed > 0
-        ? `<div class="stage mix filled" style="background:#${digits.map((d) => d ?? '0').join('')};"></div>`
+      typed === SLOT_LENGTH
+        ? `<div class="stage mix filled" style="background:#${digits.join('')};"></div>`
         : `<div class="stage mix"><span class="q">?</span></div>`;
 
     return `<div class="compare">
@@ -657,7 +659,7 @@ const STYLE = `
   .cell .caret { position:absolute; inset:2px; border-radius:6px; z-index:4; pointer-events:none;
                  box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
   .cell .lock { position:absolute; top:3px; right:4px; line-height:0; opacity:.65; z-index:5; }
-  .num { position:absolute; font:400 9px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74); z-index:6; pointer-events:none; }
+  .num { position:absolute; font:400 10px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74); z-index:6; pointer-events:none; }
 
   .dock { padding:16px; display:flex; flex-direction:column; gap:16px; margin:0 14px; }
 

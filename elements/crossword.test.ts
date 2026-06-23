@@ -57,12 +57,16 @@ test('<c0ffee-crossword> renders the Across/Down clue list, split by direction',
   expect(groups[1].querySelectorAll('.cluerow').length).toBe(down);
 });
 
-test('<c0ffee-crossword> labels each Slot start with a deduped clue number', () => {
-  // a Cell that starts both an across and a down Slot shows ONE number, so the label
-  // count is the number of distinct start Cells, not the Slot count
-  const starts = new Set(puzzle().layout.slots.map((s) => `${s.cells[0].row},${s.cells[0].col}`));
+test('<c0ffee-crossword> labels each Slot with a clue number on the board periphery', () => {
+  // the handoff design puts numbers OUTSIDE the cells: one per Slot (a corner that
+  // starts both an across and a down shows its number on both edges), positioned with a
+  // negative offset (down above the top edge, across left of the left edge)
+  const slots = puzzle().layout.slots;
   const el = mount();
-  expect(el.shadowRoot!.querySelectorAll('.num').length).toBe(starts.size);
+  const nums = [...el.shadowRoot!.querySelectorAll('.num')] as HTMLElement[];
+  expect(nums.length).toBe(slots.length); // one per Slot, NOT deduped to start Cells
+  // every label sits outside the board via a negative offset, never inside a Cell
+  expect(nums.every((n) => /(top|left):-\d/.test(n.getAttribute('style') ?? ''))).toBe(true);
 });
 
 test('<c0ffee-crossword> renders the comparison: the clue painted its target, an empty mix', () => {
@@ -201,17 +205,24 @@ test('<c0ffee-crossword> tapping a Cell that belongs only to another Slot select
   expect(el.shadowRoot!.querySelector('.clabel')!.textContent).toContain('Down');
 });
 
-test('<c0ffee-crossword> the your-mix swatch paints live as digits are typed', () => {
+test('<c0ffee-crossword> the your-mix swatch stays the "?" placeholder until ALL six Cells are filled', () => {
   const cells = firstSlot().cells.map(cellKey);
   const el = mount();
   // fresh: the empty "?" placeholder
   expect(el.shadowRoot!.querySelector('.stage.mix')!.textContent).toContain('?');
-  cells.forEach((k, i) => {
+  // type only the first five — a partial Guess is NOT a color, so still "?"
+  cells.slice(0, 5).forEach((k, i) => {
     tapCell(el, k);
-    pressKey(el, 'ABCDEF'[i]);
+    pressKey(el, 'ABCDE'[i]);
   });
+  expect(el.shadowRoot!.querySelector('.stage.mix')!.textContent).toContain('?');
+  expect(el.shadowRoot!.querySelector('.stage.mix.filled')).toBeNull();
+  // the sixth digit completes the address — now the mix paints
+  tapCell(el, cells[5]);
+  pressKey(el, 'F');
   const mix = el.shadowRoot!.querySelector('.stage.mix') as HTMLElement;
-  expect(mix.getAttribute('style')).toContain('#ABCDEF'); // the live mix color
+  expect(mix.classList.contains('filled')).toBe(true);
+  expect(mix.getAttribute('style')).toContain('#ABCDEF');
 });
 
 test('<c0ffee-crossword> checking an incomplete Slot warns and does not grade', () => {
