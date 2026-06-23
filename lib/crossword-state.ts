@@ -70,8 +70,13 @@ const CHANNELS: ReadonlyArray<readonly [keyof GuessResult, number, number]> = [
   ['blue', 4, 5],
 ];
 
-const cellKey = (cell: Cell): string => `${cell.row},${cell.col}`;
-const slotKey = (ref: SlotRef): string => `${ref.number}-${ref.direction}`;
+/** The canonical key encoders, the single source of truth for how a Cell and a
+ *  Slot serialize. `cells` is keyed by `cellKey` and `verdicts`/`solved` by
+ *  `slotKey`, so the shell MUST reuse these (not re-derive the format) or its
+ *  `state.cells[...]` lookups would silently drift from what the reducer indexes
+ *  by. Exported for exactly that reason (C0FFEE-65). */
+export const cellKey = (cell: Cell): string => `${cell.row},${cell.col}`;
+export const slotKey = (ref: SlotRef): string => `${ref.number}-${ref.direction}`;
 const isHexDigit = (ch: string): boolean => /^[0-9a-fA-F]$/.test(ch);
 
 // initCrossword(puzzle) -> the fresh state for a puzzle: every Cell empty and

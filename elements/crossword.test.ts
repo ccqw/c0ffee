@@ -4,9 +4,9 @@
 // Across/Down clue list, the clue-vs-your-mix comparison, and the active-Slot
 // channel-pair outlines. The real weave fidelity + ADR-0007 color contract get a
 // human browser eyeball (this slice is HITL); this covers the structural wiring.
-import { test, expect, beforeAll } from 'vitest';
+import { test, expect, beforeAll, vi } from 'vitest';
 import { generatePuzzle } from '../lib/crossword-generator.ts';
-import { initCrossword } from '../lib/crossword-state.ts';
+import { initCrossword, cellKey, slotKey } from '../lib/crossword-state.ts';
 import { gradeGuess } from '../lib/crossword-guess.ts';
 
 // Registering the custom element is a module side effect (customElements.define).
@@ -104,8 +104,8 @@ test('<c0ffee-crossword> hand-rolls one clue chip per Slot (opts out of ADR-0001
 // happy-dom can't paint, so these assert the action wiring + projected state, not
 // pixels (the design fidelity + toast motion get the browser eyeball).
 
-const cellKey = (c: { row: number; col: number }): string => `${c.row},${c.col}`;
-const slotKey = (s: { number: number; direction: string }): string => `${s.number}-${s.direction}`;
+// cellKey / slotKey are imported from the core — the same encoders the reducer indexes
+// by, so the test can never assert against a key shape that drifts from production.
 
 // The Slot the element opens on: lowest number, across before down (mirrors firstSlot).
 function firstSlot() {
@@ -220,6 +220,9 @@ test('<c0ffee-crossword> checking an incomplete Slot warns and does not grade', 
   pressCheck(el);
   expect(el.shadowRoot!.querySelector('.toast.warn')).toBeTruthy();
   expect(el.shadowRoot!.querySelectorAll('.chip').length).toBe(0); // no verdict yet
+  // the warn path must NOT dispatch commit: nothing locks (a render-side proxy like
+  // "no chips" would still pass a refactor that committed-then-suppressed-chips)
+  expect(lockedAt(el, firstSlot().cells.map(cellKey)[0])).toBe(false);
 });
 
 test('<c0ffee-crossword> a commit renders per-Channel verdict chips matching the grader, and a toast', () => {
@@ -269,4 +272,69 @@ test('<c0ffee-crossword> a full tap-driven solve locks every Cell (reaches the c
 
   // complete == every Cell locked (the reducer's honest completion test)
   expect(el.shadowRoot!.querySelectorAll('.lock').length).toBe(p.layout.cells.length);
+  // a fully-solved Slot has no editable Cell, so the cursor resolves to null (no caret)
+  expect(el.shadowRoot!.querySelector('.cell.cur')).toBeNull();
+});
+
+test('<c0ffee-crossword> a keypad press on the last Cell clamps the cursor there — no wrap, no auto-commit', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+  cells.forEach((k, i) => {
+    tapCell(el, k);
+    pressKey(el, 'ABCDEF'[i]);
+  });
+  expect(cursorKey(el)).toBe(cells[5]); // parked on the last Cell, not wrapped to cells[0]
+  expect(el.shadowRoot!.querySelectorAll('.chip').length).toBe(0); // reaching the end did NOT commit
+});
+
+test('<c0ffee-crossword> delete steps back OVER a locked crossing Cell to the previous editable one', () => {
+  const p = puzzle();
+  const xset = new Set(p.layout.crossings.map((x) => cellKey(x.cell)));
+  const across = firstSlot();
+  const aCells = across.cells.map(cellKey);
+  // an INTERIOR crossing (index >= 2) so a lock can sit between two editable Cells
+  const xIdx = aCells.findIndex((k, i) => i >= 2 && xset.has(k));
+  expect(xIdx).toBeGreaterThanOrEqual(2);
+  const xCell = aCells[xIdx];
+  const down = p.layout.slots.find(
+    (s) => s.direction === 'down' && s.cells.some((c) => cellKey(c) === xCell),
+  )!;
+
+  const el = mount();
+  // 1. solve the crossing down Slot so xCell locks
+  const dTarget = p.targets[slotKey(down)];
+  tapCell(el, down.cells.map(cellKey).find((k) => !xset.has(k))!);
+  down.cells.forEach((c, i) => {
+    const k = cellKey(c);
+    if (cursorKey(el) !== k) tapCell(el, k);
+    pressKey(el, dTarget[i]);
+  });
+  pressCheck(el);
+  expect(lockedAt(el, xCell)).toBe(true);
+
+  // 2. back on the across Slot, fill the Cell just before the lock, advancing PAST the lock
+  tapCell(el, aCells[0]); // re-selects the across Slot
+  tapCell(el, aCells[xIdx - 1]);
+  pressKey(el, '7'); // fills xIdx-1; cursor auto-advances over the locked xIdx to xIdx+1
+  expect(cursorKey(el)).toBe(aCells[xIdx + 1]);
+
+  // 3. delete from the empty cursor: it must step back OVER the lock, clearing xIdx-1
+  pressDelete(el);
+  expect(glyphAt(el, aCells[xIdx - 1])).toBeNull(); // the editable Cell before the lock cleared
+  expect(lockedAt(el, xCell)).toBe(true); // the lock was stepped over, never cleared
+  expect(cursorKey(el)).toBe(aCells[xIdx - 1]);
+});
+
+test('<c0ffee-crossword> a commit toast clears itself after its timeout', () => {
+  vi.useFakeTimers();
+  try {
+    const el = mount();
+    pressKey(el, 'A'); // one digit
+    pressCheck(el); // incomplete -> warn toast
+    expect(el.shadowRoot!.querySelector('.toast')).toBeTruthy();
+    vi.advanceTimersByTime(3000); // past TOAST_MS
+    expect(el.shadowRoot!.querySelector('.toast')).toBeNull(); // transient — it cleared
+  } finally {
+    vi.useRealTimers();
+  }
 });

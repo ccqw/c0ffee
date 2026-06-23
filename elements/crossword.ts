@@ -30,8 +30,11 @@ import { generatePuzzle } from '../lib/crossword-generator.ts';
 import {
   initCrossword,
   crosswordReducer,
+  cellKey,
+  slotKey,
   type CrosswordState,
   type CrosswordAction,
+  type CellState,
   type SlotRef,
 } from '../lib/crossword-state.ts';
 import type { GuessResult, ChannelVerdict } from '../lib/crossword-guess.ts';
@@ -95,12 +98,14 @@ const DELETE_SVG =
   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="m18 9-6 6M12 9l6 6"/></svg>';
 const CHECK_SVG =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-const WARN_SVG =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>';
-const WIN_SVG =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-const WRONG_SVG =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+// The commit toast's three kinds (contract #4: the one earned semantic color).
+type ToastKind = 'warn' | 'win' | 'wrong';
+// Icon per kind, table-driven like VERDICT_GLYPH (no nested ternary at the call site).
+const TOAST_GLYPH: Record<ToastKind, string> = {
+  warn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>',
+  win: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  wrong: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+};
 
 // The hex keypad's keys in render order — 0-9 then A-F (the A-F row accent-tinted
 // like the prototype, since they're the "color" digits). delete + Check live below.
@@ -152,8 +157,8 @@ function firstSlot(layout: Layout): SlotRef {
   return { number: slot.number, direction: slot.direction };
 }
 
-const cellKey = (cell: Cell): string => `${cell.row},${cell.col}`;
-const slotKey = (ref: SlotRef): string => `${ref.number}-${ref.direction}`;
+// cellKey / slotKey are imported from the core (crossword-state.ts) so the shell's
+// `state.cells[...]` lookups can never drift from the keys the reducer indexes by.
 // A grid position as a percentage of an n-unit axis — the board's one geometry primitive,
 // shared by every percentage-positioned overlay (cells, pair outlines, clue numbers).
 const pct = (n: number, of: number): string => `${(n / of) * 100}%`;
@@ -172,7 +177,7 @@ class C0ffeeCrossword extends HTMLElement {
   // selected Slot has no editable Cell (e.g. fully locked).
   private cursorKey: string | null = null;
   // The transient commit toast (contract #4); null when none is showing.
-  private toast: { kind: 'warn' | 'win' | 'wrong'; text: string } | null = null;
+  private toast: { kind: ToastKind; text: string } | null = null;
   private toastTimer: number | null = null;
   // One delegated click listener on the shadow root drives every control. The root
   // persists across innerHTML re-renders, so the listener survives them — no per-render
@@ -240,8 +245,8 @@ class C0ffeeCrossword extends HTMLElement {
   private _delete(): void {
     const slot = this._selectedSlot();
     if (!slot || this.cursorKey === null) return;
-    const cur = this.state.cells[this.cursorKey];
-    if (cur && !cur.locked && cur.digit !== null) {
+    const cur = this._cellState(this.cursorKey);
+    if (!cur.locked && cur.digit !== null) {
       this._dispatch({ type: 'clearDigit', cell: this._cellOf(this.cursorKey) });
     } else {
       const prev = this._prevEditable(slot, this._indexInSlot(slot, this.cursorKey));
@@ -300,15 +305,17 @@ class C0ffeeCrossword extends HTMLElement {
   private _check(): void {
     const slot = this._selectedSlot();
     if (!slot) return;
-    const digits = slot.cells.map((c) => this.state.cells[cellKey(c)].digit);
+    const digits = slot.cells.map((c) => this._cellState(cellKey(c)).digit);
     if (digits.some((d) => d === null)) {
       this._showToast('warn', 'Fill in all six digits before checking.');
       return;
     }
     this._dispatch({ type: 'commit' });
-    const result = this.state.verdicts[slotKey(slot)];
-    const allCorrect =
-      !!result && result.red === 'correct' && result.green === 'correct' && result.blue === 'correct';
+    // "Every Channel matched" is exactly state.solved for this Slot (a Channel is solved
+    // iff its commit graded correct) — consume the core's derived truth rather than
+    // re-interpreting the verdict strings in the shell (ADR-0003).
+    const solved = this.state.solved[slotKey(slot)];
+    const allCorrect = solved.red && solved.green && solved.blue;
     // A correct commit locks the Slot's Cells; move the cursor to whatever stays
     // editable (null once the Slot is fully solved).
     this.cursorKey = this._firstCursor();
@@ -319,8 +326,23 @@ class C0ffeeCrossword extends HTMLElement {
 
   // --- cursor helpers ------------------------------------------------------
 
+  // The play state at a "row,col" key, fail-loud on a miss (mirrors the core's cellAt
+  // and the face's _target/_selectedSlot). Every read of state.cells routes through
+  // here, so a key-shape drift surfaces as a greppable domain error rather than a bare
+  // TypeError deep in a handler — the face fails loud uniformly, not in hand-picked spots.
+  private _cellState(key: string): CellState {
+    const cs = this.state.cells[key];
+    if (!cs) throw new Error(`c0ffee-crossword: no Cell state for ${key} in rendered state`);
+    return cs;
+  }
+
+  // The index of `key` within `slot`, fail-loud when absent. Callers only pass a cursor
+  // key that is, by construction, in the active Slot, so a -1 here means a drift — caught
+  // loudly rather than silently restarting a scan from index 0.
   private _indexInSlot(slot: Slot, key: string): number {
-    return slot.cells.findIndex((c) => cellKey(c) === key);
+    const i = slot.cells.findIndex((c) => cellKey(c) === key);
+    if (i < 0) throw new Error(`c0ffee-crossword: cursor ${key} not in Slot ${slotKey(slot)}`);
+    return i;
   }
 
   // The first editable Cell of the selected Slot: the first non-locked empty one, else
@@ -329,18 +351,18 @@ class C0ffeeCrossword extends HTMLElement {
     const slot = this._selectedSlot();
     if (!slot) return null;
     const empty = slot.cells.find((c) => {
-      const cs = this.state.cells[cellKey(c)];
+      const cs = this._cellState(cellKey(c));
       return !cs.locked && cs.digit === null;
     });
     if (empty) return cellKey(empty);
-    const free = slot.cells.find((c) => !this.state.cells[cellKey(c)].locked);
+    const free = slot.cells.find((c) => !this._cellState(cellKey(c)).locked);
     return free ? cellKey(free) : null;
   }
 
   private _nextEditable(slot: Slot, fromIndex: number): string | null {
     for (let i = fromIndex + 1; i < slot.cells.length; i++) {
       const key = cellKey(slot.cells[i]);
-      if (!this.state.cells[key].locked) return key;
+      if (!this._cellState(key).locked) return key;
     }
     return null; // clamp at the last editable Cell, no wrap
   }
@@ -348,7 +370,7 @@ class C0ffeeCrossword extends HTMLElement {
   private _prevEditable(slot: Slot, fromIndex: number): string | null {
     for (let i = fromIndex - 1; i >= 0; i--) {
       const key = cellKey(slot.cells[i]);
-      if (!this.state.cells[key].locked) return key;
+      if (!this._cellState(key).locked) return key;
     }
     return null;
   }
@@ -362,7 +384,7 @@ class C0ffeeCrossword extends HTMLElement {
 
   // --- toast ---------------------------------------------------------------
 
-  private _showToast(kind: 'warn' | 'win' | 'wrong', text: string): void {
+  private _showToast(kind: ToastKind, text: string): void {
     this._clearToastTimer();
     this.toast = { kind, text };
     this._render();
@@ -443,7 +465,7 @@ class C0ffeeCrossword extends HTMLElement {
       .map((cell) => {
         const key = cellKey(cell);
         const g = weaveCell(live, cell.row, cell.col);
-        const st = this.state.cells[key];
+        const st = this._cellState(key);
         const isCursor = key === this.cursorKey;
         const wrap = `position:absolute;left:${pct(cell.col, cols)};top:${pct(cell.row, rows)};width:${pct(1, cols)};height:${pct(1, rows)};`;
         const base = `position:absolute;inset:${g.inset};border-radius:${g.radius};background:var(--c0ffee-bg, #0a0a0b);box-shadow:${g.shadow};`;
@@ -487,7 +509,7 @@ class C0ffeeCrossword extends HTMLElement {
   }
 
   // Clue-number labels: one per starting Cell, in the Cell's top-left corner — the
-  // standard crossword convention, and robust to the ladder shapes' multiple blocks.
+  // standard crossword convention, and robust to multi-block layouts (e.g. lattice-6).
   // A Cell that starts both an across and a down Slot shares one number. Neutral
   // (contract #6). pointer-events:none so the label never eats a Cell tap.
   private _clueNumbers(layout: Layout, cols: number, rows: number): string {
@@ -515,7 +537,7 @@ class C0ffeeCrossword extends HTMLElement {
     const ref = slot ? { number: slot.number, direction: slot.direction } : null;
 
     const label = ref ? slotLabel(ref) : '';
-    const digits = slot ? slot.cells.map((c) => this.state.cells[cellKey(c)].digit) : [];
+    const digits = slot ? slot.cells.map((c) => this._cellState(cellKey(c)).digit) : [];
     const typed = digits.filter((d) => d !== null).length;
     const verdict = ref ? this.state.verdicts[slotKey(ref)] : null;
     const meta = verdict
@@ -584,9 +606,7 @@ class C0ffeeCrossword extends HTMLElement {
 
   private _toastEl(): string {
     if (!this.toast) return '';
-    const icon =
-      this.toast.kind === 'warn' ? WARN_SVG : this.toast.kind === 'win' ? WIN_SVG : WRONG_SVG;
-    return `<div class="toastwrap"><span class="toast ${this.toast.kind}">${icon}${this.toast.text}</span></div>`;
+    return `<div class="toastwrap"><span class="toast ${this.toast.kind}">${TOAST_GLYPH[this.toast.kind]}${this.toast.text}</span></div>`;
   }
 
   // The Across/Down clue list: one hand-rolled chip per Slot — its number, direction,
@@ -641,7 +661,8 @@ const STYLE = `
 
   .dock { padding:16px; display:flex; flex-direction:column; gap:16px; margin:0 14px; }
 
-  /* the comparison: clue + live mix, the only saturated color besides the active outline */
+  /* the comparison: clue + live mix — the literal Color values (contract #1); the active
+     outline (#2) and the transient commit toast (#4) are the other saturated surfaces */
   .compare { display:flex; flex-direction:column; gap:11px; }
   .cmeta { display:flex; align-items:center; gap:10px; min-height:18px; }
   .clabel { font:400 14px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); white-space:nowrap; }
