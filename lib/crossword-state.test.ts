@@ -76,6 +76,53 @@ describe('select + setDigit', () => {
   });
 });
 
+describe('clearDigit', () => {
+  test('clears an unlocked Cell back to empty', () => {
+    let s = crosswordReducer(initCrossword(PUZZLE), {
+      type: 'setDigit',
+      cell: { row: 0, col: 0 },
+      digit: 'A',
+    });
+    expect(s.cells['0,0'].digit).toBe('A');
+    s = crosswordReducer(s, { type: 'clearDigit', cell: { row: 0, col: 0 } });
+    expect(s.cells['0,0']).toEqual({ digit: null, locked: false });
+  });
+
+  test('clearing an already-empty Cell is a harmless no-op (still empty)', () => {
+    const s = initCrossword(PUZZLE);
+    const after = crosswordReducer(s, { type: 'clearDigit', cell: { row: 0, col: 0 } });
+    expect(after.cells['0,0']).toEqual({ digit: null, locked: false });
+  });
+
+  test('refuses to clear a locked Cell — it holds its correct digit', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = commit(fill(s, ONE_ACROSS, '3A0000')); // red 3A correct -> (0,0),(0,1) lock
+    const locked = s.cells['0,0'];
+    expect(locked.locked).toBe(true);
+    const after = crosswordReducer(s, { type: 'clearDigit', cell: { row: 0, col: 0 } });
+    expect(after.cells['0,0']).toEqual(locked); // unchanged, still locked '3'
+  });
+
+  test('re-finalizes: clearing never un-completes a puzzle (completion is read off locks, not digits)', () => {
+    // Solve everything, then clear a (now locked) Cell: clearDigit no-ops on locks, so
+    // complete stays true — the proof that finalize reads locks, not the digit touched.
+    let s = initCrossword(PUZZLE);
+    s = commit(fill(select(s, ONE_ACROSS), ONE_ACROSS, '3A7BD5'));
+    s = commit(fill(select(s, ONE_DOWN), ONE_DOWN, '3C9F6E'));
+    s = commit(fill(select(s, TWO_ACROSS), TWO_ACROSS, 'FA8C00'));
+    expect(s.complete).toBe(true);
+    const after = crosswordReducer(s, { type: 'clearDigit', cell: { row: 0, col: 0 } });
+    expect(after.complete).toBe(true); // locked Cell untouched; completion holds
+  });
+
+  test('clearDigit rejects a Cell that is not in the grid (fail-loud, like setDigit)', () => {
+    const s = initCrossword(PUZZLE);
+    expect(() =>
+      crosswordReducer(s, { type: 'clearDigit', cell: { row: 9, col: 9 } }),
+    ).toThrow();
+  });
+});
+
 describe('commit: per-Channel grading + locking', () => {
   test('a correct red Channel locks both its Cells; wrong Channels do not lock', () => {
     let s = select(initCrossword(PUZZLE), ONE_ACROSS);

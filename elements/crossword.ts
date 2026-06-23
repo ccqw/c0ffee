@@ -1,30 +1,43 @@
 // <c0ffee-crossword> — the Hex Color crossword's face (imperative shell, ADR-0003).
 //
-// Slice 1 of 4 (C0FFEE-64): the element skeleton + a READ-ONLY render of a freshly
-// generated puzzle — the woven board, the Across/Down clue list, and the clue-vs-
-// your-mix comparison. There is no input yet (the board is a readout); later slices
-// wire the keypad/cursor/clearDigit (C0FFEE-65), navigation + keyboard (C0FFEE-66),
-// and the chrome/overlays/timer (C0FFEE-67) onto this same shadow tree.
+// Slice 1 (C0FFEE-64) shipped the read-only render. Slice 2 of 4 (C0FFEE-65)
+// makes it PLAYABLE by touch/pointer: a face-owned within-slot cursor, the hex
+// keypad (0-9 / A-F / delete / Check), tap-to-position + crossing-select +
+// re-tap direction toggle, a live your-mix Swatch, per-Channel verdict chips,
+// and the commit toast. Physical-keyboard entry + clue-nav (C0FFEE-66) and the
+// chrome/overlays/timer (C0FFEE-67) layer onto this same shadow tree later.
 //
-// The functional core is shipped and untouched: generatePuzzle (C0FFEE-60) makes a
-// crossing-consistent Puzzle; initCrossword/crosswordReducer (C0FFEE-61) hold the
-// CrosswordState this projects. The shell only translates state -> DOM (here) and,
-// later, DOM events -> the reducer's actions.
+// The functional core is shipped and (almost) untouched: generatePuzzle
+// (C0FFEE-60) makes a crossing-consistent Puzzle; initCrossword/crosswordReducer
+// (C0FFEE-61) hold the CrosswordState this projects. The one core addition this
+// slice folds in is the reducer's fifth action, clearDigit (the editing affordance
+// the keypad's delete needs); everything else is shell. The shell translates state
+// -> DOM (here) and DOM events -> the reducer's five actions.
 //
 // It holds many Color values, so it deliberately opts OUT of ADR-0001 URL reflection:
 // no `colorchange`, no hash, and it does NOT mount <c0ffee-swatch> (whose click-to-load
 // would hijack the hash with a clue color). The clue chips are hand-rolled boxes.
 //
-// Styling obeys the ADR-0007 color contract: the only saturated color on screen is the
-// literal clue/mix Swatch (contract #1) and the active-Slot channel-pair outlines in
-// pure --c0ffee-r/-g/-b (contract #2). Everything else is neutral, muted by opacity off
-// --c0ffee-fg, never grey tokens — and consumes tokens.css across the shadow boundary.
+// Styling obeys the ADR-0007 color contract: saturated color appears only on the
+// literal clue/mix Swatch (contract #1), the active-Slot channel-pair outlines in
+// pure --c0ffee-r/-g/-b (contract #2), and the transient commit toast (contract #4).
+// Verdict glyphs stay achromatic (contract #3); chip identity letters take MUTED
+// channel tints (legible at 11px — pure #0000FF text is invisible on near-black).
+// Everything else is neutral, muted by opacity off --c0ffee-fg, never grey tokens —
+// and consumes tokens.css across the shadow boundary.
 
 import { generatePuzzle } from '../lib/crossword-generator.ts';
-import { initCrossword, crosswordReducer, type CrosswordState, type SlotRef } from '../lib/crossword-state.ts';
+import {
+  initCrossword,
+  crosswordReducer,
+  type CrosswordState,
+  type CrosswordAction,
+  type SlotRef,
+} from '../lib/crossword-state.ts';
+import type { GuessResult, ChannelVerdict } from '../lib/crossword-guess.ts';
 import type { Cell, Layout, Slot } from '../lib/crossword-layout.ts';
 
-// Slice 1 opens on a fixed shape + seed, so the puzzle is deterministic: the smoke
+// Slice 1 opened on a fixed shape + seed, so the puzzle is deterministic: the smoke
 // test asserts stable counts and the design eyeball reviews the same board every load.
 // New-puzzle / the seeded Puzzle link (C0FFEE-67 / C0FFEE-57) are the future homes for
 // a varying seed; this is the only place one is chosen for now.
@@ -35,6 +48,9 @@ const DEFAULT_SEED = 1;
 // aspect ratio. Every Cell is then positioned as a percentage, so the board is fluid
 // and scales with its container (the prototype's geometry).
 const CELL_PX = 42;
+
+// How long a commit toast stays before it fades (transient teaching beat, contract #4).
+const TOAST_MS = 2600;
 
 // The grid weave hairline (ADR-0007 contract #6: neutral chrome off --c0ffee-fg).
 const HAIR = 'rgba(255,255,255,.22)';
@@ -48,13 +64,47 @@ const PAIRS: ReadonlyArray<{ ring: string; bg: string }> = [
   { ring: 'var(--c0ffee-b, #0000FF)', bg: 'rgba(0,0,255,.10)' },
 ];
 
+// Muted channel-identity tints for the verdict chip letters (handoff §3 / open-Q3:
+// legible at 11px where the pure primary would not be). The pure primary stays on the
+// grid pair-outline, the structural signifier.
+const CHIP_TINT: Record<'red' | 'green' | 'blue', string> = {
+  red: '#ff6a6a',
+  green: '#46e87f',
+  blue: '#7aa6ff',
+};
+
 // A neutral padlock (lifted from the prototype): top-right, stroke off --c0ffee-fg,
-// muted by opacity (contract #6 — status chrome stays achromatic). No Cell is locked
-// in slice 1's read-only render, so this is dormant until a commit lands (C0FFEE-65).
+// muted by opacity (contract #6 — status chrome stays achromatic).
 const LOCK_SVG =
   '<span class="lock"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" ' +
   'stroke="var(--c0ffee-fg, #ededed)" stroke-width="2.4">' +
   '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>';
+
+// Achromatic verdict glyphs (contract #3). 'correct' -> check; 'higher' -> aim-up
+// (the target is above the guess); 'lower' -> aim-down. Stroke off --c0ffee-fg.
+const VERDICT_GLYPH: Record<ChannelVerdict, string> = {
+  correct:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  higher:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  lower:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>',
+};
+
+const DELETE_SVG =
+  '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="m18 9-6 6M12 9l6 6"/></svg>';
+const CHECK_SVG =
+  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const WARN_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>';
+const WIN_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const WRONG_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+
+// The hex keypad's keys in render order — 0-9 then A-F (the A-F row accent-tinted
+// like the prototype, since they're the "color" digits). delete + Check live below.
+const KEYS = '0123456789ABCDEF'.split('');
 
 // weaveCell — the basket-weave board geometry, lifted VERBATIM from the design
 // prototype (docs/design/crossword-face/prototype/CW-HexBoard.dc.html, the
@@ -92,10 +142,7 @@ function weaveCell(live: (r: number, c: number) => boolean, r: number, c: number
   return { inset, radius, shadow: sh.join(','), corner };
 }
 
-// The lowest-numbered Slot, across before down — the Slot slice 1 opens on, so the
-// read-only render exercises BOTH saturated elements of the ADR-0007 contract for the
-// design eyeball: the clue Swatch (contract #1) and the active-pair outlines (#2).
-// Selecting a Slot for display is a read-surface concern, not the input this slice omits.
+// The lowest-numbered Slot, across before down — the Slot the element opens on.
 function firstSlot(layout: Layout): SlotRef {
   // A generated layout always has at least one Slot (generatePuzzle would have thrown
   // otherwise), so [0] is safe.
@@ -110,23 +157,238 @@ const slotKey = (ref: SlotRef): string => `${ref.number}-${ref.direction}`;
 // A grid position as a percentage of an n-unit axis — the board's one geometry primitive,
 // shared by every percentage-positioned overlay (cells, pair outlines, clue numbers).
 const pct = (n: number, of: number): string => `${(n / of) * 100}%`;
+// "1-Across" / "3-Down" — the human label for a SlotRef (clue-vs-mix header).
+const slotLabel = (ref: SlotRef): string =>
+  `${ref.number}-${ref.direction.charAt(0).toUpperCase()}${ref.direction.slice(1)}`;
 
 class C0ffeeCrossword extends HTMLElement {
   // attachShadow returns the root, so we never juggle a nullable shadowRoot.
   private root: ShadowRoot = this.attachShadow({ mode: 'open' });
   // The one game state the whole face projects from (ADR-0003 functional core).
   private state!: CrosswordState;
+  // The within-slot cursor — the active editing Cell, keyed "row,col". CrosswordState
+  // has no notion of an active Cell (setDigit takes an explicit cell and does not
+  // advance), so the cursor is the FACE's job (C0FFEE-62 decision 2). null when the
+  // selected Slot has no editable Cell (e.g. fully locked).
+  private cursorKey: string | null = null;
+  // The transient commit toast (contract #4); null when none is showing.
+  private toast: { kind: 'warn' | 'win' | 'wrong'; text: string } | null = null;
+  private toastTimer: number | null = null;
+  // One delegated click listener on the shadow root drives every control. The root
+  // persists across innerHTML re-renders, so the listener survives them — no per-render
+  // re-binding, no leaks (dropped in disconnectedCallback).
+  private onClick = (e: Event): void => this._handleClick(e);
 
   connectedCallback(): void {
     const puzzle = generatePuzzle(DEFAULT_SHAPE, DEFAULT_SEED);
-    // Open on the first Slot via the real reducer (not a hand-built state), so the
-    // read-only render shows an active Slot's outline + clue Swatch from day one.
+    // Open on the first Slot via the real reducer (not a hand-built state).
     this.state = crosswordReducer(initCrossword(puzzle), {
       type: 'select',
       slot: firstSlot(puzzle.layout),
     });
+    this.cursorKey = this._firstCursor();
+    this.root.addEventListener('click', this.onClick);
     this._render();
   }
+
+  disconnectedCallback(): void {
+    this.root.removeEventListener('click', this.onClick);
+    this._clearToastTimer();
+  }
+
+  // --- event routing -------------------------------------------------------
+
+  // One handler, three control families, routed by data-attribute. Cell taps,
+  // keypad digits, and the delete/Check actions all bubble to the root.
+  private _handleClick(e: Event): void {
+    const target = e.target as Element | null;
+    if (!target) return;
+    const keyEl = target.closest('[data-key]');
+    if (keyEl) return this._press((keyEl as HTMLElement).dataset.key as string);
+    const actEl = target.closest('[data-act]');
+    if (actEl) {
+      const act = (actEl as HTMLElement).dataset.act;
+      if (act === 'delete') return this._delete();
+      if (act === 'check') return this._check();
+      return;
+    }
+    const cellEl = target.closest('[data-cell]');
+    if (cellEl) return this._tap((cellEl as HTMLElement).dataset.cell as string);
+  }
+
+  private _dispatch(action: CrosswordAction): void {
+    this.state = crosswordReducer(this.state, action);
+  }
+
+  // A keypad digit -> setDigit at the cursor, then auto-advance to the next editable
+  // (non-locked) Cell, clamping at the last (no wrap; reaching the end does not
+  // auto-commit — Check stays explicit). The reducer ignores a locked Cell, so a
+  // cursor parked on one is a safe no-op.
+  private _press(digit: string): void {
+    const slot = this._selectedSlot();
+    if (!slot || this.cursorKey === null) return;
+    const cell = this._cellOf(this.cursorKey);
+    this._dispatch({ type: 'setDigit', cell, digit });
+    this.cursorKey = this._nextEditable(slot, this._indexInSlot(slot, this.cursorKey)) ?? this.cursorKey;
+    this._dismissToast();
+    this._render();
+  }
+
+  // Delete = backspace: a filled cursor Cell clears in place (retype there); an empty
+  // cursor Cell steps back over locked Cells to the previous editable one and clears
+  // it. Locks are stepped over, never cleared (C0FFEE-62 decision 3).
+  private _delete(): void {
+    const slot = this._selectedSlot();
+    if (!slot || this.cursorKey === null) return;
+    const cur = this.state.cells[this.cursorKey];
+    if (cur && !cur.locked && cur.digit !== null) {
+      this._dispatch({ type: 'clearDigit', cell: this._cellOf(this.cursorKey) });
+    } else {
+      const prev = this._prevEditable(slot, this._indexInSlot(slot, this.cursorKey));
+      if (prev === null) return; // at the start, nothing behind to clear
+      this.cursorKey = prev;
+      this._dispatch({ type: 'clearDigit', cell: this._cellOf(prev) });
+    }
+    this._dismissToast();
+    this._render();
+  }
+
+  // A Cell tap. Three outcomes (C0FFEE-62 decision 2):
+  //  - re-tap the active crossing Cell already under the cursor -> toggle direction
+  //    (select the perpendicular Slot, keep the cursor on the shared Cell);
+  //  - tap any other Cell of the active Slot -> move the cursor there;
+  //  - tap a Cell that belongs only to another Slot -> select that Slot (cursor inits
+  //    to its first editable Cell).
+  private _tap(key: string): void {
+    const active = this._selectedSlot();
+    const slotsHere = this.state.puzzle.layout.slots.filter((s) =>
+      s.cells.some((c) => cellKey(c) === key),
+    );
+    const activeHasCell = !!active && active.cells.some((c) => cellKey(c) === key);
+
+    if (active && activeHasCell) {
+      if (key === this.cursorKey && slotsHere.length > 1) {
+        const perp = slotsHere.find((s) => s.direction !== active.direction);
+        if (perp) {
+          this._dispatch({ type: 'select', slot: { number: perp.number, direction: perp.direction } });
+          // cursor kept on the shared Cell (it belongs to the perpendicular Slot too)
+          this._dismissToast();
+          this._render();
+          return;
+        }
+      }
+      this.cursorKey = key; // move within the active Slot
+      this._dismissToast();
+      this._render();
+      return;
+    }
+
+    // Selecting a new Slot from a Cell outside the active one. A crossing Cell belongs
+    // to one across + one down; with nothing relevant active, prefer the across.
+    const pick = slotsHere.find((s) => s.direction === 'across') ?? slotsHere[0];
+    if (!pick) return; // no live Slot here (impossible for a real Cell) — ignore
+    this._dispatch({ type: 'select', slot: { number: pick.number, direction: pick.direction } });
+    this.cursorKey = this._firstCursor();
+    this._dismissToast();
+    this._render();
+  }
+
+  // Check -> commit. An incomplete Slot can't be graded, so it warns instead of
+  // dispatching (the reducer would no-op silently). A graded Slot shows win when every
+  // Channel matched (and a fuller message once the whole puzzle is complete) else
+  // wrong; the per-Channel verdict chips carry the detail.
+  private _check(): void {
+    const slot = this._selectedSlot();
+    if (!slot) return;
+    const digits = slot.cells.map((c) => this.state.cells[cellKey(c)].digit);
+    if (digits.some((d) => d === null)) {
+      this._showToast('warn', 'Fill in all six digits before checking.');
+      return;
+    }
+    this._dispatch({ type: 'commit' });
+    const result = this.state.verdicts[slotKey(slot)];
+    const allCorrect =
+      !!result && result.red === 'correct' && result.green === 'correct' && result.blue === 'correct';
+    // A correct commit locks the Slot's Cells; move the cursor to whatever stays
+    // editable (null once the Slot is fully solved).
+    this.cursorKey = this._firstCursor();
+    if (this.state.complete) this._showToast('win', 'Solved — every Channel matches.');
+    else if (allCorrect) this._showToast('win', 'Every Channel matches — locked in.');
+    else this._showToast('wrong', 'Not quite — read the channel hints.');
+  }
+
+  // --- cursor helpers ------------------------------------------------------
+
+  private _indexInSlot(slot: Slot, key: string): number {
+    return slot.cells.findIndex((c) => cellKey(c) === key);
+  }
+
+  // The first editable Cell of the selected Slot: the first non-locked empty one, else
+  // the first non-locked one, else null (the Slot is fully locked).
+  private _firstCursor(): string | null {
+    const slot = this._selectedSlot();
+    if (!slot) return null;
+    const empty = slot.cells.find((c) => {
+      const cs = this.state.cells[cellKey(c)];
+      return !cs.locked && cs.digit === null;
+    });
+    if (empty) return cellKey(empty);
+    const free = slot.cells.find((c) => !this.state.cells[cellKey(c)].locked);
+    return free ? cellKey(free) : null;
+  }
+
+  private _nextEditable(slot: Slot, fromIndex: number): string | null {
+    for (let i = fromIndex + 1; i < slot.cells.length; i++) {
+      const key = cellKey(slot.cells[i]);
+      if (!this.state.cells[key].locked) return key;
+    }
+    return null; // clamp at the last editable Cell, no wrap
+  }
+
+  private _prevEditable(slot: Slot, fromIndex: number): string | null {
+    for (let i = fromIndex - 1; i >= 0; i--) {
+      const key = cellKey(slot.cells[i]);
+      if (!this.state.cells[key].locked) return key;
+    }
+    return null;
+  }
+
+  // The Cell at a "row,col" key, as a {row,col}. Used only for keys the cursor already
+  // sits on (so the Cell is in the grid); parse is the inverse of cellKey.
+  private _cellOf(key: string): Cell {
+    const [row, col] = key.split(',').map(Number);
+    return { row, col };
+  }
+
+  // --- toast ---------------------------------------------------------------
+
+  private _showToast(kind: 'warn' | 'win' | 'wrong', text: string): void {
+    this._clearToastTimer();
+    this.toast = { kind, text };
+    this._render();
+    this.toastTimer = window.setTimeout(() => {
+      this.toast = null;
+      this.toastTimer = null;
+      this._render();
+    }, TOAST_MS);
+  }
+
+  // Drop the toast immediately (the next input supersedes it) without re-rendering —
+  // the caller renders. A no-op when nothing is showing.
+  private _dismissToast(): void {
+    if (!this.toast) return;
+    this._clearToastTimer();
+    this.toast = null;
+  }
+
+  private _clearToastTimer(): void {
+    if (this.toastTimer !== null) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+  }
+
+  // --- render --------------------------------------------------------------
 
   private _render(): void {
     const { layout } = this.state.puzzle;
@@ -136,6 +398,7 @@ class C0ffeeCrossword extends HTMLElement {
         <div class="boardwrap">${this._board(layout)}</div>
         <section class="dock panel">
           ${this._compare()}
+          ${this._inputDock()}
           ${this._clueList(layout)}
         </section>
       </div>`;
@@ -145,7 +408,7 @@ class C0ffeeCrossword extends HTMLElement {
   // A non-null selection absent from the layout is impossible — the reducer's `select`
   // validates against this same layout and throws otherwise — so it fails loud here
   // rather than silently dropping the active-Slot outline.
-  private selectedSlot(): Slot | null {
+  private _selectedSlot(): Slot | null {
     const sel = this.state.selected;
     if (!sel) return null;
     const slot = this.state.puzzle.layout.slots.find(
@@ -168,7 +431,8 @@ class C0ffeeCrossword extends HTMLElement {
 
   // The woven board: walk Layout.cells (row-major), position each by percentage of an
   // aspect-locked square, and dress it with the lifted weave geometry. Lays the active
-  // Slot's channel-pair outlines and the clue-number labels over the top.
+  // Slot's channel-pair outlines and the clue-number labels over the top. Each Cell is a
+  // tap target (data-cell); the cursor Cell carries an accent caret.
   private _board(layout: Layout): string {
     const cols = Math.max(...layout.cells.map((c) => c.col)) + 1;
     const rows = Math.max(...layout.cells.map((c) => c.row)) + 1;
@@ -177,13 +441,16 @@ class C0ffeeCrossword extends HTMLElement {
 
     const cells = layout.cells
       .map((cell) => {
+        const key = cellKey(cell);
         const g = weaveCell(live, cell.row, cell.col);
-        const st = this.state.cells[cellKey(cell)];
+        const st = this.state.cells[key];
+        const isCursor = key === this.cursorKey;
         const wrap = `position:absolute;left:${pct(cell.col, cols)};top:${pct(cell.row, rows)};width:${pct(1, cols)};height:${pct(1, rows)};`;
         const base = `position:absolute;inset:${g.inset};border-radius:${g.radius};background:var(--c0ffee-bg, #0a0a0b);box-shadow:${g.shadow};`;
-        return `<div class="cell" style="${wrap}">
+        return `<div class="cell${isCursor ? ' cur' : ''}" data-cell="${key}" style="${wrap}">
           <div class="base" style="${base}"></div>
           ${g.corner ? `<div style="${g.corner}"></div>` : ''}
+          ${isCursor ? '<div class="caret"></div>' : ''}
           ${st.digit ? `<span class="glyph">${st.digit}</span>` : ''}
           ${st.locked ? LOCK_SVG : ''}
         </div>`;
@@ -202,7 +469,7 @@ class C0ffeeCrossword extends HTMLElement {
   // Slot's six Cells in order and ring pairs [0,1]/[2,3]/[4,5], each over the two Cells'
   // bounding box (horizontal for across, vertical for down), in its pure channel primary.
   private _outlines(cols: number, rows: number): string {
-    const slot = this.selectedSlot();
+    const slot = this._selectedSlot();
     if (!slot) return '';
     return PAIRS.map((pair, i) => {
       const a = slot.cells[i * 2];
@@ -221,10 +488,8 @@ class C0ffeeCrossword extends HTMLElement {
 
   // Clue-number labels: one per starting Cell, in the Cell's top-left corner — the
   // standard crossword convention, and robust to the ladder shapes' multiple blocks.
-  // A Cell that starts both an across and a down Slot shares one number. (The prototype
-  // drew across on the left edge and down on the top edge, which assumed a single 6x6
-  // block; on a multi-block ladder every down label would pile up at the board top.)
-  // Neutral (contract #6).
+  // A Cell that starts both an across and a down Slot shares one number. Neutral
+  // (contract #6). pointer-events:none so the label never eats a Cell tap.
   private _clueNumbers(layout: Layout, cols: number, rows: number): string {
     const numberAt = new Map<string, number>();
     for (const slot of layout.slots) {
@@ -241,19 +506,87 @@ class C0ffeeCrossword extends HTMLElement {
       .join('');
   }
 
-  // The clue-vs-your-mix comparison (the keeper "aha"): the selected Slot's clue Swatch
-  // painted its literal target Color value (contract #1), beside the your-mix Swatch. No
-  // input yet, so the mix is the empty "?" placeholder ringed in accent (the mix is
-  // painted once the keypad lands in C0FFEE-65).
+  // The clue-vs-your-mix comparison (the keeper "aha"): the selected Slot's label + a
+  // meta line (the typed-digit count while solving, the per-Channel verdict chips once
+  // a Guess has been graded), then the clue Swatch painted its literal target (contract
+  // #1) beside the live your-mix Swatch ringed in accent.
   private _compare(): string {
-    const slot = this.selectedSlot();
-    const clueStyle = slot
-      ? `background:#${this._target(slot)};`
+    const slot = this._selectedSlot();
+    const ref = slot ? { number: slot.number, direction: slot.direction } : null;
+
+    const label = ref ? slotLabel(ref) : '';
+    const digits = slot ? slot.cells.map((c) => this.state.cells[cellKey(c)].digit) : [];
+    const typed = digits.filter((d) => d !== null).length;
+    const verdict = ref ? this.state.verdicts[slotKey(ref)] : null;
+    const meta = verdict
+      ? this._chips(verdict)
+      : `<span class="count">${typed} / 6</span>`;
+
+    const clueStyle = ref
+      ? `background:#${this._target(ref)};`
       : 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);';
+
+    // The live mix: paint from the typed digits (implied trailing zeros for any not yet
+    // typed), or the empty "?" placeholder until the solver types the first digit.
+    const mix =
+      typed > 0
+        ? `<div class="stage mix filled" style="background:#${digits.map((d) => d ?? '0').join('')};"></div>`
+        : `<div class="stage mix"><span class="q">?</span></div>`;
+
     return `<div class="compare">
-      <div class="stage clue" style="${clueStyle}"></div>
-      <div class="stage mix"><span class="q">?</span></div>
+      <div class="cmeta">
+        <span class="clabel">${label}</span>
+        ${meta}
+      </div>
+      <div class="stages">
+        <div class="stage clue" style="${clueStyle}"></div>
+        ${mix}
+      </div>
     </div>`;
+  }
+
+  // The per-Channel verdict chips (handoff §3): identity letter in a muted channel tint
+  // (contract #2 made legible), glyph achromatic (contract #3).
+  private _chips(verdict: GuessResult): string {
+    const rows: ReadonlyArray<[keyof GuessResult, string, string]> = [
+      ['red', 'r', 'R'],
+      ['green', 'g', 'G'],
+      ['blue', 'b', 'B'],
+    ];
+    return `<span class="chips">${rows
+      .map(([channel, ch, letter]) => {
+        const v = verdict[channel];
+        return `<span class="chip ${ch}" data-ch="${ch}" data-verdict="${v}">
+          <span class="id" style="color:${CHIP_TINT[channel]};">${letter}</span>
+          <span class="glyph">${VERDICT_GLYPH[v]}</span>
+        </span>`;
+      })
+      .join('')}</span>`;
+  }
+
+  // The input dock: a transient commit toast (contract #4) above the hex keypad. The
+  // keypad is the crossword's OWN hex entry (the console is slider-driven and owns no
+  // keypad). 0-9 / A-F digit keys, then a delete + Check row.
+  private _inputDock(): string {
+    const digitKeys = KEYS.map(
+      (k) =>
+        `<button type="button" class="key${/[A-F]/.test(k) ? ' hex' : ''}" data-key="${k}">${k}</button>`,
+    ).join('');
+    return `<div class="inputdock">
+      ${this._toastEl()}
+      <div class="keypad">${digitKeys}</div>
+      <div class="keyrow">
+        <button type="button" class="key del" data-act="delete" aria-label="Delete">${DELETE_SVG}</button>
+        <button type="button" class="key check" data-act="check">${CHECK_SVG}<span>Check guess</span></button>
+      </div>
+    </div>`;
+  }
+
+  private _toastEl(): string {
+    if (!this.toast) return '';
+    const icon =
+      this.toast.kind === 'warn' ? WARN_SVG : this.toast.kind === 'win' ? WIN_SVG : WRONG_SVG;
+    return `<div class="toastwrap"><span class="toast ${this.toast.kind}">${icon}${this.toast.text}</span></div>`;
   }
 
   // The Across/Down clue list: one hand-rolled chip per Slot — its number, direction,
@@ -280,8 +613,8 @@ class C0ffeeCrossword extends HTMLElement {
 }
 
 // The scoped CSS. Page bg is dressed (hairline + shadow), never a lighter fill (ADR-0007
-// surface recipe, shared with swatch.ts / console.ts). Only the keys slice 1 renders are
-// here; later slices add the keypad / toast / topbar rules onto the same skeleton.
+// surface recipe, shared with swatch.ts / console.ts). Keypad keys, toasts, chips, and
+// the cursor caret are this slice's additions onto the slice-1 skeleton.
 const STYLE = `
   :host { display:block; font-family:var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
   *, *::before, *::after { box-sizing:border-box; }
@@ -298,18 +631,53 @@ const STYLE = `
   /* the negative-offset clue numbers need room outside the board box */
   .boardwrap { padding:20px 22px; }
   .board { position:relative; }
-  .cell { position:absolute; display:flex; align-items:center; justify-content:center; }
+  .cell { position:absolute; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .cell .glyph { position:relative; z-index:3; font:400 21px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
+  /* the within-slot cursor: an accent caret ring over the active Cell (contract: accent = "you") */
+  .cell .caret { position:absolute; inset:2px; border-radius:6px; z-index:4; pointer-events:none;
+                 box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
   .cell .lock { position:absolute; top:3px; right:4px; line-height:0; opacity:.65; z-index:5; }
   .num { position:absolute; font:400 9px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74); z-index:6; pointer-events:none; }
 
   .dock { padding:16px; display:flex; flex-direction:column; gap:16px; margin:0 14px; }
 
-  /* the comparison: the only saturated color besides the active outline (contract #1) */
-  .compare { display:flex; gap:10px; }
+  /* the comparison: clue + live mix, the only saturated color besides the active outline */
+  .compare { display:flex; flex-direction:column; gap:11px; }
+  .cmeta { display:flex; align-items:center; gap:10px; min-height:18px; }
+  .clabel { font:400 14px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); white-space:nowrap; }
+  .count { margin-left:auto; font:400 10.5px/1 var(--c0ffee-font, monospace); letter-spacing:.12em;
+           text-transform:uppercase; color:rgba(255,255,255,.62); }
+  .chips { margin-left:auto; display:inline-flex; align-items:center; gap:9px; }
+  .chip { display:inline-flex; align-items:center; gap:3px; }
+  .chip .id { font:500 11.5px/1 var(--c0ffee-font, monospace); }
+  .chip .glyph { line-height:0; }
+  .stages { display:flex; gap:10px; }
   .stage { flex:1; height:72px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
   .stage.mix { display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
   .stage.mix .q { font:400 26px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-accent, #C0FFEE); opacity:.8; }
+
+  /* the input dock — toast above the hex keypad */
+  .inputdock { position:relative; display:flex; flex-direction:column; gap:8px; }
+  .toastwrap { position:absolute; left:0; right:0; bottom:100%; margin-bottom:10px; display:flex;
+               justify-content:center; pointer-events:none; z-index:5; }
+  .toast { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px;
+           font:400 11.5px/1.3 var(--c0ffee-font, monospace); white-space:nowrap; }
+  .toast svg { flex:none; }
+  .toast.warn  { background:#241c0c; box-shadow:inset 0 0 0 1px rgba(240,180,80,.5), 0 10px 24px -10px rgba(0,0,0,.7); color:#f1c074; }
+  .toast.win   { background:#0d2417; box-shadow:inset 0 0 0 1px rgba(60,235,120,.55), 0 10px 24px -10px rgba(0,0,0,.7); color:#7be8a5; }
+  .toast.wrong { background:#2a1212; box-shadow:inset 0 0 0 1px rgba(255,80,80,.5), 0 10px 24px -10px rgba(0,0,0,.7); color:#ff8b8b; }
+
+  .keypad { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .keyrow { display:grid; grid-template-columns:1fr 2fr; gap:6px; }
+  .key { min-height:44px; border:none; border-radius:9px; background:var(--c0ffee-bg, #0a0a0b);
+         box-shadow:inset 0 0 0 1px rgba(255,255,255,.19); color:var(--c0ffee-fg, #ededed);
+         font:400 18px/1 var(--c0ffee-font, monospace); cursor:pointer;
+         display:flex; align-items:center; justify-content:center; gap:7px; }
+  .key.hex { box-shadow:inset 0 0 0 1px rgba(192,255,238,.28); color:var(--c0ffee-accent, #C0FFEE); }
+  .key.del { color:rgba(255,255,255,.78); }
+  .key.check { box-shadow:inset 0 0 0 1px rgba(192,255,238,.4); color:var(--c0ffee-accent, #C0FFEE);
+               font:400 14px/1 var(--c0ffee-font, monospace); letter-spacing:.04em; }
+  .key:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
 
   .cluelist { display:flex; gap:18px; }
   .cluegroup { flex:1; }

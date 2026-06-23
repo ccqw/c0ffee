@@ -52,10 +52,12 @@ export interface CrosswordState {
 }
 
 /** The actions the shell dispatches: pick the active Slot, type a digit into a
- *  Cell, commit the selected Slot's Guess, or start a fresh puzzle. */
+ *  Cell, clear a Cell's digit, commit the selected Slot's Guess, or start a
+ *  fresh puzzle. */
 export type CrosswordAction =
   | { type: 'select'; slot: SlotRef }
   | { type: 'setDigit'; cell: Cell; digit: string }
+  | { type: 'clearDigit'; cell: Cell }
   | { type: 'commit' }
   | { type: 'newPuzzle'; puzzle: Puzzle };
 
@@ -121,6 +123,18 @@ export function crosswordReducer(state: CrosswordState, action: CrosswordAction)
       if (cell.locked) return state; // a locked Cell holds its correct digit; ignore edits
       const key = cellKey(action.cell);
       const cells = { ...state.cells, [key]: { ...cell, digit: action.digit.toUpperCase() } };
+      return finalize({ ...state, cells });
+    }
+
+    case 'clearDigit': {
+      const cell = cellAt(state, action.cell); // fail-loud on an off-grid Cell, like setDigit
+      if (cell.locked) return state; // a locked Cell holds its correct digit; ignore clears
+      if (cell.digit === null) return state; // already empty — nothing to clear
+      const key = cellKey(action.cell);
+      const cells = { ...state.cells, [key]: { ...cell, digit: null } };
+      // Re-finalize for symmetry with setDigit; clearing an unlocked Cell can never
+      // change `solved`/`complete` (those read locks, not digits), but routing through
+      // the one chokepoint keeps the no-drift guarantee structural, not incidental.
       return finalize({ ...state, cells });
     }
 
