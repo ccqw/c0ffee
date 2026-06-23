@@ -52,10 +52,12 @@ export interface CrosswordState {
 }
 
 /** The actions the shell dispatches: pick the active Slot, type a digit into a
- *  Cell, commit the selected Slot's Guess, or start a fresh puzzle. */
+ *  Cell, clear a Cell's digit, commit the selected Slot's Guess, or start a
+ *  fresh puzzle. */
 export type CrosswordAction =
   | { type: 'select'; slot: SlotRef }
   | { type: 'setDigit'; cell: Cell; digit: string }
+  | { type: 'clearDigit'; cell: Cell }
   | { type: 'commit' }
   | { type: 'newPuzzle'; puzzle: Puzzle };
 
@@ -68,8 +70,13 @@ const CHANNELS: ReadonlyArray<readonly [keyof GuessResult, number, number]> = [
   ['blue', 4, 5],
 ];
 
-const cellKey = (cell: Cell): string => `${cell.row},${cell.col}`;
-const slotKey = (ref: SlotRef): string => `${ref.number}-${ref.direction}`;
+/** The canonical key encoders, the single source of truth for how a Cell and a
+ *  Slot serialize. `cells` is keyed by `cellKey` and `verdicts`/`solved` by
+ *  `slotKey`, so the shell MUST reuse these (not re-derive the format) or its
+ *  `state.cells[...]` lookups would silently drift from what the reducer indexes
+ *  by. Exported for exactly that reason (C0FFEE-65). */
+export const cellKey = (cell: Cell): string => `${cell.row},${cell.col}`;
+export const slotKey = (ref: SlotRef): string => `${ref.number}-${ref.direction}`;
 const isHexDigit = (ch: string): boolean => /^[0-9a-fA-F]$/.test(ch);
 
 // initCrossword(puzzle) -> the fresh state for a puzzle: every Cell empty and
@@ -121,6 +128,18 @@ export function crosswordReducer(state: CrosswordState, action: CrosswordAction)
       if (cell.locked) return state; // a locked Cell holds its correct digit; ignore edits
       const key = cellKey(action.cell);
       const cells = { ...state.cells, [key]: { ...cell, digit: action.digit.toUpperCase() } };
+      return finalize({ ...state, cells });
+    }
+
+    case 'clearDigit': {
+      const cell = cellAt(state, action.cell); // fail-loud on an off-grid Cell, like setDigit
+      if (cell.locked) return state; // a locked Cell holds its correct digit; ignore clears
+      if (cell.digit === null) return state; // already empty — nothing to clear
+      const key = cellKey(action.cell);
+      const cells = { ...state.cells, [key]: { ...cell, digit: null } };
+      // Re-finalize for symmetry with setDigit; clearing an unlocked Cell can never
+      // change `solved`/`complete` (those read locks, not digits), but routing through
+      // the one chokepoint keeps the no-drift guarantee structural, not incidental.
       return finalize({ ...state, cells });
     }
 
