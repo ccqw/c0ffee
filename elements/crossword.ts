@@ -39,7 +39,7 @@ import {
   type SlotRef,
 } from '../lib/crossword-state.ts';
 import type { GuessResult, ChannelVerdict } from '../lib/crossword-guess.ts';
-import type { Cell, Layout, Slot } from '../lib/crossword-layout.ts';
+import type { Cell, Direction, Layout, Slot } from '../lib/crossword-layout.ts';
 
 // Slice 1 opened on a fixed shape + seed, so the puzzle is deterministic: the smoke
 // test asserts stable counts and the design eyeball reviews the same board every load.
@@ -106,6 +106,45 @@ const TOAST_GLYPH: Record<ToastKind, string> = {
   warn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>',
   win: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
   wrong: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+};
+
+// The two persistent per-Clue mark states (the absent third state is just no mark).
+type ClueMark = 'solved' | 'off';
+
+// The persistent per-Clue verdict marks in the clue list (ADR-0007 contract #5: a
+// PERSISTENT status mark stays achromatic — unlike the one transient toast). 'solved'
+// once every Channel of the Slot has locked; 'off' once a Guess has been graded but the
+// Slot is not yet fully solved. Drawn in the neutral fg, never a channel primary — the
+// graded higher/lower detail lives only on the inline board chips, not in this list.
+const CLUE_MARK: Record<ClueMark, { glyph: string; text: string }> = {
+  solved: {
+    glyph:
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    text: 'solved',
+  },
+  off: {
+    glyph:
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    text: 'off',
+  },
+};
+
+// The prev/next clue-nav chevrons (neutral chrome, contract #6). Lucide-style strokes
+// off currentColor so the button's color rule drives them.
+const NAV_GLYPH: Record<'prev' | 'next', string> = {
+  prev: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  next: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+};
+
+// Each arrow key, mapped to the Slot axis it moves ALONG and its step. An arrow moves the
+// cursor only when its axis matches the active Slot's direction; the cross-axis arrow
+// instead toggles direction at a crossing (see _arrow). A flat table beats a nested
+// ternary and makes the axis-vs-direction rule explicit.
+const ARROW_AXIS: Record<string, { axis: Direction; step: 1 | -1 }> = {
+  ArrowLeft: { axis: 'across', step: -1 },
+  ArrowRight: { axis: 'across', step: 1 },
+  ArrowUp: { axis: 'down', step: -1 },
+  ArrowDown: { axis: 'down', step: 1 },
 };
 
 // The hex keypad's keys in render order — 0-9 then A-F (the A-F row accent-tinted
@@ -184,6 +223,10 @@ class C0ffeeCrossword extends HTMLElement {
   // persists across innerHTML re-renders, so the listener survives them — no per-render
   // re-binding, no leaks (dropped in disconnectedCallback).
   private onClick = (e: Event): void => this._handleClick(e);
+  // The physical keyboard (C0FFEE-66). Bound on the host so a key from any focused shadow
+  // control reaches it (events bubble across the boundary) and so the host itself — made
+  // focusable with tabindex — can drive the puzzle directly.
+  private onKeydown = (e: Event): void => this._handleKey(e as KeyboardEvent);
 
   connectedCallback(): void {
     const puzzle = generatePuzzle(DEFAULT_SHAPE, DEFAULT_SEED);
@@ -193,12 +236,18 @@ class C0ffeeCrossword extends HTMLElement {
       slot: firstSlot(puzzle.layout),
     });
     this.cursorKey = this._firstCursor();
+    // One focusable unit so a keyboard user can Tab to the puzzle and drive it. The
+    // assistive-tech focus model (roving tabindex across the grid, ARIA roles) is the
+    // separate C0FFEE-63 layer; this is the sighted-desktop keyboard seam.
+    if (!this.hasAttribute('tabindex')) this.setAttribute('tabindex', '0');
     this.root.addEventListener('click', this.onClick);
+    this.addEventListener('keydown', this.onKeydown);
     this._render();
   }
 
   disconnectedCallback(): void {
     this.root.removeEventListener('click', this.onClick);
+    this.removeEventListener('keydown', this.onKeydown);
     this._clearToastTimer();
   }
 
@@ -218,8 +267,54 @@ class C0ffeeCrossword extends HTMLElement {
       if (act === 'check') return this._check();
       return;
     }
+    const navEl = target.closest('[data-nav]');
+    if (navEl) return this._step((navEl as HTMLElement).dataset.nav === 'prev' ? -1 : 1);
+    const slotEl = target.closest('[data-slot]');
+    if (slotEl) return this._routeToClue((slotEl as HTMLElement).dataset.slot as string);
     const cellEl = target.closest('[data-cell]');
     if (cellEl) return this._tap((cellEl as HTMLElement).dataset.cell as string);
+  }
+
+  // Physical keyboard, mirroring the touch model (C0FFEE-62 decision 8): a hex digit ->
+  // setDigit at the cursor (then auto-advance, via _press); Backspace -> clearDigit
+  // step-back; Enter -> commit; arrow keys move the cursor / toggle direction at a
+  // crossing; Tab/Shift-Tab -> prev/next Slot (skip fully-locked). preventDefault keeps
+  // Tab from moving DOM focus and arrows/Backspace from scrolling or going back — the
+  // puzzle owns the keyboard while focused. Unhandled keys fall through untouched.
+  private _handleKey(e: KeyboardEvent): void {
+    // Leave browser/OS chords alone — Cmd/Ctrl/Alt + a hex letter (Cmd+C, Cmd+R, Ctrl+F…)
+    // must reach copy/paste/reload/find, not get typed as a digit. Shift is intentionally
+    // NOT excluded: Shift+Tab is the prev-Slot binding.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    // Escape is the escape hatch: since Tab is rebound to prev/next Slot (PRD decision 8),
+    // a focused puzzle would otherwise trap the keyboard. Blur releases focus to the page.
+    // The full roving-focus / screen-reader model is C0FFEE-63; this is the minimum so the
+    // sighted-keyboard seam is not a hard trap.
+    if (k === 'Escape') {
+      this.blur();
+      return;
+    }
+    if (/^[0-9a-fA-F]$/.test(k)) {
+      e.preventDefault();
+      return this._press(k.toUpperCase());
+    }
+    if (k === 'Backspace') {
+      e.preventDefault();
+      return this._delete();
+    }
+    if (k === 'Enter') {
+      e.preventDefault();
+      return this._check();
+    }
+    if (k === 'Tab') {
+      e.preventDefault();
+      return this._step(e.shiftKey ? -1 : 1);
+    }
+    if (k.startsWith('Arrow')) {
+      e.preventDefault();
+      return this._arrow(k);
+    }
   }
 
   private _dispatch(action: CrosswordAction): void {
@@ -323,6 +418,95 @@ class C0ffeeCrossword extends HTMLElement {
     if (this.state.complete) this._showToast('win', 'Solved — every Channel matches.');
     else if (allCorrect) this._showToast('win', 'Every Channel matches — locked in.');
     else this._showToast('wrong', 'Not quite — read the channel hints.');
+  }
+
+  // --- navigation ----------------------------------------------------------
+
+  // An arrow key. Along the active Slot's axis (Left/Right for an across Slot, Up/Down
+  // for a down Slot) it moves the cursor one editable Cell, clamping at the ends (no
+  // wrap) and skipping locked Cells like the keypad's auto-advance. The cross-axis arrow,
+  // on a crossing Cell, toggles to the perpendicular Slot keeping the cursor on the shared
+  // Cell — the keyboard twin of re-tapping a crossing (C0FFEE-62 decisions 2 + 8).
+  private _arrow(key: string): void {
+    const slot = this._selectedSlot();
+    if (!slot || this.cursorKey === null) return;
+    // An arrow whose axis matches the active Slot moves the cursor along it; any other
+    // arrow (the cross-axis one) leaves `along` 0 and falls through to the toggle branch.
+    const move = ARROW_AXIS[key];
+    const along = move && move.axis === slot.direction ? move.step : 0;
+    if (along !== 0) {
+      const idx = this._indexInSlot(slot, this.cursorKey);
+      const next = along < 0 ? this._prevEditable(slot, idx) : this._nextEditable(slot, idx);
+      if (next === null) return; // clamp at the Slot end
+      this.cursorKey = next;
+      this._dismissToast();
+      this._render();
+      return;
+    }
+    // a cross-axis arrow: toggle direction at a crossing (the keyboard re-tap)
+    const perp = this.state.puzzle.layout.slots.find(
+      (s) => s.direction !== slot.direction && s.cells.some((c) => cellKey(c) === this.cursorKey),
+    );
+    if (!perp) return; // not on a crossing — no perpendicular Slot to switch to
+    this._dispatch({ type: 'select', slot: { number: perp.number, direction: perp.direction } });
+    // cursor kept on the shared Cell (it belongs to the perpendicular Slot too)
+    this._dismissToast();
+    this._render();
+  }
+
+  // prev/next Slot navigation (C0FFEE-62 decision 7), shared by the clue-nav buttons and
+  // Tab/Shift-Tab. Walks layout.slots order, wraps, and SKIPS fully-locked Slots (those
+  // with no editable Cell), landing on the next Slot that still has an editable Cell. A
+  // no-op when no OTHER Slot is editable (the current is the only one, or the puzzle is
+  // solved). On landing, the cursor inits to the new Slot's first editable Cell.
+  private _step(dir: 1 | -1): void {
+    const slot = this._selectedSlot();
+    if (!slot) return;
+    const slots = this.state.puzzle.layout.slots;
+    const n = slots.length;
+    const start = slots.findIndex((s) => s.number === slot.number && s.direction === slot.direction);
+    const editable = (s: Slot): boolean => s.cells.some((c) => !this._cellState(cellKey(c)).locked);
+    for (let i = 1; i < n; i++) {
+      const cand = slots[(((start + dir * i) % n) + n) % n];
+      if (!editable(cand)) continue;
+      this._dispatch({ type: 'select', slot: { number: cand.number, direction: cand.direction } });
+      this.cursorKey = this._firstCursor();
+      this._dismissToast();
+      this._render();
+      return;
+    }
+    // no other editable Slot — nothing to move to
+  }
+
+  // A clue-list tap: select that Slot and init the cursor to its first editable Cell. A
+  // fully-solved clue stays selectable (reviewable) — its cursor just resolves to null.
+  // The data-slot string is the core's slotKey ("number-direction"), so it round-trips
+  // back into a SlotRef the reducer validates.
+  private _routeToClue(key: string): void {
+    const [numStr, dir] = key.split('-');
+    // Narrow `dir` to a Direction rather than asserting it — a data-slot that ever drifts
+    // from slotKey's "number-direction" format fails loud HERE (at the decoder that owns
+    // the assumption) instead of silently downstream. Number(numStr) NaN is still caught
+    // by the reducer's select -> findSlot, which throws on an unknown Slot.
+    if (dir !== 'across' && dir !== 'down') {
+      throw new Error(`c0ffee-crossword: malformed clue Slot key ${key}`);
+    }
+    this._dispatch({ type: 'select', slot: { number: Number(numStr), direction: dir } });
+    this.cursorKey = this._firstCursor();
+    this._dismissToast();
+    this._render();
+  }
+
+  // The persistent per-Clue mark state (ADR-0007 contract #5): 'solved' once every Channel
+  // of the Slot has locked, 'off' once a Guess has been graded but it is not yet fully
+  // solved (including a partially-correct Slot — some Channels locked, others not), null
+  // when the Slot has never been checked (no mark). Reads the core's derived truth
+  // (verdicts / solved); never re-interprets digits.
+  private _clueVerdict(slot: Slot): ClueMark | null {
+    const key = slotKey(slot);
+    if (this.state.verdicts[key] == null) return null;
+    const s = this.state.solved[key];
+    return s.red && s.green && s.blue ? 'solved' : 'off';
   }
 
   // --- cursor helpers ------------------------------------------------------
@@ -559,8 +743,10 @@ class C0ffeeCrossword extends HTMLElement {
 
     return `<div class="compare">
       <div class="cmeta">
+        <button type="button" class="navbtn" data-nav="prev" aria-label="Previous clue">${NAV_GLYPH.prev}</button>
         <span class="clabel">${label}</span>
         ${meta}
+        <button type="button" class="navbtn" data-nav="next" aria-label="Next clue">${NAV_GLYPH.next}</button>
       </div>
       <div class="stages">
         <div class="stage clue" style="${clueStyle}"></div>
@@ -611,21 +797,31 @@ class C0ffeeCrossword extends HTMLElement {
     return `<div class="toastwrap"><span class="toast ${this.toast.kind}">${TOAST_GLYPH[this.toast.kind]}${this.toast.text}</span></div>`;
   }
 
-  // The Across/Down clue list: one hand-rolled chip per Slot — its number, direction,
-  // and a painted box of its clue Color value. NOT <c0ffee-swatch> (which would emit
-  // colorchange and hijack the hash). The six-digit answer stays latent: only the color
-  // is shown, which is the clue (you reason its hex), so nothing is leaked.
+  // The Across/Down clue list: one tappable row per Slot — its number, a painted box of
+  // its clue Color value, and (once checked) a neutral verdict mark. A tap routes to that
+  // Slot (C0FFEE-66); the rows are real <button>s with the focus-visible ring, so the list
+  // is fully keyboard/pointer drivable. NOT <c0ffee-swatch> (which would emit colorchange
+  // and hijack the hash). The six-digit answer stays latent: only the color is shown,
+  // which is the clue (you reason its hex), so nothing is leaked.
   private _clueList(layout: Layout): string {
+    const sel = this.state.selected;
     const group = (direction: 'across' | 'down', heading: string): string => {
       const rows = layout.slots
         .filter((s) => s.direction === direction)
         .sort((a, b) => a.number - b.number)
         .map((slot) => {
           const hex = this._target(slot);
-          return `<li class="cluerow">
+          const key = slotKey(slot);
+          const isSel = !!sel && sel.number === slot.number && sel.direction === slot.direction;
+          const v = this._clueVerdict(slot);
+          const mark = v
+            ? `<span class="verdict">${CLUE_MARK[v].glyph}<span class="vt">${CLUE_MARK[v].text}</span></span>`
+            : '';
+          return `<li><button type="button" class="cluerow${isSel ? ' sel' : ''}" data-slot="${key}" aria-pressed="${isSel}">
             <span class="cnum">${slot.number}</span>
             <span class="box" style="background:#${hex};"></span>
-          </li>`;
+            ${mark}
+          </button></li>`;
         })
         .join('');
       return `<div class="cluegroup"><h2>${heading}</h2><ul>${rows}</ul></div>`;
@@ -638,7 +834,10 @@ class C0ffeeCrossword extends HTMLElement {
 // surface recipe, shared with swatch.ts / console.ts). Keypad keys, toasts, chips, and
 // the cursor caret are this slice's additions onto the slice-1 skeleton.
 const STYLE = `
-  :host { display:block; font-family:var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
+  :host { display:block; font-family:var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); outline:none; }
+  /* the puzzle is one focusable unit (tabindex on the host) — show the keyboard-focus ring
+     when it is reached by Tab, the same accent ring every control uses (C0FFEE-66) */
+  :host(:focus-visible) { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:3px; border-radius:18px; }
   *, *::before, *::after { box-sizing:border-box; }
 
   /* mobile-first fluid; centered, clamped column on wide viewports (ADR-0005) */
@@ -667,6 +866,11 @@ const STYLE = `
      outline (#2) and the transient commit toast (#4) are the other saturated surfaces */
   .compare { display:flex; flex-direction:column; gap:11px; }
   .cmeta { display:flex; align-items:center; gap:10px; min-height:18px; }
+  /* prev/next clue-nav: neutral chevron buttons flanking the clue label (contract #6) */
+  .navbtn { flex:none; width:30px; height:30px; padding:0; border:none; border-radius:8px;
+            background:var(--c0ffee-bg, #0a0a0b); box-shadow:inset 0 0 0 1px rgba(255,255,255,.19);
+            color:rgba(255,255,255,.78); cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .navbtn:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
   .clabel { font:400 14px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); white-space:nowrap; }
   .count { margin-left:auto; font:400 10.5px/1 var(--c0ffee-font, monospace); letter-spacing:.12em;
            text-transform:uppercase; color:rgba(255,255,255,.62); }
@@ -706,10 +910,21 @@ const STYLE = `
   .cluegroup { flex:1; }
   .cluegroup h2 { margin:0 0 8px; font:500 9.5px/1 var(--c0ffee-font, monospace);
                   letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.5); }
-  .cluegroup ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px; }
-  .cluerow { display:flex; align-items:center; gap:8px; }
+  .cluegroup ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; }
+  .cluegroup li { display:flex; }
+  /* a clue row is a real <button> (reset to inherit the panel) so a tap routes to its
+     Slot and the focus-visible ring lands here; 44px min-height keeps it a touch target */
+  .cluerow { flex:1; display:flex; align-items:center; gap:8px; min-height:36px; padding:4px 7px;
+             border:none; border-radius:8px; background:none; color:inherit; cursor:pointer;
+             font:inherit; text-align:left; }
+  .cluerow.sel { background:rgba(255,255,255,.05); box-shadow:inset 0 0 0 1px rgba(255,255,255,.28); }
+  .cluerow:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
   .cluerow .cnum { font:400 12px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74); min-width:14px; }
-  .cluerow .box { width:22px; height:22px; border-radius:6px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  .cluerow .box { width:22px; height:22px; border-radius:6px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); flex:none; }
+  /* the persistent verdict mark — achromatic icon + muted text (contract #5) */
+  .cluerow .verdict { margin-left:auto; display:inline-flex; align-items:center; gap:4px; line-height:0; }
+  .cluerow .verdict .vt { font:400 9px/1 var(--c0ffee-font, monospace); letter-spacing:.1em;
+                          text-transform:uppercase; color:rgba(255,255,255,.6); }
 `;
 
 customElements.define('c0ffee-crossword', C0ffeeCrossword);
