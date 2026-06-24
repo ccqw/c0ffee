@@ -568,6 +568,14 @@ test('<c0ffee-crossword> keyboard: arrows clamp at the Slot ends (no wrap)', () 
   expect(cursorKey(el)).toBe(cells[5]);
 });
 
+test('<c0ffee-crossword> keyboard: Escape releases focus (the escape hatch from Tab-nav capture)', () => {
+  const el = mount();
+  el.focus();
+  expect(document.activeElement).toBe(el);
+  pressPhysical(el, 'Escape');
+  expect(document.activeElement).not.toBe(el); // blurred -> the keyboard is no longer trapped
+});
+
 test('<c0ffee-crossword> keyboard: an arrow on a fully-locked Slot (no cursor) is a safe no-op', () => {
   const p = puzzle();
   const S = firstSlot();

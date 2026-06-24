@@ -287,6 +287,14 @@ class C0ffeeCrossword extends HTMLElement {
     // NOT excluded: Shift+Tab is the prev-Slot binding.
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
+    // Escape is the escape hatch: since Tab is rebound to prev/next Slot (PRD decision 8),
+    // a focused puzzle would otherwise trap the keyboard. Blur releases focus to the page.
+    // The full roving-focus / screen-reader model is C0FFEE-63; this is the minimum so the
+    // sighted-keyboard seam is not a hard trap.
+    if (k === 'Escape') {
+      this.blur();
+      return;
+    }
     if (/^[0-9a-fA-F]$/.test(k)) {
       e.preventDefault();
       return this._press(k.toUpperCase());
