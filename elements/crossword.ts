@@ -288,6 +288,12 @@ const slotLabel = (ref: SlotRef): string =>
 class C0ffeeCrossword extends HTMLElement {
   // attachShadow returns the root, so we never juggle a nullable shadowRoot.
   private root: ShadowRoot = this.attachShadow({ mode: 'open' });
+  // The body container whose innerHTML _render replaces. The <style> sheet is injected
+  // ONCE into the root scaffold (connectedCallback) and lives OUTSIDE this container, so a
+  // re-render (every keystroke) no longer re-parses the whole stylesheet — only the body
+  // markup is rebuilt. (Set up in _scaffold; the delegated listeners stay on the root,
+  // which persists across body re-renders.)
+  private body!: HTMLElement;
   // The one game state the whole face projects from (ADR-0003 functional core).
   private state!: CrosswordState;
   // The within-slot cursor — the active editing Cell, keyed "row,col". CrosswordState
@@ -348,6 +354,9 @@ class C0ffeeCrossword extends HTMLElement {
 
   connectedCallback(): void {
     this._loadPuzzle(generatePuzzle(DEFAULT_SHAPE, this.seed));
+    // Inject the stylesheet once and create the body container; _render only rewrites the
+    // body, so the CSS is parsed a single time per connect, not on every keystroke.
+    this._scaffold();
     // One focusable unit so a keyboard user can Tab to the puzzle and drive it. The
     // assistive-tech focus model (roving tabindex across the grid, ARIA roles) is the
     // separate C0FFEE-63 layer; this is the sighted-desktop keyboard seam.
@@ -1073,6 +1082,13 @@ class C0ffeeCrossword extends HTMLElement {
 
   // --- render --------------------------------------------------------------
 
+  // Inject the stylesheet once + create the persistent body container the renders rewrite.
+  // Idempotent across reconnects: a fresh connect rebuilds the scaffold from scratch.
+  private _scaffold(): void {
+    this.root.innerHTML = `<style>${STYLE}</style><div class="cw-body"></div>`;
+    this.body = this.root.querySelector('.cw-body') as HTMLElement;
+  }
+
   private _render(): void {
     const { layout } = this.state.puzzle;
     const complete = this.state.complete;
@@ -1086,8 +1102,8 @@ class C0ffeeCrossword extends HTMLElement {
           ${this._inputDock()}
           ${this._clueList(layout)}
         </section>`;
-    this.root.innerHTML = `
-      <style>${STYLE}</style>
+    // Rewrite only the body — the <style> sheet lives in the scaffold and is not re-parsed.
+    this.body.innerHTML = `
       <div class="screen">
         ${this._topbar()}
         <div class="boardwrap">${this._board(layout)}</div>
@@ -1536,6 +1552,9 @@ const STYLE = `
      when it is reached by Tab, the same accent ring every control uses (C0FFEE-66) */
   :host(:focus-visible) { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:3px; border-radius:18px; }
   *, *::before, *::after { box-sizing:border-box; }
+  /* the render container generates no box — its children lay out as if direct children of
+     the host, so injecting the stylesheet once (not per-render) changes nothing visually */
+  .cw-body { display:contents; }
 
   /* mobile-first fluid; centered, clamped column on wide viewports (ADR-0005).
      position:relative so the absolute overlay layer (scrim, pause/confirm cards, the
