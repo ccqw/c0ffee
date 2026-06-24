@@ -1,11 +1,14 @@
 // <c0ffee-crossword> — the Hex Color crossword's face (imperative shell, ADR-0003).
 //
 // Slice 1 (C0FFEE-64) shipped the read-only render. Slice 2 of 4 (C0FFEE-65)
-// makes it PLAYABLE by touch/pointer: a face-owned within-slot cursor, the hex
+// made it PLAYABLE by touch/pointer: a face-owned within-slot cursor, the hex
 // keypad (0-9 / A-F / delete / Check), tap-to-position + crossing-select +
 // re-tap direction toggle, a live your-mix Swatch, per-Channel verdict chips,
-// and the commit toast. Physical-keyboard entry + clue-nav (C0FFEE-66) and the
-// chrome/overlays/timer (C0FFEE-67) layer onto this same shadow tree later.
+// and the commit toast. Slice 3 (C0FFEE-66) added physical-keyboard entry +
+// clue-nav. Slice 4 of 4 (C0FFEE-67) wraps the chrome around all of it: the
+// topbar (timer / pause / help / menu), the shared-scrim overlays (first-run
+// coach, pause, destructive Restart/New confirm), the one-shot lock callout,
+// and the completion card — all on this same shadow tree.
 //
 // The functional core is shipped and (almost) untouched: generatePuzzle
 // (C0FFEE-60) makes a crossing-consistent Puzzle; initCrossword/crosswordReducer
@@ -24,7 +27,11 @@
 // Verdict glyphs stay achromatic (contract #3); chip identity letters take MUTED
 // channel tints (legible at 11px — pure #0000FF text is invisible on near-black).
 // Everything else is neutral, muted by opacity off --c0ffee-fg, never grey tokens —
-// and consumes tokens.css across the shadow boundary.
+// and consumes tokens.css across the shadow boundary. The chrome (C0FFEE-67) adds two
+// further uses, both kept within the contract: --c0ffee-accent marks primary actions
+// (Resume / coach Next / Got it / New), and ONE earned warm semantic tone marks the
+// destructive confirm CTA + warn glyph; the completion recolor paints the solved board
+// its own answer Colors (contract #1 territory). See the `=== chrome ===` STYLE block.
 
 import { generatePuzzle } from '../lib/crossword-generator.ts';
 import {
@@ -304,7 +311,11 @@ class C0ffeeCrossword extends HTMLElement {
   // The Timer (CONTEXT.md: Solve time). Elapsed whole seconds the board has been live
   // and unpaused; an interval ticks it while running. Coupled to the overlay layer
   // (decision 6): it does not run while the coach/pause overlay is up, and freezes on
-  // completion. No persisted best-time.
+  // completion. No persisted best-time. Deferred to C0FFEE-57 (Solve time / share):
+  // CONTEXT.md also wants the clock paused while the TAB is hidden and shared accurately;
+  // this slice is a quiet, deliberately-downplayed tick-counter, so background-tab
+  // throttling can undercount real wall-time. That precision rides the share work, not
+  // this chrome slice.
   private elapsed = 0;
   private timerInterval: number | null = null;
   private timerRunning = false;
@@ -468,10 +479,14 @@ class C0ffeeCrossword extends HTMLElement {
 
   // Re-summon the coach via the topbar "?" (decision 5). Always opens at step 0; does
   // not touch the seen-flag (it is already seen) and does not pause an existing solve.
+  // Clears any other overlay first so at most one scrim overlay is ever open (the
+  // precedence in _activeScrimOverlay then never has to resolve a real conflict).
   private _openCoach(): void {
+    this.paused = false;
+    this.confirm = null;
+    this.menuOpen = false;
     this.coachOpen = true;
     this.coachStep = 0;
-    this.menuOpen = false;
     this._render();
   }
 
@@ -488,6 +503,8 @@ class C0ffeeCrossword extends HTMLElement {
 
   private _pause(): void {
     if (this.paused || this.state.complete) return;
+    this.confirm = null;
+    this.coachOpen = false;
     this.paused = true;
     this.menuOpen = false;
     this._stopTimer(); // the clock pauses with the scrim (decision 6)
@@ -508,6 +525,8 @@ class C0ffeeCrossword extends HTMLElement {
   // A menu item (Restart/New) opens the destructive confirm rather than acting at once
   // (decision 3 — both wipe progress). The confirm rides the shared scrim.
   private _requestConfirm(action: PendingConfirm): void {
+    this.paused = false;
+    this.coachOpen = false;
     this.confirm = action;
     this.menuOpen = false;
     this._render();
@@ -563,10 +582,12 @@ class C0ffeeCrossword extends HTMLElement {
         return { key, perp, aPair, bPair };
       })
       .filter((c): c is NonNullable<typeof c> => c !== null);
-    // Prefer the first crossing whose two roles are DIFFERENT Channels — that is the
-    // demonstrable "same value, a different Channel" the callout teaches (a corner where
-    // both roles are the same Channel/place-value teaches nothing). Fall back to the first.
-    const pick = candidates.find((c) => c.aPair !== c.bPair) ?? candidates[0];
+    // Fire only on a crossing whose two roles are DIFFERENT Channels — that is the
+    // demonstrable "same value, a different Channel" the callout teaches. A same-Channel
+    // corner teaches nothing AND would render the footer's "a different Channel" as a
+    // falsehood, so suppress instead of firing it; leaving `lockCalloutFired` false keeps
+    // the one-shot armed for a later, genuinely dual-Channel lock.
+    const pick = candidates.find((c) => c.aPair !== c.bPair);
     if (!pick) return;
     const { key, perp, aPair, bPair } = pick;
     this.lockCallout = {
@@ -668,20 +689,38 @@ class C0ffeeCrossword extends HTMLElement {
     if (cellEl) return this._tap((cellEl as HTMLElement).dataset.cell as string);
   }
 
-  // Whether an overlay is currently covering the board (coach / pause / confirm), or the
-  // puzzle is complete (the completion card has supplanted the dock). The game surface is
-  // inert in any of these states.
+  // The single source of truth for which scrim-backed overlay is up (coach / pause /
+  // confirm), with the one canonical precedence. The render layer, the scrim-tap router
+  // and `_overlayUp` all read this, so the precedence is defined exactly once — and the
+  // openers keep these mutually exclusive, so the order only ever resolves a real tie
+  // defensively. Returns null when no scrim overlay is showing. (The kebab menu and the
+  // lock callout are NOT scrim overlays and are handled separately.)
+  private _activeScrimOverlay(): 'confirm' | 'pause' | 'coach' | null {
+    if (this.confirm !== null) return 'confirm';
+    if (this.paused) return 'pause';
+    if (this.coachOpen) return 'coach';
+    return null;
+  }
+
+  // Whether an overlay is currently covering the board (any scrim overlay), or the puzzle
+  // is complete (the completion card has supplanted the dock). The game surface is inert
+  // in any of these states.
   private _overlayUp(): boolean {
-    return this.coachOpen || this.paused || this.confirm !== null || this.state.complete;
+    return this._activeScrimOverlay() !== null || this.state.complete;
   }
 
   // A tap on the shared scrim, routed to the overlay it backs: resume from pause, cancel a
   // confirm, dismiss the coach. (The destructive confirm also cancels on a scrim tap — the
   // Cancel button is the same affordance; the only irreversible step is the Confirm button.)
   private _scrimTap(): void {
-    if (this.paused) return this._resume();
-    if (this.confirm !== null) return this._cancelConfirm();
-    if (this.coachOpen) return this._dismissCoach();
+    switch (this._activeScrimOverlay()) {
+      case 'pause':
+        return this._resume();
+      case 'confirm':
+        return this._cancelConfirm();
+      case 'coach':
+        return this._dismissCoach();
+    }
   }
 
   // Physical keyboard, mirroring the touch model (C0FFEE-62 decision 8): a hex digit ->
@@ -1097,9 +1136,17 @@ class C0ffeeCrossword extends HTMLElement {
   // popover (not scrim-backed — it teaches mid-play without dimming the board).
   private _overlays(): string {
     let overlay = '';
-    if (this.coachOpen) overlay = this._coachSheet();
-    else if (this.paused) overlay = this._pauseOverlay();
-    else if (this.confirm !== null) overlay = this._confirmDialog();
+    switch (this._activeScrimOverlay()) {
+      case 'coach':
+        overlay = this._coachSheet();
+        break;
+      case 'pause':
+        overlay = this._pauseOverlay();
+        break;
+      case 'confirm':
+        overlay = this._confirmDialog();
+        break;
+    }
     const scrim = overlay ? `<div class="scrim" data-act="scrim"></div>` : '';
     const callout = this.lockCallout ? this._lockCalloutEl(this.lockCallout) : '';
     return `${scrim}${overlay}${callout}`;
@@ -1114,8 +1161,8 @@ class C0ffeeCrossword extends HTMLElement {
       `<span class="dot${on ? ' on' : ''}"></span>`;
     const body =
       step === 0
-        ? `<div class="csheet-head">Every clue is a colour.</div>
-           <p class="csheet-body">Fill the six hex digits — <b>#RRGGBB</b> — that build the Swatch. Two digits per Channel: red, green, blue.</p>`
+        ? `<div class="csheet-head">Every clue is a color.</div>
+           <p class="csheet-body">Fill the six hex digits - <b>#RRGGBB</b> - that build the Swatch. Two digits per Channel: red, green, blue.</p>`
         : `<div class="csheet-head">Read the channel hints.</div>
            <p class="csheet-body">Check a Guess and each Channel tells you which way to go: a check means it matches, an arrow points where to nudge your next guess.</p>`;
     const footerBtns =
@@ -1181,24 +1228,26 @@ class C0ffeeCrossword extends HTMLElement {
     return `<div class="lockcallout" style="${pos}" role="status">
       <div class="lc-top">${ACCENT_LOCK_SVG}<span class="lc-tag">Locked cell</span></div>
       <div class="lc-head">This cell is locked.</div>
-      <p class="lc-body">One cell, two roles — a crossing Channel already filled it, so you can't change it. Here's why:</p>
+      <p class="lc-body">One cell, two roles - a crossing Channel already filled it, so you can't change it. Here's why:</p>
       <div class="lc-roles">
         <span class="role">${roleCell(lc.aRing)}<span class="role-label">${lc.aLabel}<br>${lc.aWord}</span></span>
         ${ARROW_RIGHT_SVG}
         <span class="role">${roleCell(lc.bRing)}<span class="role-label">${lc.bLabel}<br>${lc.bWord}</span></span>
       </div>
-      <p class="lc-foot">The <b>${lc.value}</b> locked as ${lc.aLabel}'s ${lc.aWord} is known here — now it's ${lc.bLabel}'s ${lc.bWord}. Same value, a different Channel.</p>
+      <p class="lc-foot">The <b>${lc.value}</b> locked as ${lc.aLabel}'s ${lc.aWord} is known here - now it's ${lc.bLabel}'s ${lc.bWord}. Same value, a different Channel.</p>
     </div>`;
   }
 
   // Position the lock callout against its anchor Cell's rect, relative to the host. Flips
   // below the Cell when there isn't room above, and clamps within the host's width. Returns
-  // an inline style. A zeroed rect (happy-dom, or a detached host) yields a harmless
-  // centered fallback rather than NaN offsets.
+  // an inline style. A zeroed rect (the `host.width === 0` guard catches both happy-dom
+  // and a detached host) yields a harmless fixed fallback (horizontally centered,
+  // upper-middle) rather than NaN offsets.
   private _calloutPosition(key: string): string {
     const cellEl = this.root.querySelector(`[data-cell="${key}"]`);
     const host = this.getBoundingClientRect();
     if (!cellEl || host.width === 0) {
+      // harmless fixed fallback (horizontally centered, upper-middle) rather than NaN
       return 'left:50%;top:40%;transform:translate(-50%,-50%);';
     }
     const r = cellEl.getBoundingClientRect();

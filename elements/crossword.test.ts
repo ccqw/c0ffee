@@ -806,7 +806,6 @@ test('<c0ffee-crossword> Restart re-arms the lock callout for the new puzzle', (
 
 test('<c0ffee-crossword> the completion card renders on a solved puzzle with a frozen time, swatches and New', () => {
   const p = puzzle();
-  const xset = new Set(p.layout.crossings.map((x) => cellKey(x.cell)));
   const el = mount();
   for (const slot of p.layout.slots) {
     if (q(el, '.completion')) break;
@@ -819,7 +818,6 @@ test('<c0ffee-crossword> the completion card renders on a solved puzzle with a f
   expect(el.shadowRoot!.querySelectorAll('.completion .swatch').length).toBeGreaterThan(0);
   expect(q(el, '[data-act="completion-new"]')).toBeTruthy();
   expect(q(el, '.keypad')).toBeNull(); // the dock is replaced by the card
-  void xset;
 });
 
 test('<c0ffee-crossword> the timer counts board-live seconds, pauses with the scrim, and resumes', () => {
@@ -872,4 +870,76 @@ test('<c0ffee-crossword> Escape closes an open overlay before releasing focus', 
   pressPhysical(el, 'Escape'); // closes the overlay first
   expect(q(el, '.pause')).toBeNull();
   expect(document.activeElement).toBe(el); // still focused — the overlay absorbed the Escape
+});
+
+test('<c0ffee-crossword> the game surface is inert while a scrim overlay covers the board', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  // pause: neither a click on the keypad nor a physical key may fill/move the board
+  const a = mount();
+  act(a, 'pause');
+  pressKey(a, 'A'); // keypad CLICK path while paused
+  pressPhysical(a, 'B'); // physical KEY path while paused
+  expect(glyphAt(a, cells[0])).toBeNull(); // nothing typed
+  expect(cursorKey(a)).toBe(cells[0]); // cursor did not advance
+
+  // confirm dialog: same inertness
+  const b = mount();
+  act(b, 'menu');
+  act(b, 'restart');
+  pressKey(b, 'A');
+  pressPhysical(b, 'B');
+  expect(glyphAt(b, cells[0])).toBeNull();
+
+  // first-run coach: same inertness (a tap on a Cell must not select/fill either)
+  window.localStorage.removeItem(COACH_SEEN_KEY);
+  const c = mount();
+  expect(q(c, '.coach')).toBeTruthy();
+  pressPhysical(c, 'A');
+  tapCell(c, cells[1]);
+  expect(glyphAt(c, cells[0])).toBeNull();
+});
+
+test('<c0ffee-crossword> at most one scrim overlay is open at a time (help while paused does not stack)', () => {
+  const el = mount();
+  act(el, 'pause');
+  expect(q(el, '.pause')).toBeTruthy();
+  act(el, 'help'); // re-summon the coach while paused — must NOT leave two overlays up
+  expect(q(el, '.coach')).toBeTruthy();
+  expect(q(el, '.pause')).toBeNull(); // pause was cleared, not stacked under the coach
+  // dismissing the single overlay returns to a fully-playable board (timer resumes)
+  act(el, 'coach-skip');
+  expect(q(el, '.coach')).toBeNull();
+  expect(q(el, '.scrim')).toBeNull();
+});
+
+test('<c0ffee-crossword> the timer does not start on a first visit until the coach is dismissed', () => {
+  vi.useFakeTimers();
+  try {
+    window.localStorage.removeItem(COACH_SEEN_KEY); // first visit -> coach auto-shows
+    const el = mount();
+    expect(q(el, '.coach')).toBeTruthy();
+    vi.advanceTimersByTime(3000);
+    expect(q(el, '.timer')!.textContent).toMatch(/0:00/); // clock waits behind the coach
+    act(el, 'coach-next');
+    act(el, 'coach-done'); // dismiss -> the clock starts
+    vi.advanceTimersByTime(2000);
+    expect(q(el, '.timer')!.textContent).not.toMatch(/0:00/);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-crossword> confirm Cancel closes the dialog and leaves every entry and lock intact', () => {
+  const p = puzzle();
+  const S = firstSlot();
+  const el = mount();
+  solveSlot(el, p, S);
+  const locksBefore = el.shadowRoot!.querySelectorAll('.lock').length;
+  expect(locksBefore).toBeGreaterThan(0);
+  act(el, 'menu');
+  act(el, 'restart');
+  expect(q(el, '.confirm')).toBeTruthy();
+  act(el, 'confirm-cancel'); // Cancel must NOT wipe
+  expect(q(el, '.confirm')).toBeNull();
+  expect(el.shadowRoot!.querySelectorAll('.lock').length).toBe(locksBefore); // intact
 });
