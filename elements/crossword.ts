@@ -108,12 +108,15 @@ const TOAST_GLYPH: Record<ToastKind, string> = {
   wrong: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
 };
 
+// The two persistent per-Clue mark states (the absent third state is just no mark).
+type ClueMark = 'solved' | 'off';
+
 // The persistent per-Clue verdict marks in the clue list (ADR-0007 contract #5: a
 // PERSISTENT status mark stays achromatic — unlike the one transient toast). 'solved'
 // once every Channel of the Slot has locked; 'off' once a Guess has been graded but the
 // Slot is not yet fully solved. Drawn in the neutral fg, never a channel primary — the
 // graded higher/lower detail lives only on the inline board chips, not in this list.
-const CLUE_MARK: Record<'solved' | 'off', { glyph: string; text: string }> = {
+const CLUE_MARK: Record<ClueMark, { glyph: string; text: string }> = {
   solved: {
     glyph:
       '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
@@ -131,6 +134,17 @@ const CLUE_MARK: Record<'solved' | 'off', { glyph: string; text: string }> = {
 const NAV_GLYPH: Record<'prev' | 'next', string> = {
   prev: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
   next: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+};
+
+// Each arrow key, mapped to the Slot axis it moves ALONG and its step. An arrow moves the
+// cursor only when its axis matches the active Slot's direction; the cross-axis arrow
+// instead toggles direction at a crossing (see _arrow). A flat table beats a nested
+// ternary and makes the axis-vs-direction rule explicit.
+const ARROW_AXIS: Record<string, { axis: Direction; step: 1 | -1 }> = {
+  ArrowLeft: { axis: 'across', step: -1 },
+  ArrowRight: { axis: 'across', step: 1 },
+  ArrowUp: { axis: 'down', step: -1 },
+  ArrowDown: { axis: 'down', step: 1 },
 };
 
 // The hex keypad's keys in render order — 0-9 then A-F (the A-F row accent-tinted
@@ -268,6 +282,10 @@ class C0ffeeCrossword extends HTMLElement {
   // Tab from moving DOM focus and arrows/Backspace from scrolling or going back — the
   // puzzle owns the keyboard while focused. Unhandled keys fall through untouched.
   private _handleKey(e: KeyboardEvent): void {
+    // Leave browser/OS chords alone — Cmd/Ctrl/Alt + a hex letter (Cmd+C, Cmd+R, Ctrl+F…)
+    // must reach copy/paste/reload/find, not get typed as a digit. Shift is intentionally
+    // NOT excluded: Shift+Tab is the prev-Slot binding.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
     if (/^[0-9a-fA-F]$/.test(k)) {
       e.preventDefault();
@@ -404,18 +422,10 @@ class C0ffeeCrossword extends HTMLElement {
   private _arrow(key: string): void {
     const slot = this._selectedSlot();
     if (!slot || this.cursorKey === null) return;
-    const horizontal = slot.direction === 'across';
-    const along = horizontal
-      ? key === 'ArrowLeft'
-        ? -1
-        : key === 'ArrowRight'
-          ? 1
-          : 0
-      : key === 'ArrowUp'
-        ? -1
-        : key === 'ArrowDown'
-          ? 1
-          : 0;
+    // An arrow whose axis matches the active Slot moves the cursor along it; any other
+    // arrow (the cross-axis one) leaves `along` 0 and falls through to the toggle branch.
+    const move = ARROW_AXIS[key];
+    const along = move && move.axis === slot.direction ? move.step : 0;
     if (along !== 0) {
       const idx = this._indexInSlot(slot, this.cursorKey);
       const next = along < 0 ? this._prevEditable(slot, idx) : this._nextEditable(slot, idx);
@@ -465,8 +475,15 @@ class C0ffeeCrossword extends HTMLElement {
   // The data-slot string is the core's slotKey ("number-direction"), so it round-trips
   // back into a SlotRef the reducer validates.
   private _routeToClue(key: string): void {
-    const [numStr, direction] = key.split('-');
-    this._dispatch({ type: 'select', slot: { number: Number(numStr), direction: direction as Direction } });
+    const [numStr, dir] = key.split('-');
+    // Narrow `dir` to a Direction rather than asserting it — a data-slot that ever drifts
+    // from slotKey's "number-direction" format fails loud HERE (at the decoder that owns
+    // the assumption) instead of silently downstream. Number(numStr) NaN is still caught
+    // by the reducer's select -> findSlot, which throws on an unknown Slot.
+    if (dir !== 'across' && dir !== 'down') {
+      throw new Error(`c0ffee-crossword: malformed clue Slot key ${key}`);
+    }
+    this._dispatch({ type: 'select', slot: { number: Number(numStr), direction: dir } });
     this.cursorKey = this._firstCursor();
     this._dismissToast();
     this._render();
@@ -474,9 +491,10 @@ class C0ffeeCrossword extends HTMLElement {
 
   // The persistent per-Clue mark state (ADR-0007 contract #5): 'solved' once every Channel
   // of the Slot has locked, 'off' once a Guess has been graded but it is not yet fully
-  // solved, null when the Slot has never been checked (no mark). Reads the core's derived
-  // truth (verdicts / solved); never re-interprets digits.
-  private _clueVerdict(slot: Slot): 'solved' | 'off' | null {
+  // solved (including a partially-correct Slot — some Channels locked, others not), null
+  // when the Slot has never been checked (no mark). Reads the core's derived truth
+  // (verdicts / solved); never re-interprets digits.
+  private _clueVerdict(slot: Slot): ClueMark | null {
     const key = slotKey(slot);
     if (this.state.verdicts[key] == null) return null;
     const s = this.state.solved[key];

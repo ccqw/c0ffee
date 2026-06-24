@@ -360,7 +360,11 @@ test('<c0ffee-crossword> a commit toast clears itself after its timeout', () => 
 
 // A physical key, dispatched at the host (where the keydown listener lives). The real
 // element receives these from any focused shadow control too (they bubble to the host).
-const pressPhysical = (el: HTMLElement, key: string, opts: { shiftKey?: boolean } = {}): void => {
+const pressPhysical = (
+  el: HTMLElement,
+  key: string,
+  opts: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
+): void => {
   el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts }));
 };
 const clabel = (el: HTMLElement): string => el.shadowRoot!.querySelector('.clabel')!.textContent ?? '';
@@ -525,4 +529,55 @@ test('<c0ffee-crossword> prev/next no-ops when no other editable Slot remains (p
   const before = clabel(el);
   pressNav(el, 'next'); // nothing editable anywhere -> no-op, selection unchanged
   expect(clabel(el)).toBe(before);
+});
+
+test('<c0ffee-crossword> keyboard: a Cmd/Ctrl modifier chord is left for the browser, not typed', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+  pressPhysical(el, 'c', { metaKey: true }); // Cmd+C must copy, not type 'C' into the puzzle
+  pressPhysical(el, 'f', { ctrlKey: true }); // Ctrl+F must reach find
+  expect(glyphAt(el, cells[0])).toBeNull(); // nothing was typed
+  expect(cursorKey(el)).toBe(cells[0]); // and the cursor did not advance
+});
+
+test('<c0ffee-crossword> a graded-but-unsolved clue shows the neutral "off" mark, not "solved"', () => {
+  const p = puzzle();
+  const S = firstSlot();
+  const target = p.targets[slotKey(S)];
+  // a six-digit Guess that differs from the target in the red Channel only (flip digit 0),
+  // so green + blue lock but the Slot is not fully solved -> the 'off' mark
+  const wrong = (target[0] === '0' ? '1' : '0') + target.slice(1);
+  const el = mount();
+  wrong.split('').forEach((d) => pressPhysical(el, d));
+  pressPhysical(el, 'Enter');
+  const mark = slotRowEl(el, slotKey(S)).querySelector('.verdict');
+  expect(mark).toBeTruthy();
+  expect(mark!.textContent).toMatch(/off/i);
+  expect(mark!.innerHTML).toContain('rgba(255,255,255'); // contract #5 — achromatic
+});
+
+test('<c0ffee-crossword> keyboard: arrows clamp at the Slot ends (no wrap)', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount(); // opens with the cursor on cells[0]
+  pressPhysical(el, 'ArrowLeft'); // at the start already -> clamp, no wrap to the end
+  expect(cursorKey(el)).toBe(cells[0]);
+  let guard = 0;
+  while (cursorKey(el) !== cells[5] && guard++ < 10) pressPhysical(el, 'ArrowRight');
+  expect(cursorKey(el)).toBe(cells[5]);
+  pressPhysical(el, 'ArrowRight'); // at the end -> clamp, no wrap to cells[0]
+  expect(cursorKey(el)).toBe(cells[5]);
+});
+
+test('<c0ffee-crossword> keyboard: an arrow on a fully-locked Slot (no cursor) is a safe no-op', () => {
+  const p = puzzle();
+  const S = firstSlot();
+  const el = mount();
+  solveSelected(el, p.targets[slotKey(S)]); // S fully locked
+  tapClue(el, slotKey(S)); // re-select the solved Slot — its cursor resolves to null
+  expect(cursorKey(el)).toBeNull();
+  const label = clabel(el);
+  pressPhysical(el, 'ArrowRight'); // must not throw
+  pressPhysical(el, 'ArrowDown');
+  expect(clabel(el)).toBe(label); // selection unchanged
+  expect(cursorKey(el)).toBeNull();
 });
