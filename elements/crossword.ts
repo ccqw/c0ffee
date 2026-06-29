@@ -702,6 +702,15 @@ class C0ffeeCrossword extends HTMLElement {
     // Any board interaction dismisses the transient lock callout (decision 4) — even a
     // no-op one (a tap on a solved Cell), which is why it lives here, not in the handlers.
     if (this.lockCallout) this._dismissLockCallout();
+    // In the clue pane only a clue-row tap is live (it routes the Slot and auto-returns to
+    // the entry pane); the board stays visible but is a passive reference there, so a
+    // board-cell tap is inert — the keypad/delete/check/nav are not even rendered. This
+    // mirrors the key guard above so the two input paths agree (C0FFEE-73).
+    if (this.activePane === 'clues') {
+      const rowEl = target.closest('[data-slot]');
+      if (rowEl) return this._routeToClue((rowEl as HTMLElement).dataset.slot as string);
+      return;
+    }
     if (act === 'pane-clues') return this._showCluePane();
     if (act === 'delete') return this._delete();
     if (act === 'check') return this._check();
@@ -785,6 +794,11 @@ class C0ffeeCrossword extends HTMLElement {
     }
     // While an overlay covers the board, the game keys are inert (mirrors the click guard).
     if (this._overlayUp()) return;
+    // The clue pane is a route/review surface with no keypad rendered, so game keys are
+    // entry-pane only — otherwise a hex digit/Enter/Tab/arrow would fill or commit the
+    // hidden selected Slot invisibly (C0FFEE-73). Escape (handled above) is the keyboard
+    // return; a clue-row tap is the only live clue-pane action (see the click guard).
+    if (this.activePane === 'clues') return;
     // Any board key dismisses the transient lock callout (decision 4), no-op input included.
     if (this.lockCallout) this._dismissLockCallout();
     if (/^[0-9a-fA-F]$/.test(k)) {

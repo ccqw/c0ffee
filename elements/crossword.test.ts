@@ -1092,6 +1092,25 @@ test('<c0ffee-crossword> New resets the active pane back to entry', () => {
   expect(q(el, '.cluepanel')).toBeNull();
 });
 
+test('<c0ffee-crossword> the clue pane is review-only: keys and board taps never mutate the hidden Slot', () => {
+  // the keypad is absent in the clue pane, so game input must be inert there — otherwise a
+  // physical hex digit / Enter would fill or commit the selected Slot invisibly
+  const S = firstSlot();
+  const cells = S.cells.map(cellKey);
+  const el = mount();
+  act(el, 'pane-clues');
+  expect(q(el, '.cluepanel')).toBeTruthy();
+  pressPhysical(el, 'A'); // would fill cells[0] in the entry pane
+  pressPhysical(el, 'Enter'); // would commit in the entry pane
+  expect(glyphAt(el, cells[0])).toBeNull(); // nothing typed into the hidden Slot
+  expect(rowState(el, slotKey(S))).toBe('unguessed'); // no hidden commit graded it
+  expect(q(el, '.cluepanel')).toBeTruthy(); // and we never left the clue pane
+  // a board-cell tap is inert too (the board is a passive reference in this pane)
+  tapCell(el, cells[1]);
+  expect(q(el, '.cluepanel')).toBeTruthy();
+  expect(glyphAt(el, cells[0])).toBeNull();
+});
+
 test('<c0ffee-crossword> overlays still mount over the constrained screen', () => {
   // the single-viewport .screen must not break the C0FFEE-67 overlay layer
   const el = mount();
