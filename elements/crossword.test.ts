@@ -79,6 +79,8 @@ test('<c0ffee-crossword> renders the Across/Down clue list, split by direction',
   const down = slots.filter((s) => s.direction === 'down').length;
   const el = mount();
   const root = el.shadowRoot!;
+  // C0FFEE-73: the clue list lives in the switchable clue pane, not the default entry pane
+  openClues(el);
 
   // one chip per Slot overall, AND the two direction groups carry their own counts
   // (a total-only assertion would pass even if the direction filter were broken)
@@ -127,11 +129,12 @@ test('<c0ffee-crossword> opens on an active Slot, outlined in three channel pair
   expect(el.shadowRoot!.querySelectorAll('.pair').length).toBe(3);
 });
 
-test('<c0ffee-crossword> hand-rolls one clue chip per Slot (opts out of ADR-0001 — no nested swatch)', () => {
+test('<c0ffee-crossword> hand-rolls one clue swatch per Slot (opts out of ADR-0001 — no nested swatch)', () => {
   const slots = puzzle().layout.slots.length;
   const el = mount();
-  // the clue chips are plain painted boxes the element owns, one per Slot...
-  expect(el.shadowRoot!.querySelectorAll('.box').length).toBe(slots);
+  openClues(el); // C0FFEE-73: the clue swatches live in the clue pane
+  // the clue swatches are plain painted boxes the element owns, one per Slot...
+  expect(el.shadowRoot!.querySelectorAll('.clueswatch').length).toBe(slots);
   // ...not <c0ffee-swatch>, whose click-to-load would hijack the hash with a clue color
   expect(el.shadowRoot!.querySelector('c0ffee-swatch')).toBeNull();
 });
@@ -409,7 +412,23 @@ const pressPhysical = (
 const clabel = (el: HTMLElement): string => el.shadowRoot!.querySelector('.clabel')!.textContent ?? '';
 const slotRowEl = (el: HTMLElement, key: string): HTMLElement =>
   el.shadowRoot!.querySelector(`[data-slot="${key}"]`) as HTMLElement;
-const tapClue = (el: HTMLElement, key: string): void => click(slotRowEl(el, key));
+// C0FFEE-73: the clue list now lives in a switchable pane reached via the "Clue list"
+// button (only present in the entry pane). openClues opens it if we are in the entry
+// pane and is a no-op once the clue pane is already showing (the button is gone there),
+// so it is safe to call before any clue-row interaction.
+const openClues = (el: HTMLElement): void => {
+  const btn = el.shadowRoot!.querySelector('[data-act="pane-clues"]');
+  if (btn) click(btn);
+};
+// A clue-row tap opens the clue pane (if needed), clicks the row, and — by the
+// auto-return contract — drops back into the entry pane with that Slot selected.
+const tapClue = (el: HTMLElement, key: string): void => {
+  openClues(el);
+  click(slotRowEl(el, key));
+};
+// The per-row status the clue panel projects: 'unguessed' | 'match' | 'wrong'.
+const rowState = (el: HTMLElement, key: string): string | null =>
+  slotRowEl(el, key).getAttribute('data-state');
 const pressNav = (el: HTMLElement, dir: 'prev' | 'next'): void =>
   click(el.shadowRoot!.querySelector(`[data-nav="${dir}"]`));
 // "1-Across" — the human clue label the element shows for a Slot (mirrors slotLabel).
@@ -429,12 +448,13 @@ test('<c0ffee-crossword> the host is keyboard-focusable (tabindex 0) so keys can
 test('<c0ffee-crossword> clue rows are <button>s carrying their Slot, and a tap routes selection', () => {
   const down = puzzle().layout.slots.find((s) => s.direction === 'down')!;
   const el = mount();
+  openClues(el); // C0FFEE-73: rows live in the clue pane
   const rows = [...el.shadowRoot!.querySelectorAll('.cluerow')] as HTMLElement[];
   expect(rows.length).toBe(puzzle().layout.slots.length);
   expect(rows.every((r) => r.tagName === 'BUTTON')).toBe(true);
   expect(rows.every((r) => !!r.getAttribute('data-slot'))).toBe(true);
-  // tapping a down clue selects that Slot (the element opens on the first across Slot)
-  expect(clabel(el)).toContain('Across');
+  // tapping a down clue selects that Slot AND auto-returns to the entry pane (the element
+  // opens on the first across Slot in the entry pane)
   tapClue(el, slotKey(down));
   expect(clabel(el)).toBe(labelOf(down));
 });
@@ -453,19 +473,19 @@ test('<c0ffee-crossword> the prev/next clue-nav controls are real <button>s', ()
   expect(el.shadowRoot!.querySelector('[data-nav="next"]')?.tagName).toBe('BUTTON');
 });
 
-test('<c0ffee-crossword> a not-yet-checked clue carries no verdict mark; a solved one shows a neutral mark', () => {
+test('<c0ffee-crossword> a not-yet-checked clue reads unguessed; a solved one reads match', () => {
   const p = puzzle();
-  const S = firstSlot();
+  const S = firstSlot(); // the element opens on S, selected, in the entry pane
   const el = mount();
-  // fresh: the active Slot has been graded by nothing, so no persistent mark
-  expect(slotRowEl(el, slotKey(S)).querySelector('.verdict')).toBeNull();
+  // fresh: S has been graded by nothing, so its clue-panel row is the unguessed state
+  openClues(el);
+  expect(rowState(el, slotKey(S))).toBe('unguessed');
+  // Escape returns to the entry pane with the selection unchanged; solve S there
+  pressPhysical(el, 'Escape');
   solveSelected(el, p.targets[slotKey(S)]);
-  const mark = slotRowEl(el, slotKey(S)).querySelector('.verdict');
-  expect(mark).toBeTruthy();
-  expect(mark!.textContent).toMatch(/solved/i); // icon + text
-  // contract #5: a persistent clue-list mark is achromatic (neutral white stroke), never
-  // a saturated channel color — assert the neutral stroke is what the glyph is drawn in
-  expect(mark!.innerHTML).toContain('rgba(255,255,255');
+  // re-open the clue pane: S now reads match (every Channel solved)
+  openClues(el);
+  expect(rowState(el, slotKey(S))).toBe('match');
 });
 
 test('<c0ffee-crossword> keyboard: hex digits fill cells (auto-advance) and Enter commits the Slot', () => {
@@ -582,20 +602,21 @@ test('<c0ffee-crossword> keyboard: a Cmd/Ctrl modifier chord is left for the bro
   expect(cursorKey(el)).toBe(cells[0]); // and the cursor did not advance
 });
 
-test('<c0ffee-crossword> a graded-but-unsolved clue shows the neutral "off" mark, not "solved"', () => {
+test('<c0ffee-crossword> a graded-but-unsolved clue reads wrong, painted with your guess color', () => {
   const p = puzzle();
   const S = firstSlot();
   const target = p.targets[slotKey(S)];
   // a six-digit Guess that differs from the target in the red Channel only (flip digit 0),
-  // so green + blue lock but the Slot is not fully solved -> the 'off' mark
+  // so green + blue lock but the Slot is not fully solved -> the 'wrong' row state
   const wrong = (target[0] === '0' ? '1' : '0') + target.slice(1);
   const el = mount();
   wrong.split('').forEach((d) => pressPhysical(el, d));
   pressPhysical(el, 'Enter');
-  const mark = slotRowEl(el, slotKey(S)).querySelector('.verdict');
-  expect(mark).toBeTruthy();
-  expect(mark!.textContent).toMatch(/off/i);
-  expect(mark!.innerHTML).toContain('rgba(255,255,255'); // contract #5 — achromatic
+  openClues(el);
+  const row = slotRowEl(el, slotKey(S));
+  expect(rowState(el, slotKey(S))).toBe('wrong');
+  // the "you" swatch carries the player's own six-digit guess color (not the latent answer)
+  expect(row.querySelector('.youswatch')!.getAttribute('style')).toContain(`#${wrong}`);
 });
 
 test('<c0ffee-crossword> keyboard: arrows clamp at the Slot ends (no wrap)', () => {
@@ -745,8 +766,8 @@ test('<c0ffee-crossword> Restart keeps the same puzzle; New generates a fresh on
   const targetFresh = generatePuzzle(SHAPE, SEED + 1).targets[firstClue];
 
   const a = mount();
+  // the entry pane's clue stage is painted the selected Slot's target (contract #1)
   const clueColor = (el: HTMLElement): string =>
-    (q(el, '.cluerow.sel .box') as HTMLElement | null)?.getAttribute('style') ??
     (q(el, '.stage.clue') as HTMLElement).getAttribute('style')!;
   expect(clueColor(a)).toContain(`#${targetSame}`);
   act(a, 'menu');
@@ -942,4 +963,140 @@ test('<c0ffee-crossword> confirm Cancel closes the dialog and leaves every entry
   act(el, 'confirm-cancel'); // Cancel must NOT wipe
   expect(q(el, '.confirm')).toBeNull();
   expect(el.shadowRoot!.querySelectorAll('.lock').length).toBe(locksBefore); // intact
+});
+
+// C0FFEE-73 — single-viewport switchable panes: below the constant board + topbar, the
+// player sees EITHER the entry pane (comparison + keypad) OR the clue-list pane (the
+// handoff's two-column CW-CluePanel). A "Clue list" button opens the list; tapping a row
+// selects that Slot and auto-returns to the entry pane. happy-dom can't see layout, so the
+// actual single-viewport FIT (board + one pane + chrome on one phone screen, the coach at
+// the visible bottom) and the spark/glow visuals are a human eyeball on `npm run dev`;
+// these assert the pane wiring, the auto-return, and the per-row status projection.
+
+test('<c0ffee-crossword> opens in the entry pane: keypad present, clue panel absent', () => {
+  const el = mount();
+  expect(q(el, '.keypad')).toBeTruthy(); // the entry pane (comparison + keypad)
+  expect(q(el, '.cluepanel')).toBeNull(); // the clue-list pane is not shown by default
+  // the board and topbar render unconditionally, above whichever pane is active
+  expect(q(el, '.board')).toBeTruthy();
+  expect(q(el, '.topbar')).toBeTruthy();
+});
+
+test('<c0ffee-crossword> the "Clue list" button swaps the entry pane for the clue-list pane', () => {
+  const el = mount();
+  expect(q(el, '[data-act="pane-clues"]')).toBeTruthy(); // the switch affordance is present
+  act(el, 'pane-clues');
+  // exactly one pane below the board: the clue panel is in, the keypad is out
+  expect(q(el, '.cluepanel')).toBeTruthy();
+  expect(q(el, '.keypad')).toBeNull();
+  // the board + topbar stay constant across the swap (the player keeps their place)
+  expect(q(el, '.board')).toBeTruthy();
+  expect(q(el, '.topbar')).toBeTruthy();
+});
+
+test('<c0ffee-crossword> tapping a clue row selects that Slot AND auto-returns to the entry pane', () => {
+  const down = puzzle().layout.slots.find((s) => s.direction === 'down')!;
+  const el = mount(); // opens on the first across Slot in the entry pane
+  act(el, 'pane-clues');
+  expect(q(el, '.keypad')).toBeNull(); // in the clue pane
+  click(slotRowEl(el, slotKey(down)));
+  // back in the entry pane (keypad present), with the tapped Slot now selected
+  expect(q(el, '.keypad')).toBeTruthy();
+  expect(q(el, '.cluepanel')).toBeNull();
+  expect(clabel(el)).toBe(labelOf(down));
+});
+
+test('<c0ffee-crossword> committing a guess and stepping clues both stay in the entry pane', () => {
+  const p = puzzle();
+  const S = firstSlot();
+  const el = mount();
+  // a commit (Check) is an entry-pane action — the keypad stays in front of the player
+  solveSelected(el, p.targets[slotKey(S)]);
+  expect(q(el, '.keypad')).toBeTruthy();
+  expect(q(el, '.cluepanel')).toBeNull();
+  // prev/next stepping is likewise an entry-pane action
+  pressNav(el, 'next');
+  expect(q(el, '.keypad')).toBeTruthy();
+  expect(q(el, '.cluepanel')).toBeNull();
+});
+
+test('<c0ffee-crossword> Escape from the clue pane returns to the entry pane, selection unchanged', () => {
+  const el = mount();
+  const before = clabel(el); // the opening Slot's label
+  act(el, 'pane-clues');
+  expect(q(el, '.cluepanel')).toBeTruthy();
+  pressPhysical(el, 'Escape'); // the clue pane is never a trap
+  expect(q(el, '.keypad')).toBeTruthy(); // back in the entry pane
+  expect(clabel(el)).toBe(before); // and on the same Slot we left
+});
+
+test('<c0ffee-crossword> the "Clue list" button and clue rows are real focusable <button>s', () => {
+  const el = mount();
+  expect(q(el, '[data-act="pane-clues"]')!.tagName).toBe('BUTTON');
+  act(el, 'pane-clues');
+  const rows = [...el.shadowRoot!.querySelectorAll('.cluerow')] as HTMLElement[];
+  expect(rows.length).toBe(puzzle().layout.slots.length);
+  expect(rows.every((r) => r.tagName === 'BUTTON')).toBe(true);
+});
+
+test('<c0ffee-crossword> the clue panel projects each Slot as unguessed / match / wrong', () => {
+  const p = puzzle();
+  const S = firstSlot();
+  const target = p.targets[slotKey(S)];
+  const el = mount();
+
+  // fresh: every row is unguessed
+  openClues(el);
+  expect(rowState(el, slotKey(S))).toBe('unguessed');
+
+  // commit a complete-but-wrong guess (flip the red Channel) -> wrong
+  pressPhysical(el, 'Escape');
+  const wrong = (target[0] === '0' ? '1' : '0') + target.slice(1);
+  wrong.split('').forEach((d) => pressPhysical(el, d));
+  pressPhysical(el, 'Enter');
+  openClues(el);
+  expect(rowState(el, slotKey(S))).toBe('wrong');
+
+  // solving it outright -> match (covered end-to-end by the reworked unguessed->match test)
+  expect(['unguessed', 'match', 'wrong']).toContain(rowState(el, slotKey(S)));
+});
+
+test('<c0ffee-crossword> a post-commit edit that empties a Cell reverts the row to unguessed', () => {
+  // "you" always means a real six-digit guess: emptying a Cell after a commit drops the
+  // your-guess swatch back to the "?" state until the Slot is re-committed
+  const p = puzzle();
+  const S = firstSlot();
+  const target = p.targets[slotKey(S)];
+  const wrong = (target[0] === '0' ? '1' : '0') + target.slice(1);
+  const el = mount();
+  wrong.split('').forEach((d) => pressPhysical(el, d));
+  pressPhysical(el, 'Enter'); // committed -> wrong (all six filled)
+  openClues(el);
+  expect(rowState(el, slotKey(S))).toBe('wrong');
+  // back to entry, clear the cursor Cell (an editable red Cell) -> only five filled
+  pressPhysical(el, 'Escape');
+  pressPhysical(el, 'Backspace');
+  openClues(el);
+  expect(rowState(el, slotKey(S))).toBe('unguessed');
+});
+
+test('<c0ffee-crossword> New resets the active pane back to entry', () => {
+  const el = mount();
+  act(el, 'pane-clues');
+  expect(q(el, '.cluepanel')).toBeTruthy();
+  // the topbar (and its menu) stay reachable from either pane
+  act(el, 'menu');
+  act(el, 'new');
+  act(el, 'confirm-ok');
+  expect(q(el, '.keypad')).toBeTruthy(); // a fresh puzzle opens in the entry pane
+  expect(q(el, '.cluepanel')).toBeNull();
+});
+
+test('<c0ffee-crossword> overlays still mount over the constrained screen', () => {
+  // the single-viewport .screen must not break the C0FFEE-67 overlay layer
+  const el = mount();
+  act(el, 'pause');
+  expect(q(el, '.screen')).toBeTruthy(); // the viewport-bounded screen is in place
+  expect(q(el, '.scrim')).toBeTruthy();
+  expect(q(el, '.pause')).toBeTruthy(); // and the overlay mounts on it
 });

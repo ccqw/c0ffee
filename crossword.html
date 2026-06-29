@@ -16,7 +16,10 @@
       background: var(--c0ffee-bg);
       color: var(--c0ffee-fg);
       font-family: var(--c0ffee-font);
-      min-height: 100vh;
+      /* svh (small viewport height): a mobile browser's collapsing toolbar can't grow the
+         page past the visible screen and reintroduce clipping of the single-viewport game
+         (Option A, C0FFEE-73). */
+      min-height: 100svh;
       display: flex; flex-direction: column;
     }
 
@@ -25,11 +28,13 @@
        top of the document; the crossword owns its own centered, clamped column below.
        Block layout (not flex) so the block-level <c0ffee-crossword> fills the width and
        its inner column self-centers — a flex row would shrink-wrap the host and starve
-       the fluid board of width. The board is tall (a ladder shape), so the page scrolls
-       rather than clipping it. */
+       the fluid board of width. flex:1 reserves all space below the Site banner; the
+       element fills it (Option A, C0FFEE-73) so the game fits one viewport without the
+       page scrolling — overflow is absorbed inside the active pane, not by <main>. */
     main {
       flex: 1;
-      padding: 2vh 5vw 6vh;
+      min-height: 0; /* let flex:1 bound <main> to the viewport remainder, not its content */
+      padding: 0.6vh 5vw 0.8vh; /* tight: the old generous 2vh/6vh was for the scroll layout */
     }
     c0ffee-crossword { display: block; max-width: 430px; margin: 0 auto; }
   </style>

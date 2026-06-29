@@ -10,6 +10,16 @@
 // coach, pause, destructive Restart/New confirm), the one-shot lock callout,
 // and the completion card — all on this same shadow tree.
 //
+// C0FFEE-73 makes the whole game fit one mobile viewport (ADR-0005): the region
+// below the constant board + topbar becomes two switchable panes. The entry pane
+// (comparison + keypad) is where you play; a "Clue list" button in the clue-nav
+// header opens the clue-list pane (the handoff's two-column CW-CluePanel: every
+// Slot's clue color beside your own guess). Tapping a clue row selects that Slot
+// and auto-returns to the entry pane; Escape returns unchanged. Exactly one pane
+// renders below the board at a time, so the page never has to scroll. Pure shell:
+// `activePane` is transient element state (never the URL hash), and the clue-vs-you
+// row status is derived from CrosswordState — no reducer or core change.
+//
 // The functional core is shipped and (almost) untouched: generatePuzzle
 // (C0FFEE-60) makes a crossing-consistent Puzzle; initCrossword/crosswordReducer
 // (C0FFEE-61) hold the CrosswordState this projects. The one core addition this
@@ -59,7 +69,7 @@ const DEFAULT_SEED = 1;
 // Natural px per Cell — caps the board's max-width (cols * CELL_PX) and sets its
 // aspect ratio. Every Cell is then positioned as a percentage, so the board is fluid
 // and scales with its container (the prototype's geometry).
-const CELL_PX = 42;
+const CELL_PX = 38;
 
 // How long a commit toast stays before it fades (transient teaching beat, contract #4).
 const TOAST_MS = 2600;
@@ -116,26 +126,25 @@ const TOAST_GLYPH: Record<ToastKind, string> = {
   wrong: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
 };
 
-// The two persistent per-Clue mark states (the absent third state is just no mark).
-type ClueMark = 'solved' | 'off';
+// The per-row status the clue-list pane projects for a Slot (C0FFEE-73 / CW-CluePanel):
+// 'unguessed' (no committed Guess, or a post-commit edit emptied a Cell), 'match' (every
+// Channel solved), 'wrong' (a full six-digit Guess committed that is not fully solved).
+type ClueRowState = 'unguessed' | 'match' | 'wrong';
 
-// The persistent per-Clue verdict marks in the clue list (ADR-0007 contract #5: a
-// PERSISTENT status mark stays achromatic — unlike the one transient toast). 'solved'
-// once every Channel of the Slot has locked; 'off' once a Guess has been graded but the
-// Slot is not yet fully solved. Drawn in the neutral fg, never a channel primary — the
-// graded higher/lower detail lives only on the inline board chips, not in this list.
-const CLUE_MARK: Record<ClueMark, { glyph: string; text: string }> = {
-  solved: {
-    glyph:
-      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
-    text: 'solved',
-  },
-  off: {
-    glyph:
-      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    text: 'off',
-  },
-};
+// The clue-list row's hamburger affordance lives in the entry pane's clue-nav header
+// (CW-InputDock): the "Clue list" button that swaps in the clue-list pane. Neutral chrome
+// off currentColor (contract #6), the prototype's three-line list glyph.
+const LIST_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+
+// The clue-panel's in-swatch marks (CW-CluePanel): a dark check stamped on a solved/match
+// swatch (legible on the saturated color), and a dark cross on the your-guess swatch of a
+// wrong row. Achromatic strokes over a colored ground (contract #3 — the glyph carries no
+// color content; the swatch underneath is the literal clue/guess color, contract #1).
+const PANEL_CHECK_SVG =
+  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const PANEL_CROSS_SVG =
+  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
 // The prev/next clue-nav chevrons (neutral chrome, contract #6). Lucide-style strokes
 // off currentColor so the button's color rule drives them.
@@ -305,6 +314,12 @@ class C0ffeeCrossword extends HTMLElement {
   private toast: { kind: ToastKind; text: string } | null = null;
   private toastTimer: number | null = null;
 
+  // Which pane renders below the constant board + topbar (C0FFEE-73). 'entry' is the
+  // comparison + keypad you play in; 'clues' is the clue-list pane (CW-CluePanel). Default
+  // 'entry' so the game opens ready to type; transient element state (never the URL hash),
+  // reset to 'entry' on every New/Restart via _loadPuzzle. Completion supersedes both.
+  private activePane: 'entry' | 'clues' = 'entry';
+
   // --- chrome (C0FFEE-67) ---
   // The current Puzzle object — kept so Restart can reuse it (newPuzzle(same Puzzle)
   // wipes entries/verdicts/locks but keeps the grid + targets); New advances the seed.
@@ -403,6 +418,7 @@ class C0ffeeCrossword extends HTMLElement {
       slot: firstSlot(puzzle.layout),
     });
     this.cursorKey = this._firstCursor();
+    this.activePane = 'entry'; // a fresh puzzle opens in the entry pane (C0FFEE-73)
     this.lockCallout = null;
     this.lockCalloutFired = false; // re-armed for the new puzzle
     this._clearLockCalloutTimer();
@@ -686,6 +702,7 @@ class C0ffeeCrossword extends HTMLElement {
     // Any board interaction dismisses the transient lock callout (decision 4) — even a
     // no-op one (a tap on a solved Cell), which is why it lives here, not in the handlers.
     if (this.lockCallout) this._dismissLockCallout();
+    if (act === 'pane-clues') return this._showCluePane();
     if (act === 'delete') return this._delete();
     if (act === 'check') return this._check();
     const keyEl = target.closest('[data-key]');
@@ -757,6 +774,12 @@ class C0ffeeCrossword extends HTMLElement {
       if (this.paused) return this._resume();
       if (this.coachOpen) return this._dismissCoach();
       if (this.lockCallout) return this._dismissLockCallout();
+      // the clue-list pane is never a trap: Escape returns to the entry pane unchanged,
+      // the keyboard twin of tapping the already-selected clue (C0FFEE-73)
+      if (this.activePane === 'clues') {
+        this.activePane = 'entry';
+        return this._render();
+      }
       this.blur();
       return;
     }
@@ -961,7 +984,19 @@ class C0ffeeCrossword extends HTMLElement {
     // no other editable Slot — nothing to move to
   }
 
-  // A clue-list tap: select that Slot and init the cursor to its first editable Cell. A
+  // Open the clue-list pane (the "Clue list" button, C0FFEE-73). The board + topbar stay
+  // constant above it; the entry pane's comparison + keypad are swapped out for the
+  // CW-CluePanel. A play action, so it is inert behind an overlay (routed below the
+  // _overlayUp guard in _handleClick).
+  private _showCluePane(): void {
+    this.activePane = 'clues';
+    this._dismissToast();
+    this._render();
+  }
+
+  // A clue-list tap: select that Slot, init the cursor to its first editable Cell, AND
+  // auto-return to the entry pane so the keypad is in front of the player ready to type
+  // (C0FFEE-73 — the clue-list pane has no back button; a row tap IS the return). A
   // fully-solved clue stays selectable (reviewable) — its cursor just resolves to null.
   // The data-slot string is the core's slotKey ("number-direction"), so it round-trips
   // back into a SlotRef the reducer validates.
@@ -976,20 +1011,25 @@ class C0ffeeCrossword extends HTMLElement {
     }
     this._dispatch({ type: 'select', slot: { number: Number(numStr), direction: dir } });
     this.cursorKey = this._firstCursor();
+    this.activePane = 'entry'; // a row tap drops back into the entry pane to type
     this._dismissToast();
     this._render();
   }
 
-  // The persistent per-Clue mark state (ADR-0007 contract #5): 'solved' once every Channel
-  // of the Slot has locked, 'off' once a Guess has been graded but it is not yet fully
-  // solved (including a partially-correct Slot — some Channels locked, others not), null
-  // when the Slot has never been checked (no mark). Reads the core's derived truth
-  // (verdicts / solved); never re-interprets digits.
-  private _clueVerdict(slot: Slot): ClueMark | null {
+  // The clue-list pane's per-row status (C0FFEE-73 / CW-CluePanel), derived from
+  // CrosswordState, never from re-interpreting digits beyond the "is it filled" check:
+  //  - 'unguessed' when no Guess has been graded (verdict null), OR a post-commit edit has
+  //    since emptied a Cell — "you" always means a real six-digit guess, so an incomplete
+  //    Slot reverts to the "?" state until re-committed;
+  //  - 'match' once every Channel is solved (the locked Cells spell the clue color);
+  //  - 'wrong' when a full six-digit Guess is committed but not fully solved.
+  private _clueRowState(slot: Slot): ClueRowState {
     const key = slotKey(slot);
-    if (this.state.verdicts[key] == null) return null;
+    if (this.state.verdicts[key] == null) return 'unguessed';
+    const filled = slot.cells.every((c) => this._cellState(cellKey(c)).digit !== null);
+    if (!filled) return 'unguessed';
     const s = this.state.solved[key];
-    return s.red && s.green && s.blue ? 'solved' : 'off';
+    return s.red && s.green && s.blue ? 'match' : 'wrong';
   }
 
   // --- cursor helpers ------------------------------------------------------
@@ -1092,16 +1132,20 @@ class C0ffeeCrossword extends HTMLElement {
   private _render(): void {
     const { layout } = this.state.puzzle;
     const complete = this.state.complete;
-    // On completion the dock (keypad + clue-nav + clue list) is replaced by the completion
-    // card, and the board switches to its solved recolor/bloom variant (scene 04). Mid-play
-    // it is the playable dock.
+    // On completion the dock is replaced wholesale by the completion card, and the board
+    // switches to its solved recolor/bloom variant (scene 04) — the pane split governs only
+    // the mid-play body. Mid-play, exactly one pane renders below the board (C0FFEE-73):
+    // the entry pane (clue-nav header + comparison + keypad) you play in, or the clue-list
+    // pane (CW-CluePanel). One pane at a time keeps the board + pane + chrome to one screen.
     const body = complete
       ? this._completionCard()
-      : `<section class="dock panel">
-          ${this._compare()}
-          ${this._inputDock()}
-          ${this._clueList(layout)}
-        </section>`;
+      : this.activePane === 'clues'
+        ? this._cluePanel(layout)
+        : `<section class="dock panel">
+            ${this._clueNav()}
+            ${this._compare()}
+            ${this._inputDock()}
+          </section>`;
     // Rewrite only the body — the <style> sheet lives in the scaffold and is not re-parsed.
     this.body.innerHTML = `
       <div class="screen">
@@ -1456,14 +1500,27 @@ class C0ffeeCrossword extends HTMLElement {
 
     return `<div class="compare">
       <div class="cmeta">
-        <button type="button" class="navbtn" data-nav="prev" aria-label="Previous clue">${NAV_GLYPH.prev}</button>
         <span class="clabel">${label}</span>
         ${meta}
-        <button type="button" class="navbtn" data-nav="next" aria-label="Next clue">${NAV_GLYPH.next}</button>
       </div>
       <div class="stages">
         <div class="stage clue" style="${clueStyle}"></div>
         ${mix}
+      </div>
+    </div>`;
+  }
+
+  // The clue-nav header (CW-InputDock two-part row, C0FFEE-73): a labelled "Clue list"
+  // button top-left that opens the clue-list pane, and the prev/next chevrons top-right.
+  // The "Clue list" button rides the same delegated click handler via data-act, so it
+  // inherits the focus-visible ring; prev/next keep their data-nav contract (_step). The
+  // clue label itself lives in the comparison band below (see _compare), as drawn.
+  private _clueNav(): string {
+    return `<div class="cluenav">
+      <button type="button" class="cluelistbtn" data-act="pane-clues" aria-label="Show clue list">${LIST_SVG}<span>Clue list</span></button>
+      <div class="navchevrons">
+        <button type="button" class="navbtn" data-nav="prev" aria-label="Previous clue">${NAV_GLYPH.prev}</button>
+        <button type="button" class="navbtn" data-nav="next" aria-label="Next clue">${NAV_GLYPH.next}</button>
       </div>
     </div>`;
   }
@@ -1510,36 +1567,62 @@ class C0ffeeCrossword extends HTMLElement {
     return `<div class="toastwrap"><span class="toast ${this.toast.kind}">${TOAST_GLYPH[this.toast.kind]}${this.toast.text}</span></div>`;
   }
 
-  // The Across/Down clue list: one tappable row per Slot — its number, a painted box of
-  // its clue Color value, and (once checked) a neutral verdict mark. A tap routes to that
-  // Slot (C0FFEE-66); the rows are real <button>s with the focus-visible ring, so the list
-  // is fully keyboard/pointer drivable. NOT <c0ffee-swatch> (which would emit colorchange
-  // and hijack the hash). The six-digit answer stays latent: only the color is shown,
-  // which is the clue (you reason its hex), so nothing is leaked.
-  private _clueList(layout: Layout): string {
+  // The clue-list pane (CW-CluePanel, C0FFEE-73): the Across/Down clues side by side, each
+  // a tappable row of Slot number -> clue swatch -> connector -> your-guess swatch, showing
+  // every clue's color next to your own guess and its status at a glance. A tap routes to
+  // that Slot and auto-returns to the entry pane (_routeToClue); the rows are real <button>s
+  // with the focus-visible ring, so the pane is fully keyboard/pointer drivable. NOT
+  // <c0ffee-swatch> (which would emit colorchange and hijack the hash). No latent answer
+  // leaks (ADR-0007): a row shows the clue color (which IS the clue) and the player's own
+  // committed guess — never an unsolved answer's digits.
+  private _cluePanel(layout: Layout): string {
     const sel = this.state.selected;
+    const row = (slot: Slot): string => {
+      const key = slotKey(slot);
+      const clueHex = this._target(slot);
+      const st = this._clueRowState(slot);
+      const isSel = !!sel && sel.number === slot.number && sel.direction === slot.direction;
+      // clue swatch: glows + stamps a check at match; a plain painted box otherwise
+      const clueSwatch =
+        st === 'match'
+          ? `<span class="clueswatch match" style="background:#${clueHex};">${PANEL_CHECK_SVG}</span>`
+          : `<span class="clueswatch" style="background:#${clueHex};"></span>`;
+      // connector: a spark once solved, an arrow (clue -> you) while you are still guessing
+      const connector =
+        st === 'match'
+          ? `<span class="connector spark" aria-hidden="true">&#10022;</span>`
+          : `<span class="connector" aria-hidden="true">&#8594;</span>`;
+      // your-guess swatch: "?" until a full Guess is committed; the clue color (with a
+      // check) once solved; your own six-digit guess color (with a cross) when wrong
+      let youSwatch: string;
+      if (st === 'unguessed') {
+        youSwatch = `<span class="youswatch q" title="no guess yet"><span class="q">?</span></span>`;
+      } else if (st === 'match') {
+        youSwatch = `<span class="youswatch match" style="background:#${clueHex};" title="solved">${PANEL_CHECK_SVG}</span>`;
+      } else {
+        const guess = slot.cells.map((c) => this._cellState(cellKey(c)).digit).join('');
+        youSwatch = `<span class="youswatch wrong" style="background:#${guess};" title="checked - wrong">${PANEL_CROSS_SVG}</span>`;
+      }
+      return `<li><button type="button" class="cluerow${isSel ? ' sel' : ''}" data-slot="${key}" data-state="${st}" aria-pressed="${isSel}">
+        <span class="cnum">${slot.number}</span>
+        ${clueSwatch}
+        ${connector}
+        ${youSwatch}
+      </button></li>`;
+    };
     const group = (direction: 'across' | 'down', heading: string): string => {
       const rows = layout.slots
         .filter((s) => s.direction === direction)
         .sort((a, b) => a.number - b.number)
-        .map((slot) => {
-          const hex = this._target(slot);
-          const key = slotKey(slot);
-          const isSel = !!sel && sel.number === slot.number && sel.direction === slot.direction;
-          const v = this._clueVerdict(slot);
-          const mark = v
-            ? `<span class="verdict">${CLUE_MARK[v].glyph}<span class="vt">${CLUE_MARK[v].text}</span></span>`
-            : '';
-          return `<li><button type="button" class="cluerow${isSel ? ' sel' : ''}" data-slot="${key}" aria-pressed="${isSel}">
-            <span class="cnum">${slot.number}</span>
-            <span class="box" style="background:#${hex};"></span>
-            ${mark}
-          </button></li>`;
-        })
+        .map(row)
         .join('');
-      return `<div class="cluegroup"><h2>${heading}</h2><ul>${rows}</ul></div>`;
+      return `<div class="cluegroup">
+        <h2>${heading}</h2>
+        <div class="colhead"><span class="ch-clue">clue</span><span class="ch-you">you</span></div>
+        <ul>${rows}</ul>
+      </div>`;
     };
-    return `<div class="cluelist">${group('across', 'Across')}${group('down', 'Down')}</div>`;
+    return `<section class="cluepanel panel">${group('across', 'Across')}${group('down', 'Down')}</section>`;
   }
 }
 
@@ -1547,7 +1630,10 @@ class C0ffeeCrossword extends HTMLElement {
 // surface recipe, shared with swatch.ts / console.ts). Keypad keys, toasts, chips, and
 // the cursor caret are this slice's additions onto the slice-1 skeleton.
 const STYLE = `
-  :host { display:block; font-family:var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); outline:none; }
+  /* fill <main> so .screen can bound itself to one viewport (Option A, C0FFEE-73): the
+     host stretches to the height <main> reserves (flex:1 under the Site banner), and
+     .screen takes height:100% of that — never taller than the screen. */
+  :host { display:block; height:100%; font-family:var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); outline:none; }
   /* the puzzle is one focusable unit (tabindex on the host) — show the keyboard-focus ring
      when it is reached by Tab, the same accent ring every control uses (C0FFEE-66) */
   :host(:focus-visible) { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:3px; border-radius:18px; }
@@ -1559,16 +1645,20 @@ const STYLE = `
   /* mobile-first fluid; centered, clamped column on wide viewports (ADR-0005).
      position:relative so the absolute overlay layer (scrim, pause/confirm cards, the
      coach bottom-sheet, the lock callout) anchors to the screen, not the page. */
-  .screen { position:relative; display:flex; flex-direction:column; gap:14px; min-height:100%;
-            width:100%; max-width:430px; margin:0 auto; padding:18px 0;
+  /* one-viewport host: height:100% (not min-height) bounds the screen to <main>, and
+     min-height:0 lets the active pane's own scroll region (not the page) absorb overflow
+     (Option A, C0FFEE-73). The board + topbar are fixed; only the pane below them flexes. */
+  .screen { position:relative; display:flex; flex-direction:column; gap:11px; height:100%; min-height:0;
+            width:100%; max-width:430px; margin:0 auto; padding:6px 0;
             background:var(--c0ffee-bg, #0a0a0b); }
 
   /* surface recipe — dressed page bg, never a lighter fill */
   .panel { background:var(--c0ffee-bg, #0a0a0b); border-radius:16px;
            box-shadow:inset 0 0 0 1px rgba(255,255,255,.18), 0 16px 34px -20px rgba(0,0,0,.85); }
 
-  /* the negative-offset clue numbers need room outside the board box */
-  .boardwrap { padding:20px 22px; }
+  /* the negative-offset clue numbers need room outside the board box. flex:none so the
+     board keeps its size and the pane below it absorbs the leftover height (C0FFEE-73). */
+  .boardwrap { flex:none; padding:14px 22px; }
   .board { position:relative; }
   .cell { position:absolute; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .cell .glyph { position:relative; z-index:3; font:400 21px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
@@ -1578,13 +1668,23 @@ const STYLE = `
   .cell .lock { position:absolute; top:3px; right:4px; line-height:0; opacity:.65; z-index:5; }
   .num { position:absolute; font:400 10px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74); z-index:6; pointer-events:none; }
 
-  .dock { padding:16px; display:flex; flex-direction:column; gap:16px; margin:0 14px; }
+  .dock { padding:14px 16px; display:flex; flex-direction:column; gap:12px; margin:0 14px; }
+
+  /* clue-nav header (CW-InputDock two-part row, C0FFEE-73): "Clue list" button left,
+     prev/next chevrons right. The clue label itself sits in the comparison band below. */
+  .cluenav { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .cluelistbtn { display:flex; align-items:center; gap:6px; min-height:38px; padding:4px 8px; margin:0 -8px;
+                 border:none; border-radius:8px; background:none; cursor:pointer; flex:none;
+                 color:rgba(255,255,255,.82); font:400 11px/1 var(--c0ffee-font, monospace); letter-spacing:.02em; white-space:nowrap; }
+  .cluelistbtn:hover { color:var(--c0ffee-fg, #ededed); }
+  .cluelistbtn:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
+  .navchevrons { display:flex; align-items:center; gap:6px; }
 
   /* the comparison: clue + live mix — the literal Color values (contract #1); the active
      outline (#2) and the transient commit toast (#4) are the other saturated surfaces */
   .compare { display:flex; flex-direction:column; gap:11px; }
   .cmeta { display:flex; align-items:center; gap:10px; min-height:18px; }
-  /* prev/next clue-nav: neutral chevron buttons flanking the clue label (contract #6) */
+  /* prev/next clue-nav: neutral chevron buttons (contract #6) */
   .navbtn { flex:none; width:30px; height:30px; padding:0; border:none; border-radius:8px;
             background:var(--c0ffee-bg, #0a0a0b); box-shadow:inset 0 0 0 1px rgba(255,255,255,.19);
             color:rgba(255,255,255,.78); cursor:pointer; display:flex; align-items:center; justify-content:center; }
@@ -1597,12 +1697,12 @@ const STYLE = `
   .chip .id { font:500 11.5px/1 var(--c0ffee-font, monospace); }
   .chip .glyph { line-height:0; }
   .stages { display:flex; gap:10px; }
-  .stage { flex:1; height:72px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  .stage { flex:1; height:62px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
   .stage.mix { display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
   .stage.mix .q { font:400 26px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-accent, #C0FFEE); opacity:.8; }
 
   /* the input dock — toast above the hex keypad */
-  .inputdock { position:relative; display:flex; flex-direction:column; gap:8px; }
+  .inputdock { position:relative; display:flex; flex-direction:column; gap:6px; }
   .toastwrap { position:absolute; left:0; right:0; bottom:100%; margin-bottom:10px; display:flex;
                justify-content:center; pointer-events:none; z-index:5; }
   .toast { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px;
@@ -1612,9 +1712,9 @@ const STYLE = `
   .toast.win   { background:#0d2417; box-shadow:inset 0 0 0 1px rgba(60,235,120,.55), 0 10px 24px -10px rgba(0,0,0,.7); color:#7be8a5; }
   .toast.wrong { background:#2a1212; box-shadow:inset 0 0 0 1px rgba(255,80,80,.5), 0 10px 24px -10px rgba(0,0,0,.7); color:#ff8b8b; }
 
-  .keypad { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
-  .keyrow { display:grid; grid-template-columns:1fr 2fr; gap:6px; }
-  .key { min-height:44px; border:none; border-radius:9px; background:var(--c0ffee-bg, #0a0a0b);
+  .keypad { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+  .keyrow { display:grid; grid-template-columns:1fr 2fr; gap:5px; }
+  .key { min-height:40px; border:none; border-radius:9px; background:var(--c0ffee-bg, #0a0a0b);
          box-shadow:inset 0 0 0 1px rgba(255,255,255,.19); color:var(--c0ffee-fg, #ededed);
          font:400 18px/1 var(--c0ffee-font, monospace); cursor:pointer;
          display:flex; align-items:center; justify-content:center; gap:7px; }
@@ -1624,25 +1724,52 @@ const STYLE = `
                font:400 14px/1 var(--c0ffee-font, monospace); letter-spacing:.04em; }
   .key:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
 
-  .cluelist { display:flex; gap:18px; }
-  .cluegroup { flex:1; }
-  .cluegroup h2 { margin:0 0 8px; font:500 9.5px/1 var(--c0ffee-font, monospace);
-                  letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.5); }
+  /* the clue-list pane (CW-CluePanel, C0FFEE-73): the Across/Down clues side by side. As
+     the active pane below the board it absorbs overflow itself (min-height:0 + overflow:auto)
+     so a long list scrolls within the panel while the board + chrome stay put. */
+  .cluepanel { flex:1 1 auto; min-height:0; overflow:auto; margin:0 14px; padding:18px; display:flex; gap:18px; }
+  .cluegroup { flex:1; min-width:0; }
+  .cluegroup h2 { margin:0 0 8px; font:400 14px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
+  /* the "clue" / "you" column captions over each row's two swatches */
+  .colhead { display:flex; gap:8px; margin:0 0 5px; padding:0 8px 0 24px; }
+  .colhead span { width:30px; text-align:center; flex:none; font:400 9.5px/1 var(--c0ffee-font, monospace);
+                  letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.74); }
+  .colhead .ch-you { margin-left:16px; } /* skip the connector column to sit over the you swatch */
   .cluegroup ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; }
   .cluegroup li { display:flex; }
-  /* a clue row is a real <button> (reset to inherit the panel) so a tap routes to its
-     Slot and the focus-visible ring lands here; 44px min-height keeps it a touch target */
-  .cluerow { flex:1; display:flex; align-items:center; gap:8px; min-height:36px; padding:4px 7px;
+  /* a clue row is a real <button> (reset to inherit the panel) so a tap routes to its Slot
+     and the focus-visible ring lands here; 44px min-height keeps it a touch target */
+  .cluerow { flex:1; display:flex; align-items:center; gap:11px; min-height:44px; padding:6px 8px;
              border:none; border-radius:8px; background:none; color:inherit; cursor:pointer;
              font:inherit; text-align:left; }
   .cluerow.sel { background:rgba(255,255,255,.05); box-shadow:inset 0 0 0 1px rgba(255,255,255,.28); }
   .cluerow:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
-  .cluerow .cnum { font:400 12px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74); min-width:14px; }
-  .cluerow .box { width:22px; height:22px; border-radius:6px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); flex:none; }
-  /* the persistent verdict mark — achromatic icon + muted text (contract #5) */
-  .cluerow .verdict { margin-left:auto; display:inline-flex; align-items:center; gap:4px; line-height:0; }
-  .cluerow .verdict .vt { font:400 9px/1 var(--c0ffee-font, monospace); letter-spacing:.1em;
-                          text-transform:uppercase; color:rgba(255,255,255,.6); }
+  .cluerow .cnum { font:400 13px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.7);
+                   width:12px; text-align:right; flex:none; }
+  /* the two color swatches: the clue (its target color, contract #1) and your own guess */
+  .clueswatch, .youswatch { width:30px; height:30px; border-radius:7px; flex:none;
+                            box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);
+                            display:flex; align-items:center; justify-content:center; line-height:0; }
+  .youswatch.q { background:var(--c0ffee-bg, #0a0a0b); box-shadow:inset 0 0 0 1px rgba(255,255,255,.15); }
+  .youswatch.q .q { font:500 16px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.46); line-height:1; }
+  /* connector between the swatches: a spark (accent) once solved, else a muted arrow */
+  .connector { width:16px; text-align:center; flex:none; font:400 13px/1 var(--c0ffee-font, monospace);
+               color:rgba(255,255,255,.62); }
+  .connector.spark { color:var(--c0ffee-accent, #C0FFEE); }
+  /* a solved swatch glows softly; the spark twinkles (both respect reduced-motion below) */
+  .clueswatch.match, .youswatch.match { animation:cw-glow 2.4s ease-in-out infinite; }
+  .connector.spark { animation:cw-twinkle 2.3s ease-in-out infinite; display:inline-block; }
+  @keyframes cw-glow {
+    0%,100% { box-shadow:inset 0 0 0 1px rgba(255,255,255,.22), 0 0 6px -1px rgba(192,255,238,.32); }
+    50% { box-shadow:inset 0 0 0 1px rgba(255,255,255,.64), 0 0 13px 0 rgba(192,255,238,.6); }
+  }
+  @keyframes cw-twinkle {
+    0%,100% { opacity:.45; transform:scale(.78) rotate(0deg); }
+    50% { opacity:1; transform:scale(1.2) rotate(45deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .clueswatch.match, .youswatch.match, .connector.spark { animation:none; }
+  }
 
   /* === chrome (C0FFEE-67) === all neutral off --c0ffee-fg (contract #6); the accent is
      "you"/primary actions; semantic colour only on the destructive confirm + warn glyph. */
