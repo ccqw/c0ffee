@@ -30,7 +30,7 @@ _Avoid_: current step, focus
 
 **Inline swatch**:
 A word-sized, read-only Swatch designed to sit inside prose (a "sparkline swatch"), rendered as a rounded **chip**. The `hex` is always its identity. Has two render modes: **mode A** (no `label`) shows a tiny swatch box + the hex; **mode C** (`label` present) paints the author-supplied word and hides the hex at rest. Hover/tap shows a uniform tooltip `{hex} · click to load`; clicking loads its Color value into the Lesson's Companion console.
-_Avoid_: chip (that's the visual style of an inline swatch), sample, sparkline (informal)
+_Avoid_: chip (that's the inline swatch's *render style* — and, separately, the name of the **Site banner**'s brand mark — never a noun for the inline swatch itself), sample, sparkline (informal)
 
 **Site banner**:
 The site's chrome strip at the **top of the document** on every page — a small mint **chip** (an 18px rounded square in the namesake `#C0FFEE`) beside the `c0ffee` wordmark on the left, kept minimal so it reads as **brand, not as a Swatch**. (The chip lockup adopted from the crossword-face handoff in C0FFEE-76, 2026-06-29, superseding the C0FFEE-46/52 `#C0FFEE cafe` + pixel-cup lockup.) It exists specifically to never be mistaken for the console's displayed color: the Swatch is the only **large** painted patch on a page; the banner is quiet chrome that blends into the neutral/dark background. The chip is the one place the banner carries a mint **fill** — small enough to read as a glyph, not a patch — so the never-a-Swatch promise holds. **Brand + optional section, no nav:** the `[chip] c0ffee` cluster acts as the home link, and a page may supply a **section label** (a non-clickable context word after a `·`, e.g. `Crosshatch` on the crossword route) — but there is still no nav; a nav affordance (dropdown/menu, language TBD) is deferred until the **Menu** is worth surfacing — the same "more than one thing to show" trigger that un-hides the Menu. (Accepted consequence: until then, home has no in-page path to the Lesson/Menu — they're reached by direct URL.) **Not sticky:** it scrolls away as the page scrolls (so the top-pinned Companion console, ADR-0005, owns the top while reading); on a short page with nothing to scroll, it simply stays visible.
@@ -142,7 +142,7 @@ These three layers separate the abstract color from how it is written and transp
 
 **Swatch**:
 A visual rendered patch of a Color value on screen (the big swatch and the Additive Venn regions).
-_Avoid_: tile, chip, sample
+_Avoid_: tile, chip, sample (a Swatch is a *large* painted Color patch — never a "chip"; that word names the **Site banner**'s small brand mark, which is deliberately *not* a Swatch)
 
 **Color value**:
 The abstract color — the live R/G/B triple a color-bearing interactive holds as its source of truth. Notation-independent.
