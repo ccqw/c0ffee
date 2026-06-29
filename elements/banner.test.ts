@@ -4,18 +4,20 @@
 // by the ADR-0001 Color value interface. So unlike the swatch/console shell
 // tests, there's no value/hex/colorchange contract to assert. What IS load-
 // bearing — and what these tests pin — is its *behavioral* promise: a single
-// home affordance (the wordmark links to /), no nav affordance yet (deferred),
-// and that it reads as quiet chrome, never sticky.
+// home affordance (the brand links to /), an optional per-page section label
+// that is context, NOT nav, and that it reads as quiet chrome, never sticky.
 //
-// C0FFEE-52: the cup lockup won the C0FFEE-46 live eval and is now THE banner —
-// `#C0FFEE cafe` wordmark with the pixel-cup badge. No variants, no flag.
+// C0FFEE-76: adopts the crossword-face handoff's chip lockup — an 18px mint
+// chip + the `c0ffee` wordmark, with a per-page `section=` suffix (e.g.
+// "Crosshatch" on the crossword route). Supersedes the C0FFEE-46/52 cup-badge
+// lockup; the namesake mint now lives in the chip, not on the zero glyph.
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import './banner.ts';
 
 const NEXT = () => new Promise((r) => setTimeout(r, 0));
-const mount = async () => {
-  document.body.innerHTML = '<c0ffee-banner></c0ffee-banner>';
+const mount = async (attrs = '') => {
+  document.body.innerHTML = `<c0ffee-banner ${attrs}></c0ffee-banner>`;
   await NEXT();
   return document.querySelector('c0ffee-banner')!.shadowRoot!;
 };
@@ -25,39 +27,51 @@ describe('<c0ffee-banner> (the Site banner)', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders the #C0FFEE cafe wordmark in a shadow root', async () => {
+  it('renders the c0ffee brand wordmark in a shadow root', async () => {
     const root = await mount();
-    expect(root.textContent).toContain('#C0FFEE');
-    expect(root.textContent).toContain('cafe');
+    expect(root.querySelector('.wordmark')!.textContent).toBe('c0ffee');
   });
 
-  it('puts the mint accent on the zero', async () => {
+  it('carries the namesake mint in a chip mark fed by the accent token', async () => {
     const root = await mount();
-    const zero = root.querySelector('.zero');
-    expect(zero).not.toBeNull();
-    expect(zero!.textContent).toBe('0');
+    expect(root.querySelector('.chip')).not.toBeNull();
+    const style = root.querySelector('style')!.textContent ?? '';
+    // the chip is the banner's mint mark — the namesake color lives here now
+    expect(style).toMatch(/\.chip[^}]*--c0ffee-accent/);
   });
 
-  it('renders the pixel-cup badge image from public/', async () => {
-    const root = await mount();
-    const img = root.querySelector('img');
-    expect(img).not.toBeNull();
-    // absolute path: resolves from every page (/, /menu, /lessons/*) on the
-    // built site, not just the dev server
-    expect(img!.getAttribute('src')).toBe('/pixie-badge.png');
-  });
-
-  it('makes the wordmark the home link (brand-only — no nav yet)', async () => {
+  it('makes [chip] c0ffee the sole home link (brand-only — no nav yet)', async () => {
     const root = await mount();
     const links = root.querySelectorAll('a');
     // exactly one link, pointing home — no Menu/nav links yet (deferred)
     expect(links.length).toBe(1);
     expect(links[0].getAttribute('href')).toBe('/');
-    expect(links[0].textContent).toContain('#C0FFEE');
+    expect(links[0].textContent).toContain('c0ffee');
+    // the chip rides inside the home link
+    expect(links[0].querySelector('.chip')).not.toBeNull();
+  });
+
+  it('shows no section label when section= is absent (home / menu)', async () => {
+    const root = await mount();
+    expect(root.querySelector('.section')).toBeNull();
+  });
+
+  it('renders a per-page section label when section= is set (crossword route)', async () => {
+    const root = await mount('section="Crosshatch"');
+    const label = root.querySelector('.section');
+    expect(label).not.toBeNull();
+    expect(label!.textContent).toContain('Crosshatch');
+  });
+
+  it('keeps the section label out of the home link — it is context, not nav', async () => {
+    const root = await mount('section="Crosshatch"');
+    // still exactly one link (the brand); the section is a label, not an affordance
+    expect(root.querySelectorAll('a').length).toBe(1);
+    expect(root.querySelector('a')!.textContent).not.toContain('Crosshatch');
   });
 
   it('has no nav affordance yet (deferred until the Menu earns surfacing)', async () => {
-    const root = await mount();
+    const root = await mount('section="Crosshatch"');
     expect(root.querySelector('nav')).toBeNull();
   });
 
