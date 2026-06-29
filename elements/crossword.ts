@@ -1769,10 +1769,9 @@ const STYLE = `
   /* connector between the swatches: a spark (accent) once solved, else a muted arrow */
   .connector { width:16px; text-align:center; flex:none; font:400 13px/1 var(--c0ffee-font, monospace);
                color:rgba(255,255,255,.62); }
-  .connector.spark { color:var(--c0ffee-accent, #C0FFEE); }
   /* a solved swatch glows softly; the spark twinkles (both respect reduced-motion below) */
   .clueswatch.match, .youswatch.match { animation:cw-glow 2.4s ease-in-out infinite; }
-  .connector.spark { animation:cw-twinkle 2.3s ease-in-out infinite; display:inline-block; }
+  .connector.spark { color:var(--c0ffee-accent, #C0FFEE); animation:cw-twinkle 2.3s ease-in-out infinite; }
   @keyframes cw-glow {
     0%,100% { box-shadow:inset 0 0 0 1px rgba(255,255,255,.22), 0 0 6px -1px rgba(192,255,238,.32); }
     50% { box-shadow:inset 0 0 0 1px rgba(255,255,255,.64), 0 0 13px 0 rgba(192,255,238,.6); }
