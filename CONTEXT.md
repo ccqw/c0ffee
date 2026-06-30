@@ -102,7 +102,7 @@ _Avoid_: entry, word, grid address; **light** (reserved — a **Channel** is lig
 
 **Clue**:
 A **Slot**'s prompt: the Slot's `1-Across` identifier together with a **Swatch** of the target color (small, click-to-enlarge). The Swatch is **an element of** the Clue, not the Clue itself.
-_Avoid_: hint (that names the per-digit feedback).
+_Avoid_: hint (that names the per-Channel feedback).
 
 **Cell**:
 One grid square holding a single hex digit (`0–F`). A Cell shared by a crossing pair of **Slots** is **dual-role**: both Slots require the same digit *value*, but it plays a different **Channel** and place-value in each direction (the across Slot's green-16s may be the down Slot's red-1s). Same value, two meanings — which is also what lets solving one color's channel hand you a digit in another color's *different* channel. The crossword therefore works at two sizes: it binds **Cells** (single digits) at its intersections, but its unit of feedback and meaning is the **Channel** (two digits) — intersection is per-digit, semantics per-Channel.

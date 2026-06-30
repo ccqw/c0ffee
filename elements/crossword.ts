@@ -345,6 +345,7 @@ class C0ffeeCrossword extends HTMLElement {
   // Overlay layer — all three ride one shared scrim primitive (decision 5).
   private paused = false; // pause scrim up
   private menuOpen = false; // topbar kebab dropdown open
+  private legendOpen = false; // channel-hint "?" key popover open (C0FFEE-77)
   private confirm: PendingConfirm | null = null; // destructive-confirm dialog (Restart/New)
   private coachOpen = false; // first-run / re-summoned coach bottom-sheet
   private coachStep: 0 | 1 = 0; // the coach's two explainer steps
@@ -510,6 +511,7 @@ class C0ffeeCrossword extends HTMLElement {
     this.paused = false;
     this.confirm = null;
     this.menuOpen = false;
+    this.legendOpen = false;
     this.coachOpen = true;
     this.coachStep = 0;
     this._render();
@@ -532,6 +534,7 @@ class C0ffeeCrossword extends HTMLElement {
     this.coachOpen = false;
     this.paused = true;
     this.menuOpen = false;
+    this.legendOpen = false;
     this._stopTimer(); // the clock pauses with the scrim (decision 6)
     this._render();
   }
@@ -544,6 +547,16 @@ class C0ffeeCrossword extends HTMLElement {
 
   private _toggleMenu(): void {
     this.menuOpen = !this.menuOpen;
+    if (this.menuOpen) this.legendOpen = false; // the two transient popovers never co-open
+    this._render();
+  }
+
+  // The channel-hint "?" disclosure (C0FFEE-77): a transient twin of the kebab menu. Opening
+  // it closes the kebab so the two are never up together (and so Escape's precedence — legend
+  // first — only ever has one to resolve). Not a scrim overlay: the board stays interactive.
+  private _toggleLegend(): void {
+    this.legendOpen = !this.legendOpen;
+    if (this.legendOpen) this.menuOpen = false;
     this._render();
   }
 
@@ -554,6 +567,7 @@ class C0ffeeCrossword extends HTMLElement {
     this.coachOpen = false;
     this.confirm = action;
     this.menuOpen = false;
+    this.legendOpen = false;
     this._render();
   }
   private _cancelConfirm(): void {
@@ -572,6 +586,7 @@ class C0ffeeCrossword extends HTMLElement {
   private _closeOverlays(): void {
     this.paused = false;
     this.menuOpen = false;
+    this.legendOpen = false;
     this.confirm = null;
     this.coachOpen = false;
   }
@@ -672,6 +687,11 @@ class C0ffeeCrossword extends HTMLElement {
       case 'menu-close':
         this.menuOpen = false;
         return this._render();
+      case 'legend':
+        return this._toggleLegend();
+      case 'legend-close':
+        this.legendOpen = false;
+        return this._render();
       case 'help':
         return this._openCoach();
       case 'restart':
@@ -702,6 +722,10 @@ class C0ffeeCrossword extends HTMLElement {
     // Any board interaction dismisses the transient lock callout (decision 4) — even a
     // no-op one (a tap on a solved Cell), which is why it lives here, not in the handlers.
     if (this.lockCallout) this._dismissLockCallout();
+    // The channel-hint legend is transient too: any board interaction retracts it. In the
+    // browser the full-bleed backdrop already catches a pointer tap (closing it before this
+    // runs); this also covers a synthetic click and keeps the two paths in step (C0FFEE-77).
+    if (this.legendOpen) this.legendOpen = false;
     // In the clue pane only a clue-row tap is live (it routes the Slot and auto-returns to
     // the entry pane); the board stays visible but is a passive reference there, so a
     // board-cell tap is inert — the keypad/delete/check/nav are not even rendered. This
@@ -770,11 +794,16 @@ class C0ffeeCrossword extends HTMLElement {
     // NOT excluded: Shift+Tab is the prev-Slot binding.
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
-    // Escape closes an open overlay first (menu -> confirm -> pause -> coach -> lock
-    // callout), and only releases focus when nothing is open. Since Tab is rebound to
-    // prev/next Slot (PRD decision 8), a focused puzzle would otherwise trap the keyboard;
-    // blur is the escape hatch (the full roving-focus / SR model is C0FFEE-63).
+    // Escape closes an open overlay first (legend -> menu -> confirm -> pause -> coach ->
+    // lock callout), and only releases focus when nothing is open. The channel-hint legend
+    // sits at the TOP: it is the most local, transient disclosure (C0FFEE-77). Since Tab is
+    // rebound to prev/next Slot (PRD decision 8), a focused puzzle would otherwise trap the
+    // keyboard; blur is the escape hatch (the full roving-focus / SR model is C0FFEE-63).
     if (k === 'Escape') {
+      if (this.legendOpen) {
+        this.legendOpen = false;
+        return this._render();
+      }
       if (this.menuOpen) {
         this.menuOpen = false;
         return this._render();
@@ -801,6 +830,9 @@ class C0ffeeCrossword extends HTMLElement {
     if (this.activePane === 'clues') return;
     // Any board key dismisses the transient lock callout (decision 4), no-op input included.
     if (this.lockCallout) this._dismissLockCallout();
+    // ...and retracts the channel-hint legend (the keyboard path the pointer backdrop can't
+    // catch), so a resumed edit never leaves the key stranded over a changed strip (C0FFEE-77).
+    if (this.legendOpen) this.legendOpen = false;
     if (/^[0-9a-fA-F]$/.test(k)) {
       e.preventDefault();
       return this._press(k.toUpperCase());
@@ -1497,7 +1529,7 @@ class C0ffeeCrossword extends HTMLElement {
     const typed = digits.filter((d) => d !== null).length;
     const verdict = ref ? this.state.verdicts[slotKey(ref)] : null;
     const meta = verdict
-      ? this._chips(verdict)
+      ? this._hintKey(verdict)
       : `<span class="count">${typed} / 6</span>`;
 
     const clueStyle = ref
@@ -1556,6 +1588,38 @@ class C0ffeeCrossword extends HTMLElement {
         </span>`;
       })
       .join('')}</span>`;
+  }
+
+  // The channel-hint strip plus its "?" legend disclosure (C0FFEE-77, CW-InputDock meta
+  // row). The strip (_chips) is unchanged; the "?" opens a transient key for the three
+  // glyphs. legendOpen is a twin of menuOpen: an invisible full-bleed backdrop catches an
+  // outside tap, the "?" toggles, Escape closes — and the board stays live behind it (no
+  // scrim, not an _overlayUp state). It rides beside the strip, so the key is reachable
+  // exactly where and when the glyphs appear (only after a Guess is graded).
+  private _hintKey(verdict: GuessResult): string {
+    return `<span class="hintkey">
+      ${this._chips(verdict)}
+      <button type="button" class="legendbtn" data-act="legend" aria-label="Show channel hint key" aria-expanded="${this.legendOpen}">?</button>
+      ${this._legendPopover()}
+    </span>`;
+  }
+
+  // The legend key: each per-Channel glyph paired with its plain-language action. It reuses
+  // VERDICT_GLYPH, so the popover shows the EXACT glyphs the strip renders (never a drifting
+  // copy) — and the glyphs stay achromatic, the letters carry no tint, so the key reads as
+  // quiet chrome, not color content (ADR-0007 contract #3). ASCII " - " separators match the
+  // completion-summary copy convention. Rendered only while open; closed by default.
+  private _legendPopover(): string {
+    if (!this.legendOpen) return '';
+    const rows: ReadonlyArray<[ChannelVerdict, string]> = [
+      ['correct', 'matched - leave it'],
+      ['higher', 'too low - go higher'],
+      ['lower', 'too high - go lower'],
+    ];
+    return `<div class="legendback" data-act="legend-close"></div>
+      <div class="legend" role="note">${rows
+        .map(([v, text]) => `<div class="legendrow"><span class="lglyph">${VERDICT_GLYPH[v]}</span>${text}</div>`)
+        .join('')}</div>`;
   }
 
   // The input dock: a transient commit toast (contract #4) above the hex keypad. The
@@ -1706,10 +1770,34 @@ const STYLE = `
   .clabel { font:400 14px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); white-space:nowrap; }
   .count { margin-left:auto; font:400 10.5px/1 var(--c0ffee-font, monospace); letter-spacing:.12em;
            text-transform:uppercase; color:rgba(255,255,255,.62); }
-  .chips { margin-left:auto; display:inline-flex; align-items:center; gap:9px; }
+  /* the channel-hint strip + its "?" legend disclosure (C0FFEE-77); margin-left:auto rides
+     the wrapper now so the popover anchors to it (position:relative) and the "?" sits flush
+     against the strip's right edge */
+  .hintkey { position:relative; margin-left:auto; display:inline-flex; align-items:center; gap:9px; }
+  .chips { display:inline-flex; align-items:center; gap:9px; }
   .chip { display:inline-flex; align-items:center; gap:3px; }
   .chip .id { font:500 11.5px/1 var(--c0ffee-font, monospace); }
   .chip .glyph { line-height:0; }
+  /* the "?" disclosure: a quiet round chrome control (contract #6), accent-ringed when open */
+  .legendbtn { flex:none; width:22px; height:22px; padding:0; border:none; border-radius:50%;
+               background:var(--c0ffee-bg, #0a0a0b); box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
+               color:rgba(255,255,255,.6); cursor:pointer; font:500 11px/1 var(--c0ffee-font, monospace);
+               display:inline-flex; align-items:center; justify-content:center; }
+  .legendbtn[aria-expanded="true"] { box-shadow:inset 0 0 0 1px rgba(192,255,238,.55); color:var(--c0ffee-accent, #C0FFEE); }
+  .legendbtn:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
+  /* invisible full-bleed backdrop — an outside tap closes the legend (kebab-menu model) */
+  .legendback { position:fixed; inset:0; z-index:40; }
+  /* the popover drops below the "?" row, right-aligned, with a little pointer notch */
+  .legend { position:absolute; top:calc(100% + 10px); right:0; z-index:45; width:208px; padding:11px 13px;
+            border-radius:11px; background:var(--c0ffee-bg, #0a0a0b);
+            box-shadow:inset 0 0 0 1px rgba(255,255,255,.16), 0 18px 40px -16px rgba(0,0,0,.94);
+            display:flex; flex-direction:column; gap:6px; }
+  .legend::before { content:''; position:absolute; top:-5px; right:9px; width:10px; height:10px;
+                    background:var(--c0ffee-bg, #0a0a0b); box-shadow:inset 1px 1px 0 rgba(255,255,255,.16);
+                    transform:rotate(45deg); }
+  .legendrow { display:flex; align-items:center; gap:10px; font:400 11.5px/1.3 var(--c0ffee-font, monospace);
+               color:rgba(255,255,255,.74); }
+  .lglyph { width:15px; flex:none; display:inline-flex; justify-content:center; line-height:0; }
   .stages { display:flex; gap:10px; }
   .stage { flex:1; height:62px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
   .stage.mix { display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
