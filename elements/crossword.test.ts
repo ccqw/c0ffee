@@ -8,6 +8,7 @@ import { test, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { generatePuzzle } from '../lib/crossword-generator.ts';
 import { initCrossword, cellKey, slotKey } from '../lib/crossword-state.ts';
 import { gradeGuess } from '../lib/crossword-guess.ts';
+import { encodePuzzleToken } from '../lib/crossword-link.ts';
 
 // happy-dom v20 does not provide localStorage, but the element uses it for the one
 // coach "seen" flag (C0FFEE-67). Install a minimal in-memory polyfill on window +
@@ -45,6 +46,10 @@ const COACH_SEEN_KEY = 'c0ffee:crossword:coach-seen';
 beforeEach(() => {
   window.localStorage.clear();
   window.localStorage.setItem(COACH_SEEN_KEY, '1');
+  // The element reads location.hash on connect (C0FFEE-78 Puzzle link). Reset it to empty
+  // so every test that does not opt into a Puzzle-link hash opens the default puzzle; the
+  // hash-load tests set it explicitly before mounting.
+  window.location.hash = '';
 });
 
 // The element generates its own puzzle from a fixed shape + seed; the tests regenerate
@@ -1208,4 +1213,56 @@ test('<c0ffee-crossword> overlays still mount over the constrained screen', () =
   expect(q(el, '.screen')).toBeTruthy(); // the viewport-bounded screen is in place
   expect(q(el, '.scrim')).toBeTruthy();
   expect(q(el, '.pause')).toBeTruthy(); // and the overlay mounts on it
+});
+
+// C0FFEE-78 — Puzzle link hash load. On connect the element decodes location.hash: a
+// valid Puzzle token reproduces THAT exact puzzle (ADR-0009 determinism — generatePuzzle
+// is byte-identical per (shapeId, seed)), while a missing / malformed / unknown-shape
+// token quietly opens a fresh puzzle (ADR-0009: a bad link is never a broken render).
+// happy-dom can set location.hash; the clue stage's painted target (contract #1) pins
+// which puzzle loaded, so the deterministic seam is what the assertion reads.
+
+// The selected (first) Slot's target Color address for a given seed — what the clue stage
+// paints. Mirrors firstSlot() but for an arbitrary seed.
+const firstTargetForSeed = (seed: number): string => {
+  const p = generatePuzzle(SHAPE, seed);
+  const first = [...p.layout.slots].sort(
+    (a, b) => a.number - b.number || (a.direction < b.direction ? -1 : 1),
+  )[0];
+  return p.targets[`${first.number}-${first.direction}`];
+};
+const clueColorOf = (el: HTMLElement): string =>
+  (q(el, '.stage.clue') as HTMLElement).getAttribute('style') ?? '';
+
+test('<c0ffee-crossword> a valid Puzzle-link hash reproduces that exact puzzle', () => {
+  const SHARED = 7; // a seed distinct from the default, so the boards differ
+  window.location.hash = encodePuzzleToken({ shapeId: SHAPE, seed: SHARED });
+  const el = mount();
+  // the clue stage paints the SHARED seed's first-Slot target, not the default seed's
+  expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SHARED)}`);
+  expect(clueColorOf(el)).not.toContain(`#${firstTargetForSeed(SEED)}`);
+});
+
+test('<c0ffee-crossword> a malformed Puzzle-link hash quietly opens the default puzzle', () => {
+  window.location.hash = 'not-a-puzzle-token';
+  const el = mount(); // must not throw on a junk hash
+  expect(q(el, '.board')).toBeTruthy(); // a real board, never a broken render
+  expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SEED)}`); // the fresh default puzzle
+});
+
+test('<c0ffee-crossword> a well-formed token for an unknown shape falls back to the default puzzle, quietly', () => {
+  // a valid-SHAPE token shape but an id no SHAPES entry has: decode succeeds, generatePuzzle
+  // would throw, and the shell must catch and open a fresh puzzle rather than crash.
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    window.location.hash = encodePuzzleToken({ shapeId: 'no-such-shape', seed: 3 });
+    const el = mount();
+    expect(q(el, '.board')).toBeTruthy();
+    expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SEED)}`);
+    // a routine stale/tampered link is the EXPECTED bad-link case — it must stay quiet, not
+    // escalate to console.error (which RUM collects), so a bad link never spams telemetry.
+    expect(errSpy).not.toHaveBeenCalled();
+  } finally {
+    errSpy.mockRestore();
+  }
 });
