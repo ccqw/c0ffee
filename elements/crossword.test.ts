@@ -297,6 +297,96 @@ test('<c0ffee-crossword> a commit renders per-Channel verdict chips matching the
   expect(el.shadowRoot!.querySelector(allCorrect ? '.toast.win' : '.toast.wrong')).toBeTruthy();
 });
 
+// --- the "?" channel-hint legend disclosure (C0FFEE-77) ------------------------
+// Commit '000000' on the entry Slot so a graded Guess exists: the per-Channel hint
+// strip (and therefore the "?" disclosure) only render once a Slot has been graded.
+// '000000' is wrong for the SEED-1 first Slot, so the band shows the hints (not the
+// solved state), and one Slot's commit can't complete the whole puzzle, so the dock
+// (and its comparison band) stays put.
+const commitFirstSlot = (el: HTMLElement): void => {
+  firstSlot().cells.forEach((c) => {
+    tapCell(el, cellKey(c));
+    pressKey(el, '0');
+  });
+  pressCheck(el);
+};
+
+test('<c0ffee-crossword> the "?" channel-hint legend disclosure appears only once a Guess is graded', () => {
+  const el = mount();
+  // mid-Guess the meta line carries the typed-digit count and no "?" clutters it
+  expect(q(el, '.count')).toBeTruthy();
+  expect(q(el, '.legendbtn')).toBeNull();
+  // a graded commit swaps the count for the per-Channel strip, with the "?" beside it
+  commitFirstSlot(el);
+  expect(q(el, '.count')).toBeNull();
+  expect(q(el, '.legendbtn')).toBeTruthy();
+});
+
+test('<c0ffee-crossword> tapping the "?" opens a legend keying the three glyphs in words', () => {
+  const el = mount();
+  commitFirstSlot(el);
+  // closed by default — it costs a returning solver who knows the glyphs nothing
+  expect(q(el, '.legend')).toBeNull();
+  expect(q(el, '.legendbtn')!.getAttribute('aria-expanded')).toBe('false');
+
+  act(el, 'legend');
+  expect(q(el, '.legend')).toBeTruthy();
+  expect(q(el, '.legendbtn')!.getAttribute('aria-expanded')).toBe('true');
+  const rows = el.shadowRoot!.querySelectorAll('.legendrow');
+  expect(rows.length).toBe(3);
+  const text = q(el, '.legend')!.textContent!.replace(/\s+/g, ' ');
+  expect(text).toContain('matched - leave it');
+  expect(text).toContain('too low - go higher');
+  expect(text).toContain('too high - go lower');
+});
+
+test('<c0ffee-crossword> the legend dismisses via a second "?" tap, the backdrop, and Escape', () => {
+  const el = mount();
+  el.focus();
+  commitFirstSlot(el);
+
+  // a second "?" tap toggles it shut
+  act(el, 'legend');
+  expect(q(el, '.legend')).toBeTruthy();
+  act(el, 'legend');
+  expect(q(el, '.legend')).toBeNull();
+
+  // a tap on the full-bleed backdrop (the kebab-menu dismiss model) closes it
+  act(el, 'legend');
+  expect(q(el, '.legendback')).toBeTruthy();
+  act(el, 'legend-close');
+  expect(q(el, '.legend')).toBeNull();
+
+  // Escape closes it
+  act(el, 'legend');
+  pressPhysical(el, 'Escape');
+  expect(q(el, '.legend')).toBeNull();
+});
+
+test('<c0ffee-crossword> Escape closes the legend first (the most-local overlay), keeping focus', () => {
+  const el = mount();
+  el.focus();
+  commitFirstSlot(el);
+  act(el, 'legend');
+  expect(q(el, '.legend')).toBeTruthy();
+  pressPhysical(el, 'Escape');
+  expect(q(el, '.legend')).toBeNull();
+  expect(document.activeElement).toBe(el); // focus retained — the legend absorbed the Escape
+});
+
+test('<c0ffee-crossword> the board stays live behind the open legend (no scrim, no freeze)', () => {
+  const el = mount();
+  el.focus();
+  commitFirstSlot(el);
+  act(el, 'legend');
+  expect(q(el, '.legend')).toBeTruthy();
+  expect(q(el, '.scrim')).toBeNull(); // not a scrim overlay — the board is never dimmed
+  // a physical digit still reaches the board: the game surface is live behind the legend
+  const cur = cursorKey(el)!;
+  pressPhysical(el, 'A');
+  expect(glyphAt(el, cur)).toBe('A');
+});
+
 test('<c0ffee-crossword> a full tap-driven solve locks every Cell (reaches the complete state)', () => {
   const p = puzzle();
   const crossingKeys = new Set(p.layout.crossings.map((x) => cellKey(x.cell)));
