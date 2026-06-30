@@ -44,6 +44,8 @@
 // its own answer Colors (contract #1 territory). See the `=== chrome ===` STYLE block.
 
 import { generatePuzzle } from '../lib/crossword-generator.ts';
+import { decodePuzzleToken } from '../lib/crossword-link.ts';
+import { SHAPES } from '../lib/crossword-shapes.ts';
 import {
   initCrossword,
   crosswordReducer,
@@ -59,10 +61,10 @@ import {
 import type { GuessResult, ChannelVerdict } from '../lib/crossword-guess.ts';
 import type { Cell, Direction, Layout, Slot } from '../lib/crossword-layout.ts';
 
-// Slice 1 opened on a fixed shape + seed, so the puzzle is deterministic: the smoke
-// test asserts stable counts and the design eyeball reviews the same board every load.
-// New-puzzle / the seeded Puzzle link (C0FFEE-67 / C0FFEE-57) are the future homes for
-// a varying seed; this is the only place one is chosen for now.
+// The default puzzle when no Puzzle link is present: a fixed shape + seed, deterministic
+// so the smoke test asserts stable counts and the design eyeball reviews the same board.
+// A varying seed now enters from two places — "New" advances it (C0FFEE-67), and a
+// Puzzle-link hash supplies a shared (shapeId, seed) on load (C0FFEE-78, _initialPuzzle).
 const DEFAULT_SHAPE = 'lattice-6';
 const DEFAULT_SEED = 1;
 
@@ -369,7 +371,7 @@ class C0ffeeCrossword extends HTMLElement {
   private onKeydown = (e: Event): void => this._handleKey(e as KeyboardEvent);
 
   connectedCallback(): void {
-    this._loadPuzzle(generatePuzzle(DEFAULT_SHAPE, this.seed));
+    this._loadPuzzle(this._initialPuzzle());
     // Inject the stylesheet once and create the body container; _render only rewrites the
     // body, so the CSS is parsed a single time per connect, not on every keystroke.
     this._scaffold();
@@ -407,6 +409,43 @@ class C0ffeeCrossword extends HTMLElement {
   }
 
   // --- puzzle lifecycle (C0FFEE-67) ----------------------------------------
+
+  // The puzzle to open on (C0FFEE-78 Puzzle link). The element reads location.hash ONCE,
+  // here on connect: a valid Puzzle token reproduces its exact (shapeId, seed) puzzle
+  // (ADR-0009 determinism), so a friend's link opens the same board. A missing/malformed
+  // token — or a well-formed token whose shape no SHAPES entry has, so generatePuzzle
+  // throws — falls back to a fresh default puzzle rather than a broken render (ADR-0009:
+  // a bad link never breaks the game). A mid-game hashchange is deliberately NOT watched
+  // (it would wipe progress); WRITING the link is the share slice (C0FFEE-80).
+  //
+  // On a shared seed we adopt it as `this.seed` so a later "New" advances from it. New
+  // still regenerates on DEFAULT_SHAPE; with a single authored shape that is always the
+  // shared shape, so carrying ref.shapeId into New is a future seam (when SHAPES grows).
+  private _initialPuzzle(): Puzzle {
+    const ref = decodePuzzleToken(window.location?.hash);
+    if (ref) {
+      try {
+        const puzzle = generatePuzzle(ref.shapeId, ref.seed);
+        this.seed = ref.seed;
+        return puzzle;
+      } catch (err) {
+        // Two throw paths land here, both ending in a fresh default puzzle (ADR-0009: a
+        // bad link is never a broken render). An unknown shapeId — a stale or tampered
+        // link — is the expected case, swallowed quietly so a routine bad link never
+        // spams RUM with false errors. But a shape the build DOES have that still failed
+        // to fill is an ATTEMPT_CAP regression the generator test claims is unreachable;
+        // surface THAT one to console.error (which RUM collects — the console.ts URL-write
+        // escalation pattern) without breaking the render.
+        if (SHAPES.some((s) => s.id === ref.shapeId)) {
+          console.error(
+            `c0ffee-crossword: known shape '${ref.shapeId}' seed ${ref.seed} failed to generate`,
+            err,
+          );
+        }
+      }
+    }
+    return generatePuzzle(DEFAULT_SHAPE, this.seed);
+  }
 
   // Initialise the element on a Puzzle: store it, derive its crossing set, open on its
   // first Slot via the real reducer, and re-arm the one-shot lock callout. Shared by
