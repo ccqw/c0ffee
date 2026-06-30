@@ -1199,6 +1199,7 @@ class C0ffeeCrossword extends HTMLElement {
         <div class="boardwrap">${this._board(layout)}</div>
         ${body}
         ${this._overlays()}
+        ${this._legendBackdrop()}
       </div>`;
   }
 
@@ -1597,11 +1598,11 @@ class C0ffeeCrossword extends HTMLElement {
   // scrim, not an _overlayUp state). It rides beside the strip, so the key is reachable
   // exactly where and when the glyphs appear (only after a Guess is graded).
   private _hintKey(verdict: GuessResult): string {
-    return `<span class="hintkey">
+    return `<div class="hintkey">
       ${this._chips(verdict)}
       <button type="button" class="legendbtn" data-act="legend" aria-label="Show channel hint key" aria-expanded="${this.legendOpen}">?</button>
       ${this._legendPopover()}
-    </span>`;
+    </div>`;
   }
 
   // The legend key: each per-Channel glyph paired with its plain-language action. It reuses
@@ -1616,10 +1617,17 @@ class C0ffeeCrossword extends HTMLElement {
       ['higher', 'too low - go higher'],
       ['lower', 'too high - go lower'],
     ];
-    return `<div class="legendback" data-act="legend-close"></div>
-      <div class="legend" role="note">${rows
-        .map(([v, text]) => `<div class="legendrow"><span class="lglyph">${VERDICT_GLYPH[v]}</span>${text}</div>`)
-        .join('')}</div>`;
+    return `<div class="legend" role="note">${rows
+      .map(([v, text]) => `<div class="legendrow"><span class="lglyph">${VERDICT_GLYPH[v]}</span>${text}</div>`)
+      .join('')}</div>`;
+  }
+
+  // The legend's dismiss backdrop, rendered at the screen level (like the kebab's .menuback)
+  // so it anchors to .screen and covers the whole crossword but NOT the Site banner above it
+  // — an outside tap closes the legend, a banner tap still works. Kept out of the inline
+  // .hintkey so it can be a screen-scoped block (C0FFEE-77).
+  private _legendBackdrop(): string {
+    return this.legendOpen ? '<div class="legendback" data-act="legend-close"></div>' : '';
   }
 
   // The input dock: a transient commit toast (contract #4) above the hex keypad. The
@@ -1785,8 +1793,9 @@ const STYLE = `
                display:inline-flex; align-items:center; justify-content:center; }
   .legendbtn[aria-expanded="true"] { box-shadow:inset 0 0 0 1px rgba(192,255,238,.55); color:var(--c0ffee-accent, #C0FFEE); }
   .legendbtn:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
-  /* invisible full-bleed backdrop — an outside tap closes the legend (kebab-menu model) */
-  .legendback { position:fixed; inset:0; z-index:40; }
+  /* invisible backdrop — an outside tap closes the legend (kebab-menu model). Absolute so it
+     anchors to .screen (covers the crossword, not the Site banner above it), as .menuback does */
+  .legendback { position:absolute; inset:0; z-index:40; }
   /* the popover drops below the "?" row, right-aligned, with a little pointer notch */
   .legend { position:absolute; top:calc(100% + 10px); right:0; z-index:45; width:208px; padding:11px 13px;
             border-radius:11px; background:var(--c0ffee-bg, #0a0a0b);
