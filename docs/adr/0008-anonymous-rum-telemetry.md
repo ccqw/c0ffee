@@ -1,6 +1,6 @@
 # 0008 — Anonymous Datadog RUM telemetry, production-only (C0FFEE-55)
 
-**Status:** Accepted (2026-06-11).
+**Status:** Accepted (2026-06-11). Amended 2026-07-01 (first custom action, C0FFEE-80).
 
 The site adds Datadog Real User Monitoring via **`@datadog/browser-rum-slim`** — the
 repo's **first runtime dependency** and the first data flow off the site. Collection
@@ -61,3 +61,16 @@ identity, no consent UI.
   *positive* is only provable post-deploy (events arriving in the Datadog RUM
   application, queryable via the Datadog MCP server).
 - Datadog-side configuration (dashboards, monitors) stays out of the repo.
+
+## Amendment (2026-07-01, C0FFEE-80): the first custom action
+
+The crossword share control emits `datadogRum.addAction('puzzle_shared')` — the first
+custom instrumentation, superseding this ADR's "deliberately deferred" consequence for
+this one event. The out-of-box data cannot see it: a share is a *success* signal
+(automatic interaction tracking records a click, not whether the share sheet resolved
+or the clipboard write landed), and it is the C0FFEE-57 feature's whole point. The
+posture is unchanged: the action carries a name and **no payload** (nothing about the
+puzzle, the time, or the target), and the emit call is inert off-production because
+`init()` never ran (the SDK buffers pre-init calls and sends nothing). Further custom
+actions still need to clear this same bar — invisible to out-of-box data, anonymous by
+construction — not ride this amendment.

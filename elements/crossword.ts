@@ -43,8 +43,10 @@
 // destructive confirm CTA + warn glyph; the completion recolor paints the solved board
 // its own answer Colors (contract #1 territory). See the `=== chrome ===` STYLE block.
 
+import { datadogRum } from '@datadog/browser-rum-slim';
 import { generatePuzzle } from '../lib/crossword-generator.ts';
-import { decodePuzzleToken } from '../lib/crossword-link.ts';
+import { decodePuzzleToken, encodePuzzleToken } from '../lib/crossword-link.ts';
+import { composeShareMessage } from '../lib/crossword-share.ts';
 import { SHAPES } from '../lib/crossword-shapes.ts';
 import {
   initCrossword,
@@ -81,6 +83,10 @@ const CELL_PX = 38;
 
 // How long a commit toast stays before it fades (transient teaching beat, contract #4).
 const TOAST_MS = 2600;
+
+// How long the share control's Copied / Copy failed flash shows before returning to
+// rest (C0FFEE-80; the C0FFEE-54 confirmation-flash cadence).
+const FLASH_MS = 1400;
 
 // The grid weave hairline (ADR-0007 contract #6: neutral chrome off --c0ffee-fg).
 const HAIR = 'rgba(255,255,255,.22)';
@@ -235,6 +241,8 @@ const RESTART_SVG =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.4 2.6L3 8"/><path d="M3 3v5h5"/></svg>';
 const SPARKLE_SVG =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3c.4 4 2.6 6.2 6.5 6.5-3.9.3-6.1 2.5-6.5 6.5-.4-4-2.6-6.2-6.5-6.5C8.4 9.2 10.6 7 11 3Z"/><path d="M18.5 13.5c.13 1.7 1 2.55 2.7 2.7-1.7.13-2.55 1-2.7 2.7-.13-1.7-1-2.55-2.7-2.7 1.7-.13 2.55-1 2.7-2.7Z"/></svg>';
+const SHARE_SVG =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
 const WARN_TRIANGLE_SVG =
   '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 const TROPHY_SVG =
@@ -347,6 +355,10 @@ class C0ffeeCrossword extends HTMLElement {
   // wipes entries/verdicts/locks but keeps the grid + targets); New advances the seed.
   private puzzle!: Puzzle;
   private seed = START_SEED;
+  // The current puzzle's shape id, tracked beside the seed so the share control can mint
+  // the (shapeId, seed) Puzzle link for the EXACT board just solved (C0FFEE-80): adopted
+  // from a shared token on load, back to the default when "New" regenerates.
+  private shapeId = DEFAULT_SHAPE;
   // The crossing Cells of the current puzzle (those shared by two Slots), the set the
   // lock callout watches for the first demonstrable cross-propagation.
   private crossings = new Set<string>();
@@ -441,6 +453,10 @@ class C0ffeeCrossword extends HTMLElement {
     this._clearToastTimer();
     this._stopRepaint();
     this._clearLockCalloutTimer();
+    if (this._shareTimer !== null) {
+      clearTimeout(this._shareTimer);
+      this._shareTimer = null;
+    }
   }
 
   // --- puzzle lifecycle (C0FFEE-67) ----------------------------------------
@@ -462,6 +478,7 @@ class C0ffeeCrossword extends HTMLElement {
       try {
         const puzzle = generatePuzzle(ref.shapeId, ref.seed);
         this.seed = ref.seed;
+        this.shapeId = ref.shapeId; // the share control re-mints this exact identity
         return puzzle;
       } catch (err) {
         // Two throw paths land here, both ending in a fresh default puzzle (ADR-0009: a
@@ -505,7 +522,10 @@ class C0ffeeCrossword extends HTMLElement {
   // (C0FFEE-62 decision 3). The Timer resets to 0 and starts immediately (the coach is
   // never re-shown by New/Restart, decision 5/6). Overlays close.
   private _restartOrNew(fresh: boolean): void {
-    if (fresh) this.seed += 1;
+    if (fresh) {
+      this.seed += 1;
+      this.shapeId = DEFAULT_SHAPE; // New regenerates on the default shape (the seam above)
+    }
     this._loadPuzzle(fresh ? generatePuzzle(DEFAULT_SHAPE, this.seed) : this.puzzle);
     this._closeOverlays();
     this._dismissToast();
@@ -643,6 +663,83 @@ class C0ffeeCrossword extends HTMLElement {
     this.clockShown = !this.clockShown;
     this._persistClockShown();
     this._render();
+  }
+
+  // --- share (C0FFEE-80) ----------------------------------------------------
+
+  // The Puzzle link for the CURRENT board, minted through the C0FFEE-78 codec so a
+  // recipient reproduces this exact puzzle (ADR-0009 determinism). Built from the page's
+  // own address — origin + pathname keep it correct on dev and prod alike — and never
+  // written to location.hash (reading a mid-game hashchange would wipe progress, and a
+  // hash rewrite would spam RUM with route_change views).
+  private _puzzleUrl(): string {
+    const token = encodePuzzleToken({ shapeId: this.shapeId, seed: this.seed });
+    return `${location.origin}${location.pathname}#${token}`;
+  }
+
+  // The completion card's share control (C0FFEE-80, the C0FFEE-57 capstone): compose the
+  // spoiler-free message and hand it to the native share sheet, or copy it to the clipboard
+  // with a confirmation flash where Web Share is absent (the C0FFEE-54 pattern). The Solve
+  // time rides along only when the running readout is shown — the remembered eye preference
+  // IS the opt-in (CONTEXT.md: a timer-less, zen solve shares a timeless message).
+  //
+  // ONE anonymous puzzle_shared action (ADR-0008 amendment) is emitted per share that
+  // actually happened: the sheet resolving, or the copy landing. A cancelled sheet or a
+  // denied clipboard emits nothing — intent isn't a share.
+  private async _share(): Promise<void> {
+    const message = composeShareMessage({
+      puzzleUrl: this._puzzleUrl(),
+      elapsedMs: this.clockShown ? elapsedMs(this.timer, this._now()) : undefined,
+    });
+
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ text: message });
+      } catch {
+        // AbortError — the solver closed the sheet. Their prerogative, not a failure:
+        // no flash, no action, no console noise.
+        return;
+      }
+      datadogRum.addAction('puzzle_shared');
+      return;
+    }
+
+    // Web Share absent (desktop): the copy IS the share. Same posture as console.ts's
+    // _copyHex — the try wraps ONLY the write; in an insecure context navigator.clipboard
+    // is undefined and that synchronous TypeError lands in the same catch.
+    let ok = true;
+    try {
+      await navigator.clipboard.writeText(message);
+    } catch (err) {
+      console.warn('c0ffee-crossword: clipboard write failed', err);
+      ok = false;
+    }
+    if (ok) datadogRum.addAction('puzzle_shared');
+    // The awaits open a gap: a removed element must not flash into a detached tree.
+    if (!this.isConnected) return;
+    this._flashShare(ok);
+  }
+
+  // The confirmation flash (C0FFEE-54 pattern): swap the control's label in place and
+  // announce via the live region, auto-return to rest, a re-tap mid-flash restarts
+  // cleanly. Nodes are re-queried at fire time — a re-render mid-flash (e.g. New) swaps
+  // in fresh at-rest markup, so a stale revert must be a no-op, never a crash.
+  private _shareTimer: number | null = null;
+
+  private _flashShare(ok: boolean): void {
+    const label = this.root.querySelector('.share-label');
+    const status = this.root.querySelector('.share-status');
+    if (!label || !status) return;
+    if (this._shareTimer !== null) clearTimeout(this._shareTimer);
+    label.textContent = ok ? 'Copied' : 'Copy failed';
+    status.textContent = ok ? 'Copied to clipboard' : 'Copy failed';
+    this._shareTimer = window.setTimeout(() => {
+      const rested = this.root.querySelector('.share-label');
+      if (rested) rested.textContent = 'Share';
+      const restedStatus = this.root.querySelector('.share-status');
+      if (restedStatus) restedStatus.textContent = '';
+      this._shareTimer = null;
+    }, FLASH_MS);
   }
 
   // --- coach + overlays (C0FFEE-67) ----------------------------------------
@@ -886,6 +983,8 @@ class C0ffeeCrossword extends HTMLElement {
         return this._dismissCoach();
       case 'completion-new':
         return this._restartOrNew(true); // nothing to lose on a solved board — no confirm
+      case 'share':
+        return void this._share(); // async share/copy; the handler flashes its own outcome
       case 'scrim':
         return this._scrimTap();
     }
@@ -1571,7 +1670,11 @@ class C0ffeeCrossword extends HTMLElement {
       <div class="comp-head">${TROPHY_SVG}<span>Solved</span></div>
       <p class="comp-summary">${summary}</p>
       <div class="comp-swatches">${swatches}</div>
-      <button type="button" class="cbtn comp-new" data-act="completion-new">${SPARKLE_SVG} New puzzle</button>
+      <div class="comp-actions">
+        <button type="button" class="cbtn comp-new" data-act="completion-new">${SPARKLE_SVG} New puzzle</button>
+        <button type="button" class="cbtn comp-share" data-act="share">${SHARE_SVG}<span class="share-label">Share</span></button>
+      </div>
+      <span class="share-status" role="status" aria-live="polite"></span>
     </section>`;
   }
 
@@ -2177,7 +2280,12 @@ const STYLE = `
                   color:rgba(255,255,255,.72); text-align:center; }
   .comp-swatches { display:flex; flex-wrap:wrap; justify-content:center; gap:7px; margin-bottom:18px; }
   .comp-swatches .swatch { width:26px; height:26px; border-radius:6px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
-  .comp-new { justify-content:center; height:46px; padding:0 22px; }
+  .comp-actions { display:flex; gap:10px; }
+  .comp-new, .comp-share { justify-content:center; height:46px; padding:0 22px; }
+  .comp-share { gap:9px; } /* secondary: the .cbtn base outline (the handoff's Share) */
+  /* visually-hidden live region: screen readers hear the copy flash too (C0FFEE-54) */
+  .share-status { position:absolute; width:1px; height:1px; overflow:hidden;
+                  clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
 
   /* solved board: the colour blooms in as the weave gives way (scene 04) */
   .board.solved .cell { cursor:default; }
