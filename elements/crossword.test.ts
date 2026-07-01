@@ -936,15 +936,19 @@ test('<c0ffee-crossword> the completion card renders on a solved puzzle with a f
   expect(q(el, '.keypad')).toBeNull(); // the dock is replaced by the card
 });
 
-test('<c0ffee-crossword> the timer counts board-live seconds, pauses with the scrim, and resumes', () => {
+test('<c0ffee-crossword> the Solve-time clock counts running seconds, pauses with the scrim, and resumes', () => {
   vi.useFakeTimers();
   try {
-    const el = mount(); // returning visitor -> timer starts immediately
+    const el = mount(); // returning visitor -> no coach, but the clock is idle until first entry
     const timer = (): string => q(el, '.timer')!.textContent ?? '';
     expect(timer()).toMatch(/0:00/);
     vi.advanceTimersByTime(3000);
+    expect(timer()).toMatch(/0:00/); // nothing typed yet -> the clock has not started (C0FFEE-79)
+
+    pressKey(el, 'A'); // the first Cell entry starts the clock
+    vi.advanceTimersByTime(3000);
     const running = timer();
-    expect(running).not.toMatch(/0:00/); // it ticked
+    expect(running).not.toMatch(/0:00/); // it ran
 
     act(el, 'pause'); // pausing freezes the clock (coupled to the overlay layer)
     const paused = timer();
@@ -1028,7 +1032,7 @@ test('<c0ffee-crossword> at most one scrim overlay is open at a time (help while
   expect(q(el, '.scrim')).toBeNull();
 });
 
-test('<c0ffee-crossword> the timer does not start on a first visit until the coach is dismissed', () => {
+test('<c0ffee-crossword> the clock is idle until the first Cell entry, even after the coach is dismissed', () => {
   vi.useFakeTimers();
   try {
     window.localStorage.removeItem(COACH_SEEN_KEY); // first visit -> coach auto-shows
@@ -1037,7 +1041,10 @@ test('<c0ffee-crossword> the timer does not start on a first visit until the coa
     vi.advanceTimersByTime(3000);
     expect(q(el, '.timer')!.textContent).toMatch(/0:00/); // clock waits behind the coach
     act(el, 'coach-next');
-    act(el, 'coach-done'); // dismiss -> the clock starts
+    act(el, 'coach-done'); // dismiss the coach — but no Cell has been entered yet
+    vi.advanceTimersByTime(2000);
+    expect(q(el, '.timer')!.textContent).toMatch(/0:00/); // still idle: the coach is not the trigger
+    pressKey(el, 'A'); // the first Cell entry is what starts the clock (C0FFEE-79)
     vi.advanceTimersByTime(2000);
     expect(q(el, '.timer')!.textContent).not.toMatch(/0:00/);
   } finally {
@@ -1265,4 +1272,86 @@ test('<c0ffee-crossword> a well-formed token for an unknown shape falls back to 
   } finally {
     errSpy.mockRestore();
   }
+});
+
+// C0FFEE-79 — Solve time: the accurate accumulator wiring. The pure pause math is unit-tested
+// in lib/crossword-timer.test.ts (injected timestamps); these shell smokes cover the WIRING the
+// PRD names — start on the first Cell entry, pause while the tab is hidden (Page Visibility), and
+// the persisted show/hide preference. happy-dom can't paint, so they assert projected state +
+// the localStorage round-trip; the eye glyph and muted readout get the browser eyeball.
+
+// Drive the Page Visibility API: shadow document.hidden with an own getter (happy-dom's is a
+// prototype getter, so an own property overrides it) and fire the event the element listens for.
+const setTabHidden = (hidden: boolean): void => {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  document.dispatchEvent(new Event('visibilitychange'));
+};
+
+test('<c0ffee-crossword> the tab starts visible (default) for the Solve-time gate', () => {
+  // guards the setTabHidden helper's own default and documents the baseline the clock assumes
+  expect(document.hidden).toBe(false);
+});
+
+test('<c0ffee-crossword> the clock pauses while the tab is hidden and excludes the hidden span', () => {
+  vi.useFakeTimers();
+  try {
+    const el = mount();
+    const timer = (): string => q(el, '.timer')!.textContent ?? '';
+    pressKey(el, 'A'); // start
+    vi.advanceTimersByTime(2000); // run 2s
+    expect(timer()).toBe('0:02');
+
+    setTabHidden(true); // switch away from the tab
+    vi.advanceTimersByTime(5000); // 5s of distraction — must NOT be counted
+    setTabHidden(false); // return to the tab
+    vi.advanceTimersByTime(1000); // run 1s more
+
+    // counted = 2s + 1s; the 5s hidden gap is excluded (it would read 0:08 if it leaked in)
+    expect(timer()).toBe('0:03');
+  } finally {
+    setTabHidden(false); // restore visibility for the rest of the suite
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-crossword> the topbar carries an eye toggle for the running clock', () => {
+  const el = mount();
+  const eye = q(el, '[data-act="clock-toggle"]');
+  expect(eye).toBeTruthy();
+  expect(eye!.tagName).toBe('BUTTON');
+  // shown by default -> the "hidden" pressed-state is false
+  expect(eye!.getAttribute('aria-pressed')).toBe('false');
+  act(el, 'clock-toggle');
+  expect(q(el, '[data-act="clock-toggle"]')!.getAttribute('aria-pressed')).toBe('true');
+});
+
+test('<c0ffee-crossword> the show/hide clock preference persists across reloads (localStorage)', () => {
+  const a = mount();
+  expect(q(a, '.timer.hidden')).toBeNull(); // shown by default
+  act(a, 'clock-toggle'); // hide the running readout (a zen solve)
+  expect(q(a, '.timer.hidden')).toBeTruthy();
+  expect(q(a, '.timer')!.textContent).toBe('--:--');
+
+  // a fresh element (a reload) remembers the hidden choice
+  const b = mount();
+  expect(q(b, '.timer.hidden')).toBeTruthy();
+
+  // toggling back to shown is likewise remembered across a reload
+  act(b, 'clock-toggle');
+  const c = mount();
+  expect(q(c, '.timer.hidden')).toBeNull();
+});
+
+test('<c0ffee-crossword> hiding the running readout does not stop the clock — completion still times the solve', () => {
+  const p = puzzle();
+  const el = mount();
+  act(el, 'clock-toggle'); // hide the running readout mid-play
+  expect(q(el, '.timer.hidden')).toBeTruthy();
+  for (const slot of p.layout.slots) {
+    if (q(el, '.completion')) break;
+    solveSlot(el, p, slot);
+  }
+  const card = q(el, '.completion');
+  expect(card).toBeTruthy();
+  expect(card!.textContent).toMatch(/\d+:\d{2}/); // the frozen Solve time is still shown, mm:ss
 });
