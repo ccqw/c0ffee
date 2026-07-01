@@ -61,3 +61,10 @@ test('composeShareMessage: fails loud on an unrenderable elapsed (programmer err
   expect(() => composeShareMessage({ puzzleUrl: URL, elapsedMs: -1 })).toThrow();
   expect(() => composeShareMessage({ puzzleUrl: URL, elapsedMs: Number.NaN })).toThrow();
 });
+
+test('composeShareMessage: fails loud on a URL that would corrupt the message shape', () => {
+  // the link is the message's intact last line (the round-trip contract) — an empty or
+  // newline-carrying URL is a wiring bug, not a message to quietly mint.
+  expect(() => composeShareMessage({ puzzleUrl: '' })).toThrow();
+  expect(() => composeShareMessage({ puzzleUrl: 'https://a\nb' })).toThrow();
+});

@@ -693,20 +693,29 @@ class C0ffeeCrossword extends HTMLElement {
     });
 
     if (typeof navigator.share === 'function') {
+      let shared = false;
       try {
         await navigator.share({ text: message });
-      } catch {
-        // AbortError — the solver closed the sheet. Their prerogative, not a failure:
-        // no flash, no action, no console noise.
+        shared = true;
+      } catch (err) {
+        // The solver closing the sheet is their prerogative, not a failure: no flash,
+        // no action, no console noise. Anything ELSE (NotAllowedError under an iframe
+        // permissions policy, InvalidStateError on a double-tap) is a sheet that could
+        // not open — so fall through to the clipboard copy below rather than leaving a
+        // dead button, keeping the reason in the console (C0FFEE-54 posture).
+        if ((err as DOMException | null)?.name === 'AbortError') return;
+        console.warn('c0ffee-crossword: navigator.share failed', err);
+      }
+      if (shared) {
+        datadogRum.addAction('puzzle_shared');
         return;
       }
-      datadogRum.addAction('puzzle_shared');
-      return;
     }
 
-    // Web Share absent (desktop): the copy IS the share. Same posture as console.ts's
-    // _copyHex — the try wraps ONLY the write; in an insecure context navigator.clipboard
-    // is undefined and that synchronous TypeError lands in the same catch.
+    // Web Share absent (desktop) or refused above: the copy IS the share. Same posture
+    // as console.ts's _copyHex — the try wraps ONLY the write; in an insecure context
+    // navigator.clipboard is undefined and that synchronous TypeError lands in the same
+    // catch.
     let ok = true;
     try {
       await navigator.clipboard.writeText(message);
@@ -714,10 +723,11 @@ class C0ffeeCrossword extends HTMLElement {
       console.warn('c0ffee-crossword: clipboard write failed', err);
       ok = false;
     }
+    // The awaits open a gap: a removed element must not flash into a detached tree —
+    // but a landed copy still counts as a share. The flash comes BEFORE the emit: the
+    // solver's confirmation must never sit downstream of a telemetry call.
+    if (this.isConnected) this._flashShare(ok);
     if (ok) datadogRum.addAction('puzzle_shared');
-    // The awaits open a gap: a removed element must not flash into a detached tree.
-    if (!this.isConnected) return;
-    this._flashShare(ok);
   }
 
   // The confirmation flash (C0FFEE-54 pattern): swap the control's label in place and

@@ -49,6 +49,11 @@ export function composeShareMessage({ puzzleUrl, elapsedMs }: ShareMessageOpts):
   if (elapsedMs !== undefined && (!Number.isFinite(elapsedMs) || elapsedMs < 0)) {
     throw new Error(`composeShareMessage: elapsedMs ${elapsedMs} is not a non-negative duration`);
   }
+  // The link must be the message's intact last line (the round-trip contract): an empty
+  // or newline-carrying URL would silently corrupt that shape, so it fails loud too.
+  if (!puzzleUrl || puzzleUrl.includes('\n')) {
+    throw new Error(`composeShareMessage: puzzleUrl ${JSON.stringify(puzzleUrl)} is not a single-line URL`);
+  }
   const lines = [NAME_LINE];
   if (elapsedMs !== undefined) {
     lines.push(`Solved in ${fmtSolveTime(elapsedMs)} - can you beat me?`);

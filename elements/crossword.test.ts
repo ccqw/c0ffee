@@ -1574,6 +1574,7 @@ test('<c0ffee-crossword> without Web Share, share copies the message and flashes
       expect(q(el, '[data-act="share"]')!.textContent).toContain('Copied');
       expect(q(el, '.share-status')!.textContent).toContain('Copied');
       expect(action).toHaveBeenCalledTimes(1); // the copy IS the share on desktop
+      el.remove(); // disconnect clears the armed flash-revert timer (no dangling real timer)
     });
   } finally {
     action.mockRestore();
@@ -1595,6 +1596,7 @@ test('<c0ffee-crossword> a denied clipboard flashes the failed state and emits n
       expect(q(el, '[data-act="share"]')!.textContent).toContain('Copy failed');
       expect(action).not.toHaveBeenCalled();
       expect(warn).toHaveBeenCalled(); // the reason stays in the console (C0FFEE-54 posture)
+      el.remove(); // disconnect clears the armed flash-revert timer (no dangling real timer)
     });
   } finally {
     warn.mockRestore();
@@ -1621,6 +1623,55 @@ test('<c0ffee-crossword> a hidden clock shares the zen message — no Solve-time
       expect(lines.at(-1)).toContain('#cw~');
     });
   } finally {
+    action.mockRestore();
+  }
+});
+
+test('<c0ffee-crossword> a cancelled share sheet stays quiet — no copy, no flash, no action', async () => {
+  const share = vi.fn().mockRejectedValue(Object.assign(new Error('cancelled'), { name: 'AbortError' }));
+  const writeText = vi.fn();
+  const action = vi.spyOn(datadogRum, 'addAction').mockImplementation(() => {});
+  try {
+    await withNavigatorApi({ share, writeText }, async () => {
+      const el = mount();
+      solveAll(el, puzzle());
+      act(el, 'share');
+      await settle();
+
+      expect(share).toHaveBeenCalledTimes(1);
+      expect(writeText).not.toHaveBeenCalled(); // closing the sheet is a choice, not a failure
+      expect(q(el, '.share-label')!.textContent).toBe('Share'); // at rest, nothing flashed
+      expect(action).not.toHaveBeenCalled();
+    });
+  } finally {
+    action.mockRestore();
+  }
+});
+
+test('<c0ffee-crossword> a REFUSED share sheet falls back to the clipboard copy', async () => {
+  // NotAllowedError (iframe permissions policy) — not a cancel: the sheet could not open
+  // at all, so the copy steps in rather than leaving a dead button, with the reason in
+  // the console (the C0FFEE-54 posture).
+  const share = vi.fn().mockRejectedValue(Object.assign(new Error('denied'), { name: 'NotAllowedError' }));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const action = vi.spyOn(datadogRum, 'addAction').mockImplementation(() => {});
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    await withNavigatorApi({ share, writeText }, async () => {
+      const el = mount();
+      solveAll(el, puzzle());
+      act(el, 'share');
+      await settle();
+
+      expect(writeText).toHaveBeenCalledTimes(1); // the copy IS the share when the sheet can't be
+      expect(writeText.mock.calls[0][0]).toContain('Hex Color crossword');
+      expect(q(el, '.share-label')!.textContent).toContain('Copied');
+      expect(action).toHaveBeenCalledTimes(1); // the landed copy counts — once, not twice
+      expect(warn).toHaveBeenCalled();
+      el.remove(); // disconnect clears the armed flash-revert timer (no dangling real timer)
+    });
+  } finally {
+    warn.mockRestore();
     action.mockRestore();
   }
 });
