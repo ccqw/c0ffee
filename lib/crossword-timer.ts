@@ -11,9 +11,9 @@
 //
 // The state is an immutable value threaded through a reducer (the crosswordReducer idiom),
 // with a separate pure reader `elapsedMs(timer, at)` so the shell can ask "how long so far?"
-// at any render frame without a state transition. Two spans of running time are added; the
-// paused gaps between them are never counted, so elapsed is exactly start-to-stop minus the
-// hidden spans.
+// at any render frame without a state transition. Each pause banks the open running span and
+// each resume opens a new one, so any number of running spans are summed; the paused gaps
+// between them are never counted, and elapsed is exactly start-to-stop minus the hidden spans.
 
 /** The clock's immutable state. Not meant to be built by hand — start from `initSolveTimer`
  *  and transition via `solveTimerReducer`.
@@ -88,5 +88,10 @@ export function solveTimerReducer(timer: SolveTimer, event: SolveTimerEvent): So
  *  any. Pure and side-effect free, so the shell can call it every repaint. A paused or
  *  stopped clock ignores `at` and returns its banked total. */
 export function elapsedMs(timer: SolveTimer, at: number): number {
+  // The terminal freeze is the reader's OWN guarantee, not one borrowed from the reducer: a
+  // stopped clock returns its banked total regardless of `at`. The reducer already nulls
+  // runningSince on stop, so this guard is belt-and-suspenders today — but it keeps elapsed
+  // frozen at completion even if a future transition ever left a span open on stop.
+  if (timer.stopped) return timer.accumulatedMs;
   return timer.accumulatedMs + (timer.runningSince !== null ? span(timer.runningSince, at) : 0);
 }

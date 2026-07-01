@@ -605,7 +605,8 @@ class C0ffeeCrossword extends HTMLElement {
     if (readout) readout.textContent = this._elapsedText();
   }
 
-  // The current Solve time as mm:ss, read live off the accumulator (frozen once stopped).
+  // The current Solve time as m:ss (unpadded minutes, per fmtTime), live off the accumulator
+  // (frozen once stopped).
   private _elapsedText(): string {
     return fmtTime(Math.floor(elapsedMs(this.timer, this._now()) / 1000));
   }
