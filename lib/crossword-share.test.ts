@@ -49,10 +49,14 @@ test('composeShareMessage: formats elapsed as m:ss with zero-padded seconds', ()
   expect(composeShareMessage({ puzzleUrl: URL, elapsedMs: 754999 })).toContain('Solved in 12:34');
 });
 
-test('composeShareMessage: is plain shareable text (single-block, no markup)', () => {
-  const msg = composeShareMessage({ puzzleUrl: URL, elapsedMs: 255000 });
-  expect(msg).not.toContain('<'); // no HTML rides into a share sheet
-  expect(msg.split('\n')).toHaveLength(4); // name, time boast, signature, link
+test('composeShareMessage: is plain shareable text (the timed 4-line shape)', () => {
+  // The whole timed shape, asserted positively: name, time boast, signature, link.
+  const lines = composeShareMessage({ puzzleUrl: URL, elapsedMs: 255000 }).split('\n');
+  expect(lines).toHaveLength(4);
+  expect(lines[0]).toBe('I solved the Hex Color crossword ☕ #C0FFEE');
+  expect(lines[1]).toBe('Solved in 4:15 - can you beat me?');
+  expect(lines[2]).toBe('#\u{1F7E5}\u{1F7E5}\u{1F7E9}\u{1F7E9}\u{1F7E6}\u{1F7E6}');
+  expect(lines[3]).toBe(URL);
 });
 
 test('composeShareMessage: fails loud on an unrenderable elapsed (programmer error)', () => {

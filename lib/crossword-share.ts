@@ -29,10 +29,10 @@ const SIGNATURE = '#\u{1F7E5}\u{1F7E5}\u{1F7E9}\u{1F7E9}\u{1F7E6}\u{1F7E6}';
 // public name), signed with the coffee emoji beside the namesake color address.
 const NAME_LINE = 'I solved the Hex Color crossword ☕ #C0FFEE';
 
-// m:ss with unpadded minutes and floored seconds — the same shape the completion
-// card's frozen readout shows (fmtTime in the shell), so the boast and the card
-// can never disagree about the time.
-function fmtSolveTime(elapsedMs: number): string {
+// m:ss with unpadded minutes and floored seconds (0:00, 4:15). Exported as the ONE
+// Solve-time formatter: the shell's readouts (topbar, completion card) render through
+// this too, so the boast and the card can never disagree about the time.
+export function fmtSolveTime(elapsedMs: number): string {
   const totalSeconds = Math.floor(elapsedMs / 1000);
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;

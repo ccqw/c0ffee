@@ -46,7 +46,7 @@
 import { datadogRum } from '@datadog/browser-rum-slim';
 import { generatePuzzle } from '../lib/crossword-generator.ts';
 import { decodePuzzleToken, encodePuzzleToken } from '../lib/crossword-link.ts';
-import { composeShareMessage } from '../lib/crossword-share.ts';
+import { composeShareMessage, fmtSolveTime } from '../lib/crossword-share.ts';
 import { SHAPES } from '../lib/crossword-shapes.ts';
 import {
   initCrossword,
@@ -204,13 +204,10 @@ const LOCK_CALLOUT_MS = 4200;
 // puzzle; "Restart" reuses the current Puzzle object (same grid + targets).
 const START_SEED = DEFAULT_SEED;
 
-// mm:ss for the quiet elapsed-time readout (CONTEXT.md: Solve time; the on-screen
-// widget is the Timer). Minutes are not zero-padded, seconds always are (0:00, 4:15).
-const fmtTime = (totalSeconds: number): string => {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-};
+// The m:ss Solve-time formatter now lives in the share core (fmtSolveTime,
+// lib/crossword-share.ts) as the ONE source of truth — the topbar readout, the
+// completion card and the shared boast all render through it, so they can never
+// disagree about the time (C0FFEE-80, collapsing a duplicated formatter).
 
 // Per-pair channel identity for the lock callout's two role cells: pair index 0 -> red,
 // 1 -> green, 2 -> blue, named with the pure primary (contract #2) and the colour word.
@@ -625,10 +622,10 @@ class C0ffeeCrossword extends HTMLElement {
     if (readout) readout.textContent = this._elapsedText();
   }
 
-  // The current Solve time as m:ss (unpadded minutes, per fmtTime), live off the accumulator
+  // The current Solve time as m:ss (fmtSolveTime), live off the accumulator
   // (frozen once stopped).
   private _elapsedText(): string {
-    return fmtTime(Math.floor(elapsedMs(this.timer, this._now()) / 1000));
+    return fmtSolveTime(elapsedMs(this.timer, this._now()));
   }
 
   // Pause/resume as the tab hides/returns (C0FFEE-79). Only touches the clock; a quick
