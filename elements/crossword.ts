@@ -60,6 +60,12 @@ import {
 } from '../lib/crossword-state.ts';
 import type { GuessResult, ChannelVerdict } from '../lib/crossword-guess.ts';
 import type { Cell, Direction, Layout, Slot } from '../lib/crossword-layout.ts';
+import {
+  initSolveTimer,
+  solveTimerReducer,
+  elapsedMs,
+  type SolveTimer,
+} from '../lib/crossword-timer.ts';
 
 // The default puzzle when no Puzzle link is present: a fixed shape + seed, deterministic
 // so the smoke test asserts stable counts and the design eyeball reviews the same board.
@@ -177,6 +183,13 @@ const KEYS = '0123456789ABCDEF'.split('');
 // a single seen-flag fails the ADR 3-test, so no ADR. Namespaced to the crossword.
 const COACH_SEEN_KEY = 'c0ffee:crossword:coach-seen';
 
+// The second UI preference flag (C0FFEE-79): whether the running Solve-time readout is
+// shown during play. A timer-less "zen" solve is a first-class choice (CONTEXT.md: Solve
+// time), remembered across visits. Like COACH_SEEN_KEY this is a single UI preference, not
+// a color address, so it stays out of the URL hash and — a lone boolean — fails the ADR
+// 3-test, so no ADR. Namespaced to the crossword. Absent -> shown (the timed default).
+const CLOCK_SHOWN_KEY = 'c0ffee:crossword:clock-shown';
+
 // How long the one-shot lock callout lingers before it auto-dismisses (a transient
 // teaching beat, C0FFEE-62 decision 4 — like the toast, it is never chased).
 const LOCK_CALLOUT_MS = 4200;
@@ -211,6 +224,13 @@ const HELP_SVG =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>';
 const KEBAB_SVG =
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>';
+// The Solve-time show/hide toggle glyphs (C0FFEE-79): eye = shown (tap to hide), eye-off =
+// hidden (tap to show). Neutral chrome, stroke off currentColor (contract #6). Lucide eye /
+// eye-off.
+const EYE_SVG =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF_SVG =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68"/><path d="M6.6 6.6C3.9 8.2 2 12 2 12s3.5 7 10 7a9.3 9.3 0 0 0 5.4-1.6"/><path d="m2 2 20 20"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 const RESTART_SVG =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.4 2.6L3 8"/><path d="M3 3v5h5"/></svg>';
 const SPARKLE_SVG =
@@ -331,18 +351,23 @@ class C0ffeeCrossword extends HTMLElement {
   // lock callout watches for the first demonstrable cross-propagation.
   private crossings = new Set<string>();
 
-  // The Timer (CONTEXT.md: Solve time). Elapsed whole seconds the board has been live
-  // and unpaused; an interval ticks it while running. Coupled to the overlay layer
-  // (decision 6): it does not run while the coach/pause overlay is up, and freezes on
-  // completion. No persisted best-time. Deferred to C0FFEE-57 (Solve time / share):
-  // CONTEXT.md also wants the clock paused while the TAB is hidden and shared accurately;
-  // this slice is a quiet, deliberately-downplayed tick-counter, so background-tab
-  // throttling can undercount real wall-time. That precision rides the share work, not
-  // this chrome slice.
-  private elapsed = 0;
-  private timerInterval: number | null = null;
-  private timerRunning = false;
-  private timerFrozen = false;
+  // The Solve time (CONTEXT.md), now an injected-time accumulator (C0FFEE-79, lib/
+  // crossword-timer.ts). The accumulator is the source of truth for elapsed ms — it banks
+  // running spans across pauses, so the arithmetic is exact even when a background tab
+  // throttles the interval below (this replaced the C0FFEE-67 tick-counter that undercounted
+  // hidden-tab time). The clock starts on the first Cell entry, pauses under any scrim overlay
+  // (decision 6) AND while the tab is hidden (Page Visibility), and stops on completion.
+  private timer: SolveTimer = initSolveTimer();
+  // Has the first Cell entry happened? The clock is idle (elapsed 0) until it has, then the
+  // gates in _clockShouldRun govern whether it accumulates. Reset by New/Restart.
+  private timerStarted = false;
+  // A 1s pulse that repaints ONLY the .timer readout (the accumulator holds the real time,
+  // so a late/throttled pulse never loses seconds — it just repaints less often).
+  private repaintInterval: number | null = null;
+  // Whether the running readout is shown during play (C0FFEE-79). Loaded from localStorage on
+  // connect; toggled by the topbar eye. Cosmetic — a hidden clock still runs and the frozen
+  // Solve time still shows on the completion card.
+  private clockShown = true;
 
   // Overlay layer — all three ride one shared scrim primitive (decision 5).
   private paused = false; // pause scrim up
@@ -369,6 +394,11 @@ class C0ffeeCrossword extends HTMLElement {
   // control reaches it (events bubble across the boundary) and so the host itself — made
   // focusable with tabindex — can drive the puzzle directly.
   private onKeydown = (e: Event): void => this._handleKey(e as KeyboardEvent);
+  // The Page Visibility API drives the Solve-time pause (C0FFEE-79): switching away from the
+  // tab pauses the clock, returning resumes it — so a distraction never inflates the time, and
+  // we sidestep the hidden-tab interval throttling by simply not counting. Bound on `document`
+  // (visibilitychange fires there), dropped in disconnectedCallback.
+  private onVisibility = (): void => this._onVisibilityChange();
 
   connectedCallback(): void {
     this._loadPuzzle(this._initialPuzzle());
@@ -385,13 +415,17 @@ class C0ffeeCrossword extends HTMLElement {
     // than re-measuring (decision 4). Listen on window — the rect moves with the page.
     window.addEventListener('resize', this.onViewportShift);
     window.addEventListener('scroll', this.onViewportShift, true);
+    // Pause/resume the Solve time as the tab hides/returns (C0FFEE-79).
+    document.addEventListener('visibilitychange', this.onVisibility);
+
+    // The remembered show/hide preference for the running readout (C0FFEE-79).
+    this.clockShown = this._loadClockShown();
 
     // First-run coach (decision 5): auto-show once, gated by the localStorage seen-flag.
-    // A first-ever visitor sees it over a scrim-dimmed board and the Timer waits for its
-    // dismissal; a returning visitor skips it and the Timer starts immediately.
-    if (this._coachSeen()) {
-      this._startTimer();
-    } else {
+    // A first-ever visitor sees it over a scrim-dimmed board. The Solve-time clock no longer
+    // starts here for anyone — it waits for the first Cell entry (C0FFEE-79), which on a first
+    // visit can only happen after the coach is dismissed (the board is inert beneath it).
+    if (!this._coachSeen()) {
       this.coachOpen = true;
       this.coachStep = 0;
     }
@@ -403,8 +437,9 @@ class C0ffeeCrossword extends HTMLElement {
     this.removeEventListener('keydown', this.onKeydown);
     window.removeEventListener('resize', this.onViewportShift);
     window.removeEventListener('scroll', this.onViewportShift, true);
+    document.removeEventListener('visibilitychange', this.onVisibility);
     this._clearToastTimer();
-    this._stopTimer();
+    this._stopRepaint();
     this._clearLockCalloutTimer();
   }
 
@@ -474,52 +509,140 @@ class C0ffeeCrossword extends HTMLElement {
     this._loadPuzzle(fresh ? generatePuzzle(DEFAULT_SHAPE, this.seed) : this.puzzle);
     this._closeOverlays();
     this._dismissToast();
-    this._resetTimer();
-    this._startTimer();
+    // The fresh board's clock resets to idle and waits for its own first Cell entry
+    // (C0FFEE-79) — a New/Restart is not itself a Cell entry.
+    this._resetClock();
     this._render();
   }
 
-  // --- timer (C0FFEE-67) ---------------------------------------------------
+  // --- Solve-time clock (C0FFEE-79) ----------------------------------------
 
-  // Start (or resume) the clock: tick once a second while the board is live. Idempotent
-  // and a no-op once frozen (completion) — so a stray resume can never un-freeze a solve.
-  private _startTimer(): void {
-    if (this.timerRunning || this.timerFrozen) return;
-    this.timerRunning = true;
-    this.timerInterval = window.setInterval(() => this._tick(), 1000);
+  // The injected timestamp for a clock transition — captured at the DOM-event moment. Date
+  // (not performance.now) so happy-dom's fake timers advance it: the accumulator is exact
+  // regardless, and clock skew is clamped to never run elapsed backwards (crossword-timer.ts).
+  private _now(): number {
+    return Date.now();
   }
 
-  // Stop the interval but keep `elapsed` — used by pause and by freeze. Leaves
-  // `timerRunning` false so the next _startTimer re-arms cleanly.
-  private _stopTimer(): void {
-    if (this.timerInterval !== null) {
-      clearInterval(this.timerInterval);
-      this.timerInterval = null;
+  // Whether the tab is currently hidden (Page Visibility). Guarded for older happy-dom.
+  private _tabHidden(): boolean {
+    return typeof document !== 'undefined' && document.hidden === true;
+  }
+
+  // Whether the Solve time should be accumulating right now: it has started (first Cell
+  // entered), the puzzle isn't solved, no scrim overlay (coach / pause / confirm) covers the
+  // board (decision 6), and the tab is visible. Any false gate pauses it; all true resume it.
+  private _clockShouldRun(): boolean {
+    return (
+      this.timerStarted &&
+      !this.state.complete &&
+      this._activeScrimOverlay() === null &&
+      !this._tabHidden()
+    );
+  }
+
+  // The first Cell entry opens the clock (C0FFEE-79). Idempotent — only the first press of a
+  // puzzle starts it; a no-op once started or once solved. (First entry is only reachable with
+  // the board live and the tab focused, so it starts running immediately.)
+  private _startClock(): void {
+    if (this.timerStarted || this.state.complete) return;
+    this.timerStarted = true;
+    this.timer = solveTimerReducer(this.timer, { type: 'start', at: this._now() });
+    this._startRepaint();
+  }
+
+  // Reconcile the accumulator + repaint pulse with _clockShouldRun, capturing `now` here at
+  // the gate-change moment. Called from every gate transition (overlay open/close, tab
+  // visibility). resume-while-running and pause-while-paused are reducer no-ops, so this only
+  // truly transitions when a gate flipped. A stopped clock never resumes.
+  private _syncClock(): void {
+    if (this.timer.stopped) {
+      this._stopRepaint();
+      return;
     }
-    this.timerRunning = false;
+    const now = this._now();
+    if (this._clockShouldRun()) {
+      this.timer = solveTimerReducer(this.timer, { type: 'resume', at: now });
+      this._startRepaint();
+    } else {
+      this.timer = solveTimerReducer(this.timer, { type: 'pause', at: now });
+      this._stopRepaint();
+    }
   }
 
-  // Reset to 0 for a fresh puzzle (New/Restart). Clears the frozen flag so the new
-  // board's clock can run again.
-  private _resetTimer(): void {
-    this._stopTimer();
-    this.elapsed = 0;
-    this.timerFrozen = false;
+  // Stop the clock on completion — banks the open span and freezes it terminally (a stray
+  // resume can never un-freeze the finished solve; that guard lives in the accumulator).
+  private _stopClock(): void {
+    this.timer = solveTimerReducer(this.timer, { type: 'stop', at: this._now() });
+    this._stopRepaint();
   }
 
-  // Freeze the clock on completion — stop ticking and refuse further starts until reset.
-  private _freezeTimer(): void {
-    this._stopTimer();
-    this.timerFrozen = true;
+  // Reset to idle for a fresh puzzle (New/Restart): a new accumulator, un-started, no pulse.
+  private _resetClock(): void {
+    this._stopRepaint();
+    this.timer = initSolveTimer();
+    this.timerStarted = false;
   }
 
-  // One second elapsed. Patch ONLY the timer readout (not a full re-render) so the board
-  // is not rebuilt every tick — cheap, and it never disturbs the cursor or an open
-  // overlay. A guarded querySelector: harmless if the readout is absent (done mode).
-  private _tick(): void {
-    this.elapsed += 1;
+  // Arm the 1s repaint pulse (idempotent). It repaints only the readout, never the board.
+  private _startRepaint(): void {
+    if (this.repaintInterval !== null) return;
+    this.repaintInterval = window.setInterval(() => this._paintClock(), 1000);
+  }
+  private _stopRepaint(): void {
+    if (this.repaintInterval !== null) {
+      clearInterval(this.repaintInterval);
+      this.repaintInterval = null;
+    }
+  }
+
+  // Patch ONLY the .timer readout from the live accumulator (not a board rebuild) — cheap, and
+  // it never disturbs the cursor or an open overlay. A no-op when the readout is hidden by the
+  // preference or absent (guarded querySelector).
+  private _paintClock(): void {
+    if (!this.clockShown) return;
     const readout = this.root.querySelector('.timer');
-    if (readout) readout.textContent = fmtTime(this.elapsed);
+    if (readout) readout.textContent = this._elapsedText();
+  }
+
+  // The current Solve time as m:ss (unpadded minutes, per fmtTime), live off the accumulator
+  // (frozen once stopped).
+  private _elapsedText(): string {
+    return fmtTime(Math.floor(elapsedMs(this.timer, this._now()) / 1000));
+  }
+
+  // Pause/resume as the tab hides/returns (C0FFEE-79). Only touches the clock; a quick
+  // readout repaint keeps the shown time fresh on return (the pause left it frozen).
+  private _onVisibilityChange(): void {
+    this._syncClock();
+    this._paintClock();
+  }
+
+  // The show/hide preference, read/written defensively like the coach seen-flag: Web Storage
+  // can throw (private mode) or be absent (older happy-dom). Absent -> shown (the timed
+  // default); on any failure the readout just behaves as shown / un-recordable.
+  private _loadClockShown(): boolean {
+    try {
+      return window.localStorage.getItem(CLOCK_SHOWN_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  }
+  private _persistClockShown(): void {
+    try {
+      window.localStorage.setItem(CLOCK_SHOWN_KEY, this.clockShown ? '1' : '0');
+    } catch {
+      /* storage unavailable — the preference just won't persist; not fatal */
+    }
+  }
+
+  // The topbar eye toggles the running readout's visibility and remembers the choice. The
+  // clock keeps running underneath either way (a hidden clock is a display choice, not a
+  // pause); the completion card still shows the frozen Solve time.
+  private _toggleClock(): void {
+    this.clockShown = !this.clockShown;
+    this._persistClockShown();
+    this._render();
   }
 
   // --- coach + overlays (C0FFEE-67) ----------------------------------------
@@ -542,10 +665,11 @@ class C0ffeeCrossword extends HTMLElement {
     }
   }
 
-  // Re-summon the coach via the topbar "?" (decision 5). Always opens at step 0; does
-  // not touch the seen-flag (it is already seen) and does not pause an existing solve.
-  // Clears any other overlay first so at most one scrim overlay is ever open (the
-  // precedence in _activeScrimOverlay then never has to resolve a real conflict).
+  // Re-summon the coach via the topbar "?" (decision 5). Always opens at step 0; does not
+  // touch the seen-flag (it is already seen). Clears any other overlay first so at most one
+  // scrim overlay is ever open (the precedence in _activeScrimOverlay then never has to resolve
+  // a real conflict). The coach is a scrim overlay, so _syncClock pauses a running solve while
+  // it is up (decision 6) — reading the help never costs Solve time.
   private _openCoach(): void {
     this.paused = false;
     this.confirm = null;
@@ -553,17 +677,18 @@ class C0ffeeCrossword extends HTMLElement {
     this.legendOpen = false;
     this.coachOpen = true;
     this.coachStep = 0;
+    this._syncClock();
     this._render();
   }
 
-  // Dismiss the coach (Skip / Got it / Escape / scrim tap). Records the seen-flag so it
-  // never auto-shows again, and — on the FIRST-run dismissal — starts the Timer (the
-  // first-visit clock waits for the coach, decision 6). A re-summoned coach dismiss
-  // leaves an already-running clock alone.
+  // Dismiss the coach (Skip / Got it / Escape / scrim tap). Records the seen-flag so it never
+  // auto-shows again, then reconciles the clock: a re-summoned coach dismissed mid-solve resumes
+  // it; a first-run dismissal leaves it idle (the clock waits for the first Cell entry, not the
+  // coach — C0FFEE-79).
   private _dismissCoach(): void {
     this.coachOpen = false;
     this._markCoachSeen();
-    if (!this.timerFrozen) this._startTimer();
+    this._syncClock();
     this._render();
   }
 
@@ -574,13 +699,13 @@ class C0ffeeCrossword extends HTMLElement {
     this.paused = true;
     this.menuOpen = false;
     this.legendOpen = false;
-    this._stopTimer(); // the clock pauses with the scrim (decision 6)
+    this._syncClock(); // the clock pauses with the scrim (decision 6)
     this._render();
   }
   private _resume(): void {
     if (!this.paused) return;
     this.paused = false;
-    if (!this.timerFrozen) this._startTimer();
+    this._syncClock();
     this._render();
   }
 
@@ -600,24 +725,31 @@ class C0ffeeCrossword extends HTMLElement {
   }
 
   // A menu item (Restart/New) opens the destructive confirm rather than acting at once
-  // (decision 3 — both wipe progress). The confirm rides the shared scrim.
+  // (decision 3 — both wipe progress). The confirm rides the shared scrim, so the Solve-time
+  // clock pauses under it (decision 6) and resumes on Cancel.
   private _requestConfirm(action: PendingConfirm): void {
     this.paused = false;
     this.coachOpen = false;
     this.confirm = action;
     this.menuOpen = false;
     this.legendOpen = false;
+    this._syncClock();
     this._render();
   }
   private _cancelConfirm(): void {
     this.confirm = null;
+    this._syncClock();
     this._render();
   }
   private _acceptConfirm(): void {
     const action = this.confirm;
     this.confirm = null;
+    // Restart/New resets the clock via _restartOrNew; a no-action accept just reconciles.
     if (action) this._restartOrNew(action === 'new');
-    else this._render();
+    else {
+      this._syncClock();
+      this._render();
+    }
   }
 
   // Close every transient overlay (used by Restart/New). Does not record the coach
@@ -733,6 +865,8 @@ class C0ffeeCrossword extends HTMLElement {
         return this._render();
       case 'help':
         return this._openCoach();
+      case 'clock-toggle':
+        return this._toggleClock();
       case 'restart':
         return this._requestConfirm('restart');
       case 'new':
@@ -905,6 +1039,8 @@ class C0ffeeCrossword extends HTMLElement {
   private _press(digit: string): void {
     const slot = this._selectedSlot();
     if (!slot || this.cursorKey === null) return;
+    // The first digit typed into a Cell is the Solve-time start (C0FFEE-79); idempotent after.
+    this._startClock();
     const cell = this._cellOf(this.cursorKey);
     this._dispatch({ type: 'setDigit', cell, digit });
     this.cursorKey = this._nextEditable(slot, this._indexInSlot(slot, this.cursorKey)) ?? this.cursorKey;
@@ -998,9 +1134,9 @@ class C0ffeeCrossword extends HTMLElement {
     // editable (null once the Slot is fully solved).
     this.cursorKey = this._firstCursor();
     if (this.state.complete) {
-      // The puzzle is solved: freeze the clock at the Solve time and let the completion
+      // The puzzle is solved: stop the clock at the Solve time and let the completion
       // card carry the moment (no win toast — the card is the celebration, scene 04).
-      this._freezeTimer();
+      this._stopClock();
       this._render();
       return;
     }
@@ -1249,13 +1385,24 @@ class C0ffeeCrossword extends HTMLElement {
   // card). No brand wordmark — the Site banner owns branding; this is controls only.
   private _topbar(): string {
     if (this.state.complete) {
+      // The frozen Solve time always shows on completion — the show/hide preference governs the
+      // running readout DURING play, not the final time (which the completion card carries too).
       return `<header class="topbar done">
-        <span class="timer">${fmtTime(this.elapsed)}</span>
+        <span class="timer">${this._elapsedText()}</span>
         <span class="trophy">${TROPHY_SVG}</span>
       </header>`;
     }
+    // The running readout, shown or replaced by a muted dash per the preference; the clock keeps
+    // running underneath a hidden readout (C0FFEE-79). The eye toggles + remembers the choice.
+    const readout = this.clockShown
+      ? `<span class="timer" aria-label="Elapsed time">${this._elapsedText()}</span>`
+      : `<span class="timer hidden" aria-label="Solve time hidden">--:--</span>`;
+    const eyeLabel = this.clockShown ? 'Hide the Solve time' : 'Show the Solve time';
     return `<header class="topbar">
-      <span class="timer" aria-label="Elapsed time">${fmtTime(this.elapsed)}</span>
+      <span class="timerwrap">
+        ${readout}
+        <button type="button" class="tbtn eyebtn" data-act="clock-toggle" aria-label="${eyeLabel}" aria-pressed="${!this.clockShown}">${this.clockShown ? EYE_SVG : EYE_OFF_SVG}</button>
+      </span>
       <span class="tbtns">
         <button type="button" class="tbtn" data-act="pause" aria-label="Pause">${PAUSE_SVG}</button>
         <button type="button" class="tbtn" data-act="help" aria-label="How to play">${HELP_SVG}</button>
@@ -1336,7 +1483,7 @@ class C0ffeeCrossword extends HTMLElement {
     return `<div class="pause overlaycard" role="dialog" aria-label="Paused">
       <div class="ovicon">${PAUSE_SVG}</div>
       <div class="ovtitle">Paused</div>
-      <div class="ovdesc">${fmtTime(this.elapsed)} elapsed - board hidden</div>
+      <div class="ovdesc">${this._elapsedText()} elapsed - board hidden</div>
       <button type="button" class="cbtn resume" data-act="resume">${PLAY_SVG} Resume</button>
     </div>`;
   }
@@ -1419,7 +1566,7 @@ class C0ffeeCrossword extends HTMLElement {
     const swatches = slots
       .map((s) => `<span class="swatch" style="background:#${this._target(s)};"></span>`)
       .join('');
-    const summary = `Solved in ${fmtTime(this.elapsed)} - ${slots.length} colors placed, all Channels matched.`;
+    const summary = `Solved in ${this._elapsedText()} - ${slots.length} colors placed, all Channels matched.`;
     return `<section class="completion panel">
       <div class="comp-head">${TROPHY_SVG}<span>Solved</span></div>
       <p class="comp-summary">${summary}</p>
@@ -1926,8 +2073,11 @@ const STYLE = `
   /* topbar — controls only (no brand wordmark; the Site banner owns branding) */
   .topbar { position:relative; display:flex; align-items:center; justify-content:space-between;
             padding:2px 16px 12px; min-height:34px; box-shadow:inset 0 -1px 0 rgba(255,255,255,.07); }
+  .timerwrap { display:flex; align-items:center; gap:2px; }
   .timer { font:400 13px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74);
            letter-spacing:.02em; min-width:34px; }
+  .timer.hidden { color:rgba(255,255,255,.34); } /* zen solve: the running readout is muted out */
+  .eyebtn { min-width:30px; height:30px; color:rgba(255,255,255,.5); }
   .tbtns { display:flex; align-items:center; gap:4px; }
   .tbtn { display:flex; align-items:center; justify-content:center; min-width:38px; height:38px;
           border:none; border-radius:9px; background:none; color:rgba(255,255,255,.66); cursor:pointer; }
