@@ -1937,9 +1937,11 @@ class C0ffeeCrossword extends HTMLElement {
   // Guess and is not yet solved. Feedback that names its referent can never go stale:
   // the swatch and digit pairs always show the GRADED mix (contract #1 — a literal
   // color value is never dimmed), and currency is carried by the caption word plus the
-  // restore glyph's presence, never by opacity. `checked now` and `last checked` are
-  // the same width in DM Mono, and the pairs are pinned right by margin-left:auto, so
-  // the caption flip and the glyph's arrival move nothing. The "?" legend disclosure
+  // restore glyph's presence, never by opacity. Captions are `now` / `last` (§6b's
+  // `checked now` / `last checked` shortened at the merge eyeball, 2026-07-02: the live
+  // compare column is narrower than the prototype's fit assumption and the long strings
+  // wrapped the diverged row at a 375 viewport). One char of width apart, and the pairs
+  // are pinned right by margin-left:auto, so the flip moves nothing. The "?" legend disclosure
   // (C0FFEE-77) rides beside the digit pairs — reachable exactly where and when the
   // glyphs appear; its popover/backdrop/Escape mechanics are unchanged.
   private _receipt(slot: Slot, verdict: GuessResult): string {
@@ -1980,7 +1982,7 @@ class C0ffeeCrossword extends HTMLElement {
     // data-act, so the delegated handler never routes it.
     return `<div class="receipt${restorable ? ' stale' : ''}"${restorable ? ' data-act="restore"' : ''}>
       <span class="rswatch" style="background:#${graded};"></span>
-      <span class="rcaption">${diverged ? 'last checked' : 'checked now'}</span>
+      <span class="rcaption">${diverged ? 'last' : 'now'}</span>
       ${restorable ? `<span class="rundo">${UNDO_SVG}</span>` : ''}
       <span class="rkey">
         <span class="rpairs">${pairs}</span>

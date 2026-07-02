@@ -272,6 +272,13 @@ Spec (all values final):
     **`checked now`** while the Slot's current digits equal the graded digits,
     **`last checked`** once they diverge. The two strings are the same width in DM Mono,
     so the flip moves nothing.
+    > **AMENDED 2026-07-02 (C0FFEE-71 merge eyeball):** captions shortened to **`now`** /
+    > **`last`**. The live compare column is ~278px at a 375 viewport (the page spends
+    > ~97px on chrome vs this prototype frame's 28px), so the long strings wrapped the
+    > diverged row's digit pairs to a second line on 375-class devices. Also: the
+    > same-width claim was off by one character (11 vs 12); `now`/`last` are off by one
+    > too, absorbed by the elastic middle. The container-width reality is recorded for
+    > the C0FFEE-87 grill (it is the width twin of the height finding).
   - **Restore glyph** (undo-2, 13px, stroke `rgba(255,255,255,.55)`, achromatic — contract
     #6) inline right after the word, rendered ONLY while diverged — it affords the restore
     and marks the receipt as not-current. No placeholder when absent: the digit pairs are
