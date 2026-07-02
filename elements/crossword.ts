@@ -1715,8 +1715,9 @@ class C0ffeeCrossword extends HTMLElement {
 
   // The woven board: walk Layout.cells (row-major), position each by percentage of an
   // aspect-locked square, and dress it with the lifted weave geometry. Lays the active
-  // Slot's channel-pair outlines and the clue-number labels over the top. Each Cell is a
-  // tap target (data-cell); the cursor Cell carries an accent caret.
+  // Slot's channel-pair outlines and the clue-number labels over the top while playing;
+  // both retire on the solved board (scene 04, C0FFEE-82). Each Cell is a tap target
+  // (data-cell); the cursor Cell carries an accent caret.
   private _board(layout: Layout): string {
     const cols = Math.max(...layout.cells.map((c) => c.col)) + 1;
     const rows = Math.max(...layout.cells.map((c) => c.row)) + 1;
