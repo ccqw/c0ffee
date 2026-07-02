@@ -1336,7 +1336,7 @@ test('<c0ffee-crossword> a valid Puzzle-link hash reproduces that exact puzzle',
   const SHARED = 7; // a seed distinct from the default, so the boards differ
   window.location.hash = encodePuzzleToken({ shapeId: SHAPE, seed: SHARED });
   const el = mount();
-  // the clue stage paints the SHARED seed's first-Slot target, not the default seed's
+  // the clue half paints the SHARED seed's first-Slot target, not the default seed's
   expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SHARED)}`);
   expect(clueColorOf(el)).not.toContain(`#${firstTargetForSeed(SEED)}`);
 });
