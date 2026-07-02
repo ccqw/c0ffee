@@ -2142,11 +2142,13 @@ const STYLE = `
   .cluepanel { flex:1 1 auto; min-height:0; overflow:auto; margin:0 14px; padding:18px; display:flex; gap:18px; }
   .cluegroup { flex:1; min-width:0; }
   .cluegroup h2 { margin:0 0 8px; font:400 14px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
-  /* the "clue" / "you" column captions over each row's two swatches */
-  .colhead { display:flex; gap:8px; margin:0 0 5px; padding:0 8px 0 24px; }
+  /* the "clue" / "you" column captions over each row's two swatches — the header math
+     mirrors the row math exactly (C0FFEE-83 / CW-CluePanel): 11px gaps, an 8+12+11
+     lead-in past the row padding + clue number, and connector 16 + gap 11 before "you" */
+  .colhead { display:flex; gap:11px; margin:0 0 5px; padding:0 8px 0 31px; }
   .colhead span { width:30px; text-align:center; flex:none; font:400 9.5px/1 var(--c0ffee-font, monospace);
                   letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.74); }
-  .colhead .ch-you { margin-left:16px; } /* skip the connector column to sit over the you swatch */
+  .colhead .ch-you { margin-left:27px; } /* skip the connector column to sit over the you swatch */
   .cluegroup ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; }
   .cluegroup li { display:flex; }
   /* a clue row is a real <button> (reset to inherit the panel) so a tap routes to its Slot
