@@ -127,6 +127,12 @@ const VERDICT_GLYPH: Record<ChannelVerdict, string> = {
     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>',
 };
 
+// The receipt's restore affordance (undo-2, lifted from the §6b prototype): achromatic
+// like all status chrome (contract #6), rendered ONLY while the Slot's digits diverge
+// from the digits the verdict graded.
+const UNDO_SVG =
+  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>';
+
 const DELETE_SVG =
   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="m18 9-6 6M12 9l6 6"/></svg>';
 const CHECK_SVG =
@@ -343,6 +349,13 @@ class C0ffeeCrossword extends HTMLElement {
   // advance), so the cursor is the FACE's job (C0FFEE-62 decision 2). null when the
   // selected Slot has no editable Cell (e.g. fully locked).
   private cursorKey: string | null = null;
+  // The six digits each Slot's verdict actually graded, keyed by slotKey (C0FFEE-71,
+  // §6b). The core's GuessResult carries verdicts but not the digits they graded, and
+  // the receipt's promise — feedback pinned to its referent — needs those digits to
+  // stay put while the solver retypes. The face is the only dispatcher of `commit`, so
+  // it snapshots here at that moment; cleared with the verdicts in _loadPuzzle so the
+  // two can never drift (no reducer/CrosswordState change — the slice is face-only).
+  private gradedDigits: Record<string, string> = {};
   // The transient commit toast (contract #4); null when none is showing.
   private toast: { kind: ToastKind; text: string } | null = null;
   private toastTimer: number | null = null;
@@ -514,6 +527,7 @@ class C0ffeeCrossword extends HTMLElement {
     });
     this.cursorKey = this._firstCursor();
     this.activePane = 'entry'; // a fresh puzzle opens in the entry pane (C0FFEE-73)
+    this.gradedDigits = {}; // the fresh state has no verdicts, so no graded referents
     this.lockCallout = null;
     this.lockCalloutFired = false; // re-armed for the new puzzle
     this._clearLockCalloutTimer();
@@ -1023,6 +1037,7 @@ class C0ffeeCrossword extends HTMLElement {
     if (act === 'pane-clues') return this._showCluePane();
     if (act === 'delete') return this._delete();
     if (act === 'check') return this._check();
+    if (act === 'restore') return this._restore();
     const keyEl = target.closest('[data-key]');
     if (keyEl) return this._press((keyEl as HTMLElement).dataset.key as string);
     const navEl = target.closest('[data-nav]');
@@ -1222,7 +1237,7 @@ class C0ffeeCrossword extends HTMLElement {
   // Check -> commit. An incomplete Slot can't be graded, so it warns instead of
   // dispatching (the reducer would no-op silently). A graded Slot shows win when every
   // Channel matched (and a fuller message once the whole puzzle is complete) else
-  // wrong; the per-Channel verdict chips carry the detail.
+  // wrong; the checked receipt below the bar carries the per-Channel detail (§6b).
   private _check(): void {
     const slot = this._selectedSlot();
     if (!slot) return;
@@ -1231,6 +1246,10 @@ class C0ffeeCrossword extends HTMLElement {
       this._showToast('warn', 'Fill in all six digits before checking.');
       return;
     }
+    // Pin the receipt's referent: these six digits are what the commit below grades
+    // (C0FFEE-71). Captured at the only place a commit is dispatched, after the
+    // completeness check above, so the snapshot is always a full six-digit Guess.
+    this.gradedDigits[slotKey(slot)] = digits.join('');
     // Snapshot which Cells were locked BEFORE the commit, so the lock callout can tell a
     // freshly-locked crossing Cell from one a prior commit already locked (decision 4).
     const lockedBefore = new Set(
@@ -1257,6 +1276,27 @@ class C0ffeeCrossword extends HTMLElement {
     this._maybeFireLockCallout(slot, lockedBefore);
     if (allCorrect) this._showToast('win', 'Every Channel matches — locked in.');
     else this._showToast('wrong', 'Not quite — read the channel hints.');
+  }
+
+  // A tap on the diverged receipt (C0FFEE-71): put the graded Guess back. Each unlocked
+  // Cell returns to its graded digit via the existing setDigit — locked Cells already
+  // hold theirs (a Cell only locks when its Channel graded correct), and the reducer
+  // ignores them anyway. The row only carries data-act="restore" while diverged, so a
+  // tap on the current receipt never lands here; restoring makes input == referent
+  // again, which is exactly what flips the caption back to `checked now`.
+  private _restore(): void {
+    const slot = this._selectedSlot();
+    if (!slot) return;
+    const graded = this.gradedDigits[slotKey(slot)];
+    if (!graded) return; // nothing graded — nothing to restore (defensive; row absent)
+    slot.cells.forEach((c, i) => {
+      const cs = this._cellState(cellKey(c));
+      if (!cs.locked && cs.digit !== graded[i]) {
+        this._dispatch({ type: 'setDigit', cell: c, digit: graded[i] });
+      }
+    });
+    this._dismissToast();
+    this._render();
   }
 
   // --- navigation ----------------------------------------------------------
@@ -1838,9 +1878,17 @@ class C0ffeeCrossword extends HTMLElement {
     const digits = slot ? slot.cells.map((c) => this._cellState(cellKey(c)).digit) : [];
     const typed = digits.filter((d) => d !== null).length;
     const verdict = ref ? this.state.verdicts[slotKey(ref)] : null;
-    const meta = verdict
-      ? this._hintKey(verdict)
-      : `<span class="count">${typed} / 6</span>`;
+
+    // A fully-matched Slot (every Channel solved) earns the bar's ONE mark: the
+    // darkened clue-list check centered over the seam. Checked-but-wrong draws
+    // nothing here — the seam plus the receipt below carry it (§6b).
+    const s = ref ? this.state.solved[slotKey(ref)] : null;
+    const solved = !!s && s.red && s.green && s.blue;
+
+    // The meta row's right side always shows the typed-digit count while the Slot is
+    // editable (C0FFEE-71 — the verdict chips left this row for the receipt); a solved
+    // Slot is no longer editable, so its meta carries the label alone.
+    const meta = solved ? '' : `<span class="count">${typed} / 6</span>`;
 
     // Your-mix: a Guess is a WHOLE six-digit color address, so the you-half only
     // resolves to a color once every Cell of the Slot is filled. Until then it stays
@@ -1850,12 +1898,6 @@ class C0ffeeCrossword extends HTMLElement {
       typed === SLOT_LENGTH
         ? `<div class="half mix filled" style="background:#${digits.join('')};"></div>`
         : `<div class="half mix"><span class="q">?</span></div>`;
-
-    // A fully-matched Slot (every Channel solved) earns the bar's ONE mark: the
-    // darkened clue-list check centered over the seam. Checked-but-wrong draws
-    // nothing here — the seam plus the meta-row verdicts carry it.
-    const s = ref ? this.state.solved[slotKey(ref)] : null;
-    const solved = !!s && s.red && s.green && s.blue;
 
     return `<div class="compare">
       <div class="cmeta">
@@ -1871,6 +1913,7 @@ class C0ffeeCrossword extends HTMLElement {
           ${solved ? `<span class="barcheck">${BAR_CHECK_SVG}</span>` : ''}
         </div>
       </div>
+      ${slot && verdict && !solved ? this._receipt(slot, verdict) : ''}
     </div>`;
   }
 
@@ -1889,36 +1932,52 @@ class C0ffeeCrossword extends HTMLElement {
     </div>`;
   }
 
-  // The per-Channel verdict chips (handoff §3): identity letter in a muted channel tint
-  // (contract #2 made legible), glyph achromatic (contract #3).
-  private _chips(verdict: GuessResult): string {
-    const rows: ReadonlyArray<[keyof GuessResult, string, string]> = [
-      ['red', 'r', 'R'],
-      ['green', 'g', 'G'],
-      ['blue', 'b', 'B'],
+  // The "checked" receipt (C0FFEE-71, handoff 2 §6b) — the verdict pinned to the exact
+  // six digits it graded, rendered below the split bar while the Slot has a graded
+  // Guess and is not yet solved. Feedback that names its referent can never go stale:
+  // the swatch and digit pairs always show the GRADED mix (contract #1 — a literal
+  // color value is never dimmed), and currency is carried by the caption word plus the
+  // restore glyph's presence, never by opacity. `checked now` and `last checked` are
+  // the same width in DM Mono, and the pairs are pinned right by margin-left:auto, so
+  // the caption flip and the glyph's arrival move nothing. The "?" legend disclosure
+  // (C0FFEE-77) rides beside the digit pairs — reachable exactly where and when the
+  // glyphs appear; its popover/backdrop/Escape mechanics are unchanged.
+  private _receipt(slot: Slot, verdict: GuessResult): string {
+    const key = slotKey(slot);
+    const graded = this.gradedDigits[key];
+    // A verdict only exists via _check, which snapshots first — a miss is a face bug.
+    if (!graded) throw new Error(`c0ffee-crossword: no graded digits for verdict on ${key}`);
+    // Diverged = any Cell no longer holds the digit the verdict graded (an emptied Cell
+    // counts). Purely a comparison against the pinned referent — never a re-grade.
+    const diverged = slot.cells.some((c, i) => this._cellState(cellKey(c)).digit !== graded[i]);
+
+    const rows: ReadonlyArray<[keyof GuessResult, string, number]> = [
+      ['red', 'r', 0],
+      ['green', 'g', 2],
+      ['blue', 'b', 4],
     ];
-    return `<span class="chips">${rows
-      .map(([channel, ch, letter]) => {
+    const pairs = rows
+      .map(([channel, ch, at]) => {
         const v = verdict[channel];
-        return `<span class="chip ${ch}" data-ch="${ch}" data-verdict="${v}">
-          <span class="id" style="color:${CHIP_TINT[channel]};">${letter}</span>
+        return `<span class="rpair" data-ch="${ch}" data-verdict="${v}">
+          <span class="id" style="color:${CHIP_TINT[channel]};">${graded.slice(at, at + 2)}</span>
           <span class="glyph">${VERDICT_GLYPH[v]}</span>
         </span>`;
       })
-      .join('')}</span>`;
-  }
+      .join('');
 
-  // The channel-hint strip plus its "?" legend disclosure (C0FFEE-77, CW-InputDock meta
-  // row). The strip (_chips) is unchanged; the "?" opens a transient key for the three
-  // glyphs. legendOpen is a twin of menuOpen: an invisible full-bleed backdrop catches an
-  // outside tap, the "?" toggles, Escape closes — and the board stays live behind it (no
-  // scrim, not an _overlayUp state). It rides beside the strip, so the key is reachable
-  // exactly where and when the glyphs appear (only after a Guess is graded).
-  private _hintKey(verdict: GuessResult): string {
-    return `<div class="hintkey">
-      ${this._chips(verdict)}
-      <button type="button" class="legendbtn" data-act="legend" aria-label="Show channel hint key" aria-expanded="${this.legendOpen}">?</button>
-      ${this._legendPopover()}
+    // While diverged the whole row is the restore control (data-act="restore"): a tap
+    // sets each unlocked Cell back to its graded digit. While current it is inert — no
+    // data-act, so the delegated handler never routes it.
+    return `<div class="receipt${diverged ? ' stale' : ''}"${diverged ? ' data-act="restore"' : ''}>
+      <span class="rswatch" style="background:#${graded};"></span>
+      <span class="rcaption">${diverged ? 'last checked' : 'checked now'}</span>
+      ${diverged ? `<span class="rundo">${UNDO_SVG}</span>` : ''}
+      <span class="rkey">
+        <span class="rpairs">${pairs}</span>
+        <button type="button" class="legendbtn" data-act="legend" aria-label="Show channel hint key" aria-expanded="${this.legendOpen}">?</button>
+        ${this._legendPopover()}
+      </span>
     </div>`;
   }
 
@@ -2095,14 +2154,27 @@ const STYLE = `
   .clabel { font:400 14px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); white-space:nowrap; }
   .count { margin-left:auto; font:400 10.5px/1 var(--c0ffee-font, monospace); letter-spacing:.12em;
            text-transform:uppercase; color:rgba(255,255,255,.62); }
-  /* the channel-hint strip + its "?" legend disclosure (C0FFEE-77); margin-left:auto rides
-     the wrapper now so the popover anchors to it (position:relative) and the "?" sits flush
-     against the strip's right edge */
-  .hintkey { position:relative; margin-left:auto; display:inline-flex; align-items:center; gap:9px; }
-  .chips { display:inline-flex; align-items:center; gap:9px; }
-  .chip { display:inline-flex; align-items:center; gap:3px; }
-  .chip .id { font:500 11.5px/1 var(--c0ffee-font, monospace); }
-  .chip .glyph { line-height:0; }
+  /* the "checked" receipt (C0FFEE-71, §6b): swatch, state caption (+ restore glyph while
+     diverged), then the graded digit pairs pinned right by .rkey's margin-left:auto — the
+     elastic middle absorbs the glyph so nothing moves between states. No dimming in any
+     state (currency = caption word + glyph presence); flex-wrap is the 320px safety net
+     (the pairs drop to a second line rather than clip). */
+  .receipt { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:8px 10px;
+             border-radius:9px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.12); }
+  .receipt.stale { cursor:pointer; }
+  .rswatch { width:18px; height:18px; border-radius:5px; flex:none;
+             box-shadow:inset 0 0 0 1px rgba(255,255,255,.2); }
+  .rcaption { font:400 9px/1 var(--c0ffee-font, monospace); letter-spacing:.1em;
+              text-transform:uppercase; color:rgba(255,255,255,.55); }
+  .rundo { flex:none; line-height:0; color:rgba(255,255,255,.55); }
+  /* the digit pairs + the "?" legend disclosure (C0FFEE-77, riding beside the pairs);
+     the wrapper is the popover's position:relative anchor */
+  .rkey { position:relative; margin-left:auto; display:inline-flex; align-items:center; gap:9px; }
+  .rpairs { display:inline-flex; align-items:center; gap:10px; }
+  .rpair { display:inline-flex; align-items:center; gap:4px; }
+  .rpair .id { font:500 12px/1 var(--c0ffee-font, monospace); }
+  .rpair .glyph { line-height:0; }
+  .rpair .glyph svg { width:11px; height:11px; }
   /* the "?" disclosure: a quiet round chrome control (contract #6), accent-ringed when open */
   .legendbtn { flex:none; width:22px; height:22px; padding:0; border:none; border-radius:50%;
                background:var(--c0ffee-bg, #0a0a0b); box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
