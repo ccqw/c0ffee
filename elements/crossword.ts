@@ -155,11 +155,14 @@ const LIST_SVG =
 // swatch (legible on the saturated color), and a dark cross on the your-guess swatch of a
 // wrong row. Achromatic strokes over a colored ground (contract #3 — the glyph carries no
 // color content; the swatch underneath is the literal clue/guess color, contract #1).
-// The completion card stamps the same check on its smaller swatches at 13px (scene 04).
-const panelCheck = (size: number): string =>
-  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+// The completion card stamps the same check on its smaller swatches at 13px (scene 04);
+// the split compare bar stamps it at 20px over the seam, deepened to .72 for visibility
+// at that size (C0FFEE-72, handoff 2 §6 — same language, deeper shade).
+const panelCheck = (size: number, shade = 0.5): string =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,${shade})" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
 const PANEL_CHECK_SVG = panelCheck(15);
 const CARD_CHECK_SVG = panelCheck(13);
+const BAR_CHECK_SVG = panelCheck(20, 0.72);
 const PANEL_CROSS_SVG =
   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
@@ -1818,10 +1821,15 @@ class C0ffeeCrossword extends HTMLElement {
       .join('');
   }
 
-  // The clue-vs-your-mix comparison (the keeper "aha"): the selected Slot's label + a
-  // meta line (the typed-digit count while solving, the per-Channel verdict chips once
-  // a Guess has been graded), then the clue Swatch painted its literal target (contract
-  // #1) beside the live your-mix Swatch ringed in accent.
+  // The clue-vs-your-mix comparison (the keeper "aha"), rebuilt as the split compare
+  // bar (C0FFEE-72, handoff 2 §6): the selected Slot's label + a meta line (the
+  // typed-digit count while solving, the per-Channel verdict chips once a Guess has
+  // been graded), then ONE rounded bar split into two literal color fills (contract #1)
+  // that touch at a seam — clue left, your mix right. The seam IS the comparison: the
+  // retired two-swatch layout's 10px gap made a one-channel miss nearly invisible, and
+  // its 2px accent ring contaminated the comparison. Accent = "you" still holds
+  // everywhere else (caret, focus rings); here the "you" identity moves to the neutral
+  // caption above the bar so the comparison surface stays clean.
   private _compare(): string {
     const slot = this._selectedSlot();
     const ref = slot ? { number: slot.number, direction: slot.direction } : null;
@@ -1834,26 +1842,34 @@ class C0ffeeCrossword extends HTMLElement {
       ? this._hintKey(verdict)
       : `<span class="count">${typed} / 6</span>`;
 
-    const clueStyle = ref
-      ? `background:#${this._target(ref)};`
-      : 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);';
-
-    // Your-mix: a Guess is a WHOLE six-digit color address, so the mix Swatch only
-    // resolves to a color once every Cell of the Slot is filled. Until then it stays the
-    // empty "?" placeholder (no half-typed color masquerading as a guess).
+    // Your-mix: a Guess is a WHOLE six-digit color address, so the you-half only
+    // resolves to a color once every Cell of the Slot is filled. Until then it stays
+    // the page-bg "?" placeholder with a seam hairline on this half only (no half-typed
+    // color masquerading as a guess); both leave the moment the mix resolves.
     const mix =
       typed === SLOT_LENGTH
-        ? `<div class="stage mix filled" style="background:#${digits.join('')};"></div>`
-        : `<div class="stage mix"><span class="q">?</span></div>`;
+        ? `<div class="half mix filled" style="background:#${digits.join('')};"></div>`
+        : `<div class="half mix"><span class="q">?</span></div>`;
+
+    // A fully-matched Slot (every Channel solved) earns the bar's ONE mark: the
+    // darkened clue-list check centered over the seam. Checked-but-wrong draws
+    // nothing here — the seam plus the meta-row verdicts carry it.
+    const s = ref ? this.state.solved[slotKey(ref)] : null;
+    const solved = !!s && s.red && s.green && s.blue;
 
     return `<div class="compare">
       <div class="cmeta">
         <span class="clabel">${label}</span>
         ${meta}
       </div>
-      <div class="stages">
-        <div class="stage clue" style="${clueStyle}"></div>
-        ${mix}
+      <div class="split">
+        <div class="caps"><span>clue</span><span>you</span></div>
+        <div class="splitbar">
+          <div class="half clue" style="${ref ? `background:#${this._target(ref)};` : ''}"></div>
+          ${mix}
+          <div class="barring"></div>
+          ${solved ? `<span class="barcheck">${BAR_CHECK_SVG}</span>` : ''}
+        </div>
       </div>
     </div>`;
   }
@@ -2108,10 +2124,32 @@ const STYLE = `
   .legendrow { display:flex; align-items:center; gap:10px; font:400 11.5px/1.3 var(--c0ffee-font, monospace);
                color:rgba(255,255,255,.74); }
   .lglyph { width:15px; flex:none; display:inline-flex; justify-content:center; line-height:0; }
-  .stages { display:flex; gap:10px; }
-  .stage { flex:1; height:62px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
-  .stage.mix { display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
-  .stage.mix .q { font:400 26px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-accent, #C0FFEE); opacity:.8; }
+  /* the split compare bar (C0FFEE-72, handoff 2 §6): one rounded rectangle, two color
+     fills meeting at a seam — no gap, no divider; the seam is the comparison. The
+     neutral ring is an absolute overlay child: an inset shadow on the container itself
+     would paint UNDER the fills. Captions ride above the bar in the clue-panel
+     column-caption voice; nothing is drawn on the fills themselves. */
+  .split { display:flex; flex-direction:column; gap:6px; }
+  .caps { display:flex; }
+  .caps span { flex:1; text-align:center; font:400 9.5px/1 var(--c0ffee-font, monospace);
+               letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.74); }
+  .splitbar { position:relative; display:flex; height:72px; border-radius:12px; overflow:hidden; }
+  .half { flex:1; }
+  /* the fills MUST touch: at fractional half-widths (e.g. 138.75px) the flex boundary
+     leaves a subpixel gap where the dark page bg reads as a phantom divider — overlap
+     the halves by half a pixel so the mix fill paints over the boundary instead */
+  .half.clue { margin-right:-0.5px; }
+  .half.mix { display:flex; align-items:center; justify-content:center; }
+  /* the unresolved you-half: page bg, neutral "?", and a seam hairline on this half only —
+     all three leave when the mix resolves (.filled paints its inline background instead) */
+  .half.mix:not(.filled) { background:var(--c0ffee-bg, #0a0a0b);
+                           box-shadow:inset 1px 0 0 rgba(255,255,255,.18); }
+  .half.mix .q { font:400 20px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.46); }
+  .barring { position:absolute; inset:0; border-radius:12px; pointer-events:none;
+             box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  /* solved: ONE darkened clue-list check centered over the seam, no circle backing */
+  .barcheck { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+              pointer-events:none; line-height:0; }
 
   /* the input dock — toast above the hex keypad */
   .inputdock { position:relative; display:flex; flex-direction:column; gap:6px; }
@@ -2126,7 +2164,9 @@ const STYLE = `
 
   .keypad { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
   .keyrow { display:grid; grid-template-columns:1fr 2fr; gap:5px; }
-  .key { min-height:40px; border:none; border-radius:9px; background:var(--c0ffee-bg, #0a0a0b);
+  /* 44px = the touch-target floor, deliberate on the game's most-tapped controls
+     (handoff 2 §3a — restored from the 40px one-viewport squeeze by C0FFEE-72) */
+  .key { min-height:44px; border:none; border-radius:9px; background:var(--c0ffee-bg, #0a0a0b);
          box-shadow:inset 0 0 0 1px rgba(255,255,255,.19); color:var(--c0ffee-fg, #ededed);
          font:400 18px/1 var(--c0ffee-font, monospace); cursor:pointer;
          display:flex; align-items:center; justify-content:center; gap:7px; }
