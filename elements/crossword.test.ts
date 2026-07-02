@@ -417,10 +417,11 @@ test('<c0ffee-crossword> a full tap-driven solve locks every Cell (reaches the c
     pressCheck(el);
   }
 
-  // complete == every Cell locked (the reducer's honest completion test). The board
-  // keeps its lock badges in the solved completion variant (recolor + bloom layer on
-  // top, C0FFEE-67) — so this count is unchanged.
-  expect(el.shadowRoot!.querySelectorAll('.lock').length).toBe(p.layout.cells.length);
+  // complete == every Cell locked (the reducer's honest completion test), projected
+  // as the solved board variant (recolor + bloom, C0FFEE-67). The lock badges retire
+  // with the rest of the play chrome (C0FFEE-82) — the solved-board content itself is
+  // asserted in the celebration-cleanup tests below.
+  expect(el.shadowRoot!.querySelector('.board.solved')).toBeTruthy();
   // a fully-solved Slot has no editable Cell, so the cursor resolves to null (no caret)
   expect(el.shadowRoot!.querySelector('.cell.cur')).toBeNull();
 });
@@ -935,6 +936,55 @@ test('<c0ffee-crossword> the completion card renders on a solved puzzle with a f
   expect(el.shadowRoot!.querySelectorAll('.completion .swatch').length).toBeGreaterThan(0);
   expect(q(el, '[data-act="completion-new"]')).toBeTruthy();
   expect(q(el, '.keypad')).toBeNull(); // the dock is replaced by the card
+});
+
+// C0FFEE-82 — solved-board celebration cleanup (handoff 2 §2 / prototype scene 04):
+// the win celebration is clean uniform color tiles carrying the answer digits, with
+// the play chrome (padlocks, periphery clue numbers, outlines) fully retired. The
+// padlock stays a MID-play signifier. happy-dom can't paint, so these assert the
+// projected structure; the ring legibility + bloom + reduced-motion get the eyeball.
+
+test('<c0ffee-crossword> the solved board is pure color tiles: ring + answer digit per Cell, chrome retired', () => {
+  const p = puzzle();
+  const el = mount();
+
+  // mid-play the padlock earns its keep: one solved Slot stamps its six locked Cells
+  solveSlot(el, p, p.layout.slots[0]);
+  expect(el.shadowRoot!.querySelectorAll('.lock').length).toBe(p.layout.slots[0].cells.length);
+
+  for (const slot of p.layout.slots) {
+    if (q(el, '.completion')) break;
+    solveSlot(el, p, slot);
+  }
+  const board = q(el, '.board.solved')!;
+  expect(board).toBeTruthy();
+  const cells = [...board.querySelectorAll('.cell')];
+  expect(cells.length).toBe(p.layout.cells.length);
+  for (const cell of cells) {
+    // each Cell is exactly its color tile + its answer digit — nothing rides along
+    expect([...cell.children].map((c) => c.className)).toEqual(['base', 'glyph']);
+    const base = cell.querySelector('.base')!.getAttribute('style')!;
+    // the definition ring: a near-black answer still reads as a tile, not a hole
+    expect(base).toContain('inset 0 0 0 1px rgba(255,255,255,.2)');
+    // the staggered bloom survives as a per-Cell delay (the accepted flourish)
+    expect(base).toMatch(/animation-delay:\d+ms/);
+    expect(cell.querySelector('.glyph')!.textContent).toMatch(/^[0-9a-f]$/i);
+  }
+  // the board's children are the Cells alone — outlines AND periphery numbers retired
+  expect(board.children.length).toBe(cells.length);
+});
+
+test('<c0ffee-crossword> completion-card swatches each carry the dark check stamp', () => {
+  const p = puzzle();
+  const el = mount();
+  for (const slot of p.layout.slots) {
+    if (q(el, '.completion')) break;
+    solveSlot(el, p, slot);
+  }
+  const swatches = [...el.shadowRoot!.querySelectorAll('.completion .swatch')];
+  expect(swatches.length).toBe(p.layout.slots.length);
+  // "every one verified" — the clue-panel check treatment stamped on each swatch
+  for (const s of swatches) expect(s.querySelector('svg')).toBeTruthy();
 });
 
 test('<c0ffee-crossword> the Solve-time clock counts running seconds, pauses with the scrim, and resumes', () => {

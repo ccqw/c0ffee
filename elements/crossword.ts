@@ -155,8 +155,11 @@ const LIST_SVG =
 // swatch (legible on the saturated color), and a dark cross on the your-guess swatch of a
 // wrong row. Achromatic strokes over a colored ground (contract #3 — the glyph carries no
 // color content; the swatch underneath is the literal clue/guess color, contract #1).
-const PANEL_CHECK_SVG =
-  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+// The completion card stamps the same check on its smaller swatches at 13px (scene 04).
+const panelCheck = (size: number): string =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+const PANEL_CHECK_SVG = panelCheck(15);
+const CARD_CHECK_SVG = panelCheck(13);
 const PANEL_CROSS_SVG =
   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
@@ -1665,12 +1668,12 @@ class C0ffeeCrossword extends HTMLElement {
 
   // The completion card (scene 04): the solved summary that supplants the dock — trophy +
   // "Solved", a summary line carrying the frozen Solve time and colour count, the solved
-  // Swatch row, and a New-puzzle action. Share is C0FFEE-57 (blocked on C0FFEE-12), so it
-  // is intentionally omitted here rather than shipped as a dead control.
+  // Swatch row (each stamped the clue-panel dark check: every one verified), and the
+  // New-puzzle + Share actions (Share landed with C0FFEE-80).
   private _completionCard(): string {
     const slots = this.state.puzzle.layout.slots;
     const swatches = slots
-      .map((s) => `<span class="swatch" style="background:#${this._target(s)};"></span>`)
+      .map((s) => `<span class="swatch" style="background:#${this._target(s)};">${CARD_CHECK_SVG}</span>`)
       .join('');
     const summary = `Solved in ${this._elapsedText()} - ${slots.length} colors placed, all Channels matched.`;
     return `<section class="completion panel">
@@ -1732,18 +1735,19 @@ class C0ffeeCrossword extends HTMLElement {
         const st = this._cellState(key);
         const isCursor = !solved && key === this.cursorKey;
         const wrap = `position:absolute;left:${pct(cell.col, cols)};top:${pct(cell.row, rows)};width:${pct(1, cols)};height:${pct(1, rows)};`;
-        // Solved variant: uniform inset-2 / radius-6 cell painted its Slot colour, with a
-        // staggered bloom (the weave hairlines give way to the colour). Playing variant:
-        // the woven neutral base.
+        // Solved variant: uniform inset-2 / radius-6 cell painted its Slot colour, ringed
+        // so a near-black answer still reads as a tile (scene 04), with a staggered bloom
+        // (only the per-Cell delay is inline; the animation itself lives in the stylesheet
+        // under the reduced-motion guard). Playing variant: the woven neutral base.
         const base = solved
-          ? `position:absolute;inset:2px;border-radius:6px;background:${cellColor![key]};animation:cw-bloom .5s ${i * 35}ms both;`
+          ? `position:absolute;inset:2px;border-radius:6px;background:${cellColor![key]};box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);animation-delay:${i * 35}ms;`
           : `position:absolute;inset:${g.inset};border-radius:${g.radius};background:var(--c0ffee-bg, #0a0a0b);box-shadow:${g.shadow};`;
         return `<div class="cell${isCursor ? ' cur' : ''}${solved ? ' solved' : ''}" data-cell="${key}" style="${wrap}">
           <div class="base" style="${base}"></div>
           ${!solved && g.corner ? `<div style="${g.corner}"></div>` : ''}
           ${isCursor ? '<div class="caret"></div>' : ''}
           ${st.digit ? `<span class="glyph">${st.digit}</span>` : ''}
-          ${st.locked ? LOCK_SVG : ''}
+          ${st.locked && !solved ? LOCK_SVG : ''}
         </div>`;
       })
       .join('');
@@ -1752,7 +1756,7 @@ class C0ffeeCrossword extends HTMLElement {
     return `<div class="board${solved ? ' solved' : ''}" style="${boardStyle}">
       ${cells}
       ${solved ? '' : this._outlines(cols, rows)}
-      ${this._clueNumbers(layout, cols, rows)}
+      ${solved ? '' : this._clueNumbers(layout, cols, rows)}
     </div>`;
   }
 
@@ -2286,7 +2290,8 @@ const STYLE = `
   .comp-summary { margin:2px 0 14px; font:400 12px/1.5 var(--c0ffee-font, monospace);
                   color:rgba(255,255,255,.72); text-align:center; }
   .comp-swatches { display:flex; flex-wrap:wrap; justify-content:center; gap:7px; margin-bottom:18px; }
-  .comp-swatches .swatch { width:26px; height:26px; border-radius:6px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  .comp-swatches .swatch { width:26px; height:26px; border-radius:6px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);
+                           display:flex; align-items:center; justify-content:center; line-height:0; }
   .comp-actions { display:flex; gap:10px; }
   .comp-new, .comp-share { justify-content:center; height:46px; padding:0 22px; }
   .comp-share { gap:9px; } /* secondary: the .cbtn base outline (the handoff's Share) */
@@ -2294,11 +2299,18 @@ const STYLE = `
   .share-status { position:absolute; width:1px; height:1px; overflow:hidden;
                   clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
 
-  /* solved board: the colour blooms in as the weave gives way (scene 04) */
+  /* solved board: the colour blooms in as the weave gives way (scene 04); the per-Cell
+     stagger rides inline as animation-delay, so the guard below can silence the bloom */
   .board.solved .cell { cursor:default; }
+  .board.solved .cell .base { animation:cw-bloom .5s both; }
   @keyframes cw-bloom { from { opacity:0; transform:scale(.6); } to { opacity:1; transform:scale(1); } }
   @keyframes cw-rise  { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
   @keyframes cw-pop   { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+  /* celebration + sheet entrances are inert for reduced-motion solvers (C0FFEE-82);
+     placed AFTER the rules it silences — the equal-specificity cascade decides */
+  @media (prefers-reduced-motion: reduce) {
+    .board.solved .cell .base, .coach.sheet, .lockcallout { animation:none; }
+  }
 `;
 
 customElements.define('c0ffee-crossword', C0ffeeCrossword);
