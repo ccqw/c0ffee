@@ -510,6 +510,60 @@ test('<c0ffee-crossword> receipt: is per-Slot — another Slot shows none until 
   expect(q(el, '.receipt')).toBeTruthy();
 });
 
+test('<c0ffee-crossword> receipt: a tap on the open "?" popover closes it without restoring', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+  commitFirstSlot(el);
+  pressKey(el, '1'); // diverge — the receipt is now the restore control
+  act(el, 'legend'); // open the "?" popover, which is nested inside the receipt
+  expect(q(el, '.legend')).toBeTruthy();
+  // the dismiss-tap reflex on the popover body must never route to the receipt's
+  // restore (the popover is inside the data-act="restore" subtree)
+  click(q(el, '.legendrow'));
+  expect(q(el, '.legend')).toBeNull(); // the tap closed the popover...
+  expect(glyphAt(el, cells[0])).toBe('1'); // ...and the solver's edit survived
+  expect(receiptCaption(el)).toBe('last checked');
+});
+
+test('<c0ffee-crossword> receipt: no restore affordance when the graded digits are unreachable', () => {
+  // A crossing Cell this Slot graded WRONG can later lock at the TRUE digit via the
+  // perpendicular Slot. The graded Guess then can never be fully reinstated (locks are
+  // permanent): the caption stays honestly "last checked", but the restore glyph/action
+  // — the affordance — must not render for a control that cannot do its job.
+  const p = puzzle();
+  const across = firstSlot();
+  const target = p.targets[slotKey(across)]; // 83BEF1
+  const cells = across.cells.map(cellKey);
+  // cells[0] ("0,0") is the crossing with 1-down; grade the across with ONLY that
+  // red digit wrong, so cells[0]+cells[1] stay unlocked and green/blue lock
+  const wrong0 = target[0] === '0' ? '1' : '0';
+  const graded = wrong0 + target.slice(1);
+  const el = mount();
+  cells.forEach((k, i) => {
+    tapCell(el, k);
+    pressKey(el, graded[i].toUpperCase());
+  });
+  pressCheck(el);
+  expect(lockedAt(el, cells[0])).toBe(false); // red graded wrong — still editable
+
+  // solve the perpendicular 1-down: its commit locks the shared Cell at the TRUE digit
+  const down = p.layout.slots.find((s) => s.number === 1 && s.direction === 'down')!;
+  tapClue(el, slotKey(down));
+  const downTarget = p.targets[slotKey(down)];
+  down.cells.forEach((c, i) => {
+    tapCell(el, cellKey(c));
+    pressKey(el, downTarget[i].toUpperCase());
+  });
+  pressCheck(el);
+  expect(lockedAt(el, cells[0])).toBe(true); // the crossing Cell locked via 1-down
+
+  // back on the across: locked-at-true != graded -> stale, but nothing is restorable
+  tapClue(el, slotKey(across));
+  expect(receiptCaption(el)).toBe('last checked');
+  expect(q(el, '.receipt .rundo')).toBeNull();
+  expect(q(el, '.receipt')!.getAttribute('data-act')).toBeNull();
+});
+
 test('<c0ffee-crossword> receipt: a solved Slot retires it and the meta count leaves with it', () => {
   const p = puzzle();
   const S = firstSlot();

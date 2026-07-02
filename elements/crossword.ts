@@ -1950,6 +1950,15 @@ class C0ffeeCrossword extends HTMLElement {
     // Diverged = any Cell no longer holds the digit the verdict graded (an emptied Cell
     // counts). Purely a comparison against the pinned referent — never a re-grade.
     const diverged = slot.cells.some((c, i) => this._cellState(cellKey(c)).digit !== graded[i]);
+    // Restorable is the narrower predicate: an UNLOCKED Cell diverges, i.e. restore would
+    // actually change something. The two split when a crossing Cell this Slot graded
+    // wrong later locks at the TRUE digit via the perpendicular Slot — the graded Guess
+    // is then partially unreachable (locks are permanent), so the caption stays honestly
+    // stale but the restore glyph/action never render as a control that cannot act.
+    const restorable = slot.cells.some((c, i) => {
+      const cs = this._cellState(cellKey(c));
+      return !cs.locked && cs.digit !== graded[i];
+    });
 
     const rows: ReadonlyArray<[keyof GuessResult, string, number]> = [
       ['red', 'r', 0],
@@ -1966,13 +1975,13 @@ class C0ffeeCrossword extends HTMLElement {
       })
       .join('');
 
-    // While diverged the whole row is the restore control (data-act="restore"): a tap
-    // sets each unlocked Cell back to its graded digit. While current it is inert — no
+    // While restorable the whole row is the restore control (data-act="restore"): a tap
+    // sets each unlocked Cell back to its graded digit. Otherwise it is inert — no
     // data-act, so the delegated handler never routes it.
-    return `<div class="receipt${diverged ? ' stale' : ''}"${diverged ? ' data-act="restore"' : ''}>
+    return `<div class="receipt${restorable ? ' stale' : ''}"${restorable ? ' data-act="restore"' : ''}>
       <span class="rswatch" style="background:#${graded};"></span>
       <span class="rcaption">${diverged ? 'last checked' : 'checked now'}</span>
-      ${diverged ? `<span class="rundo">${UNDO_SVG}</span>` : ''}
+      ${restorable ? `<span class="rundo">${UNDO_SVG}</span>` : ''}
       <span class="rkey">
         <span class="rpairs">${pairs}</span>
         <button type="button" class="legendbtn" data-act="legend" aria-label="Show channel hint key" aria-expanded="${this.legendOpen}">?</button>
@@ -1986,6 +1995,10 @@ class C0ffeeCrossword extends HTMLElement {
   // copy) — and the glyphs stay achromatic, the letters carry no tint, so the key reads as
   // quiet chrome, not color content (ADR-0007 contract #3). ASCII " - " separators match the
   // completion-summary copy convention. Rendered only while open; closed by default.
+  // The popover carries its own data-act: it is nested inside the receipt, which is the
+  // restore control while diverged — without an inner act, a dismiss-tap on the popover
+  // body would resolve (via closest) to data-act="restore" and silently wipe the solver's
+  // in-progress edits. legend-close keeps a popover tap what it always was: close, no more.
   private _legendPopover(): string {
     if (!this.legendOpen) return '';
     const rows: ReadonlyArray<[ChannelVerdict, string]> = [
@@ -1993,7 +2006,7 @@ class C0ffeeCrossword extends HTMLElement {
       ['higher', 'too low - go higher'],
       ['lower', 'too high - go lower'],
     ];
-    return `<div class="legend" role="note">${rows
+    return `<div class="legend" role="note" data-act="legend-close">${rows
       .map(([v, text]) => `<div class="legendrow"><span class="lglyph">${VERDICT_GLYPH[v]}</span>${text}</div>`)
       .join('')}</div>`;
   }
