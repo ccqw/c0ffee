@@ -110,7 +110,7 @@ test('<c0ffee-crossword> labels each Slot with a clue number on the board periph
   expect(nums.every((n) => /(top|left):-\d/.test(n.getAttribute('style') ?? ''))).toBe(true);
 });
 
-test('<c0ffee-crossword> renders the comparison: the clue painted its target, an empty mix', () => {
+test('<c0ffee-crossword> renders the split compare bar: clue fill painted its target, empty you-half', () => {
   const p = puzzle();
   // the element opens on the lowest-numbered Slot, across before down
   const first = [...p.layout.slots].sort(
@@ -120,12 +120,17 @@ test('<c0ffee-crossword> renders the comparison: the clue painted its target, an
 
   const el = mount();
   const root = el.shadowRoot!;
-  expect(root.querySelectorAll('.stage').length).toBe(2);
-  // clue stage carries the literal target Color value, pinned to the seed (contract #1)
-  const clue = root.querySelector('.stage.clue') as HTMLElement;
+  // ONE bar, two fills meeting at the seam (handoff 2 §6) — the seam IS the comparison
+  const bar = root.querySelector('.splitbar') as HTMLElement;
+  expect(bar).toBeTruthy();
+  expect(bar.querySelectorAll('.half').length).toBe(2);
+  // the clue half carries the literal target Color value, pinned to the seed (contract #1)
+  const clue = bar.querySelector('.half.clue') as HTMLElement;
   expect(clue.getAttribute('style')).toContain(`#${target}`);
-  // mix empty -> the "?" placeholder, since slice 1 takes no input yet
-  expect(root.querySelector('.stage.mix')!.textContent).toContain('?');
+  // the you-half is empty -> the page-bg "?" placeholder
+  expect(bar.querySelector('.half.mix')!.textContent).toContain('?');
+  // the neutral captions sit ABOVE the bar, one centered over each half
+  expect([...root.querySelectorAll('.caps span')].map((s) => s.textContent)).toEqual(['clue', 'you']);
 });
 
 test('<c0ffee-crossword> opens on an active Slot, outlined in three channel pairs (contract #2)', () => {
@@ -247,22 +252,22 @@ test('<c0ffee-crossword> tapping a Cell that belongs only to another Slot select
   expect(el.shadowRoot!.querySelector('.clabel')!.textContent).toContain('Down');
 });
 
-test('<c0ffee-crossword> the your-mix swatch stays the "?" placeholder until ALL six Cells are filled', () => {
+test('<c0ffee-crossword> the you-half stays the "?" placeholder until ALL six Cells are filled', () => {
   const cells = firstSlot().cells.map(cellKey);
   const el = mount();
   // fresh: the empty "?" placeholder
-  expect(el.shadowRoot!.querySelector('.stage.mix')!.textContent).toContain('?');
+  expect(el.shadowRoot!.querySelector('.half.mix')!.textContent).toContain('?');
   // type only the first five — a partial Guess is NOT a color, so still "?"
   cells.slice(0, 5).forEach((k, i) => {
     tapCell(el, k);
     pressKey(el, 'ABCDE'[i]);
   });
-  expect(el.shadowRoot!.querySelector('.stage.mix')!.textContent).toContain('?');
-  expect(el.shadowRoot!.querySelector('.stage.mix.filled')).toBeNull();
-  // the sixth digit completes the address — now the mix paints
+  expect(el.shadowRoot!.querySelector('.half.mix')!.textContent).toContain('?');
+  expect(el.shadowRoot!.querySelector('.half.mix.filled')).toBeNull();
+  // the sixth digit completes the address — now the mix resolves and the fills touch
   tapCell(el, cells[5]);
   pressKey(el, 'F');
-  const mix = el.shadowRoot!.querySelector('.stage.mix') as HTMLElement;
+  const mix = el.shadowRoot!.querySelector('.half.mix') as HTMLElement;
   expect(mix.classList.contains('filled')).toBe(true);
   expect(mix.getAttribute('style')).toContain('#ABCDEF');
 });
@@ -344,6 +349,41 @@ test('<c0ffee-crossword> tapping the "?" opens a legend keying the three glyphs 
   expect(text).toContain('matched - leave it');
   expect(text).toContain('too low - go higher');
   expect(text).toContain('too high - go lower');
+});
+
+// --- the split compare bar's graded states (C0FFEE-72, handoff 2 §6) -----------
+// Solved: both fills the same color, ONE dark check centered over the seam.
+// Checked-but-wrong: the bar stays unmarked — the seam (and, until C0FFEE-71
+// lands the receipt, the meta-row chips) carries the news.
+
+test('<c0ffee-crossword> a solved Slot paints both halves the same color and stamps the seam check', () => {
+  const p = puzzle();
+  const slot = firstSlot();
+  const target = p.targets[slotKey(slot)];
+  const el = mount();
+  slot.cells.forEach((c, i) => {
+    tapCell(el, cellKey(c));
+    pressKey(el, target[i].toUpperCase());
+  });
+  pressCheck(el);
+
+  const root = el.shadowRoot!;
+  // the mix half resolved to the SAME literal color as the clue half — the seam vanishes
+  const mixStyle = (root.querySelector('.half.mix') as HTMLElement).getAttribute('style') ?? '';
+  const clueStyle = (root.querySelector('.half.clue') as HTMLElement).getAttribute('style') ?? '';
+  expect(mixStyle.toUpperCase()).toContain(`#${target.toUpperCase()}`);
+  expect(clueStyle.toUpperCase()).toContain(`#${target.toUpperCase()}`);
+  // ONE check over the seam (the darkened clue-list check) marks the solved Slot
+  expect(root.querySelectorAll('.barcheck').length).toBe(1);
+});
+
+test('<c0ffee-crossword> a checked-but-wrong Guess leaves the bar unmarked', () => {
+  const el = mount();
+  commitFirstSlot(el); // '000000' is wrong for the SEED-1 first Slot
+  // graded, so the chips render (C0FFEE-71 will replace them with the receipt)...
+  expect(el.shadowRoot!.querySelectorAll('.chip').length).toBe(3);
+  // ...but no mark lands on the comparison surface itself
+  expect(el.shadowRoot!.querySelector('.barcheck')).toBeNull();
 });
 
 test('<c0ffee-crossword> the legend dismisses via a second "?" tap, the backdrop, and Escape', () => {
@@ -863,9 +903,9 @@ test('<c0ffee-crossword> Restart keeps the same puzzle; New generates a fresh on
   const targetFresh = generatePuzzle(SHAPE, SEED + 1).targets[firstClue];
 
   const a = mount();
-  // the entry pane's clue stage is painted the selected Slot's target (contract #1)
+  // the entry pane's clue half is painted the selected Slot's target (contract #1)
   const clueColor = (el: HTMLElement): string =>
-    (q(el, '.stage.clue') as HTMLElement).getAttribute('style')!;
+    (q(el, '.half.clue') as HTMLElement).getAttribute('style')!;
   expect(clueColor(a)).toContain(`#${targetSame}`);
   act(a, 'menu');
   act(a, 'restart');
@@ -1277,10 +1317,10 @@ test('<c0ffee-crossword> overlays still mount over the constrained screen', () =
 // valid Puzzle token reproduces THAT exact puzzle (ADR-0009 determinism — generatePuzzle
 // is byte-identical per (shapeId, seed)), while a missing / malformed / unknown-shape
 // token quietly opens a fresh puzzle (ADR-0009: a bad link is never a broken render).
-// happy-dom can set location.hash; the clue stage's painted target (contract #1) pins
+// happy-dom can set location.hash; the clue half's painted target (contract #1) pins
 // which puzzle loaded, so the deterministic seam is what the assertion reads.
 
-// The selected (first) Slot's target Color address for a given seed — what the clue stage
+// The selected (first) Slot's target Color address for a given seed — what the clue half
 // paints. Mirrors firstSlot() but for an arbitrary seed.
 const firstTargetForSeed = (seed: number): string => {
   const p = generatePuzzle(SHAPE, seed);
@@ -1290,13 +1330,13 @@ const firstTargetForSeed = (seed: number): string => {
   return p.targets[`${first.number}-${first.direction}`];
 };
 const clueColorOf = (el: HTMLElement): string =>
-  (q(el, '.stage.clue') as HTMLElement).getAttribute('style') ?? '';
+  (q(el, '.half.clue') as HTMLElement).getAttribute('style') ?? '';
 
 test('<c0ffee-crossword> a valid Puzzle-link hash reproduces that exact puzzle', () => {
   const SHARED = 7; // a seed distinct from the default, so the boards differ
   window.location.hash = encodePuzzleToken({ shapeId: SHAPE, seed: SHARED });
   const el = mount();
-  // the clue stage paints the SHARED seed's first-Slot target, not the default seed's
+  // the clue half paints the SHARED seed's first-Slot target, not the default seed's
   expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SHARED)}`);
   expect(clueColorOf(el)).not.toContain(`#${firstTargetForSeed(SEED)}`);
 });
