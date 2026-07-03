@@ -277,13 +277,13 @@ test('<c0ffee-crossword> checking an incomplete Slot warns and does not grade', 
   pressKey(el, 'A'); // one digit only
   pressCheck(el);
   expect(el.shadowRoot!.querySelector('.toast.warn')).toBeTruthy();
-  expect(el.shadowRoot!.querySelectorAll('.chip').length).toBe(0); // no verdict yet
+  expect(el.shadowRoot!.querySelector('.receipt')).toBeNull(); // no verdict yet
   // the warn path must NOT dispatch commit: nothing locks (a render-side proxy like
-  // "no chips" would still pass a refactor that committed-then-suppressed-chips)
+  // "no receipt" would still pass a refactor that committed-then-suppressed-it)
   expect(lockedAt(el, firstSlot().cells.map(cellKey)[0])).toBe(false);
 });
 
-test('<c0ffee-crossword> a commit renders per-Channel verdict chips matching the grader, and a toast', () => {
+test('<c0ffee-crossword> a commit renders the checked receipt matching the grader, and a toast', () => {
   const p = puzzle();
   const slot = firstSlot();
   const target = p.targets[slotKey(slot)];
@@ -295,11 +295,12 @@ test('<c0ffee-crossword> a commit renders per-Channel verdict chips matching the
   });
   pressCheck(el);
 
+  // the receipt's digit pairs carry the graded verdicts, one per Channel (§6b)
   const result = gradeGuess(target, guess);
-  const chips = el.shadowRoot!.querySelectorAll('.chip');
-  expect(chips.length).toBe(3);
+  const pairs = el.shadowRoot!.querySelectorAll('.receipt .rpair');
+  expect(pairs.length).toBe(3);
   const verdictOf = (ch: string): string | null =>
-    el.shadowRoot!.querySelector(`.chip[data-ch="${ch}"]`)!.getAttribute('data-verdict');
+    el.shadowRoot!.querySelector(`.rpair[data-ch="${ch}"]`)!.getAttribute('data-verdict');
   expect(verdictOf('r')).toBe(result.red);
   expect(verdictOf('g')).toBe(result.green);
   expect(verdictOf('b')).toBe(result.blue);
@@ -327,10 +328,12 @@ test('<c0ffee-crossword> the "?" channel-hint legend disclosure appears only onc
   // mid-Guess the meta line carries the typed-digit count and no "?" clutters it
   expect(q(el, '.count')).toBeTruthy();
   expect(q(el, '.legendbtn')).toBeNull();
-  // a graded commit swaps the count for the per-Channel strip, with the "?" beside it
+  // a graded commit brings the receipt in with the "?" beside its digit pairs — and the
+  // count STAYS on the meta row while the Slot is editable (C0FFEE-71, §6b)
   commitFirstSlot(el);
-  expect(q(el, '.count')).toBeNull();
-  expect(q(el, '.legendbtn')).toBeTruthy();
+  expect(q(el, '.count')).toBeTruthy();
+  expect(q(el, '.count')!.textContent).toContain('6 / 6');
+  expect(q(el, '.receipt .legendbtn')).toBeTruthy();
 });
 
 test('<c0ffee-crossword> tapping the "?" opens a legend keying the three glyphs in words', () => {
@@ -380,10 +383,195 @@ test('<c0ffee-crossword> a solved Slot paints both halves the same color and sta
 test('<c0ffee-crossword> a checked-but-wrong Guess leaves the bar unmarked', () => {
   const el = mount();
   commitFirstSlot(el); // '000000' is wrong for the SEED-1 first Slot
-  // graded, so the chips render (C0FFEE-71 will replace them with the receipt)...
-  expect(el.shadowRoot!.querySelectorAll('.chip').length).toBe(3);
+  // graded, so the receipt renders below the bar (C0FFEE-71)...
+  expect(q(el, '.receipt')).toBeTruthy();
   // ...but no mark lands on the comparison surface itself
   expect(el.shadowRoot!.querySelector('.barcheck')).toBeNull();
+});
+
+// --- the checked receipt (C0FFEE-71, handoff 2 §6b) -----------------------------
+// The verdict is pinned to the exact six digits it graded ("feedback that names its
+// referent can never go stale"): the receipt renders below the split bar once the Slot
+// has a graded Guess, never re-grades live, and flips its caption on divergence only.
+// The SEED-1 first-Slot target is 83BEF1, so '000000' grades all-wrong (nothing locks).
+
+const receiptCaption = (el: HTMLElement): string =>
+  q(el, '.receipt .rcaption')!.textContent!.trim();
+
+test('<c0ffee-crossword> receipt: shows the graded swatch, "now", and the graded digit pairs', () => {
+  const el = mount();
+  commitFirstSlot(el); // graded guess '000000'
+  const receipt = q(el, '.receipt')!;
+  // the 18px swatch carries the literal graded mix — full fidelity, never dimmed (contract #1)
+  expect(q(el, '.receipt .rswatch')!.getAttribute('style')).toContain('#000000');
+  expect(receiptCaption(el)).toBe('now');
+  // current == graded: no restore affordance, the receipt is inert
+  expect(q(el, '.receipt .rundo')).toBeNull();
+  expect(receipt.getAttribute('data-act')).toBeNull();
+  // the three graded digit pairs, right-pinned, spell the graded guess
+  const pairTexts = [...el.shadowRoot!.querySelectorAll('.rpair .id')].map((n) => n.textContent);
+  expect(pairTexts).toEqual(['00', '00', '00']);
+  // the chips era is over — nothing renders under the old meta-row classes
+  expect(q(el, '.chip')).toBeNull();
+});
+
+test('<c0ffee-crossword> receipt: editing a graded Cell flips to "last" and reveals restore', () => {
+  const el = mount();
+  commitFirstSlot(el);
+  // after the (all-wrong) commit the cursor re-inits to the Slot's first Cell — a
+  // keypress edits it in place (a tapCell here would re-tap the crossing cursor Cell
+  // and toggle to the ungraded down Slot instead)
+  pressKey(el, '1'); // diverge from the graded '0'
+  expect(receiptCaption(el)).toBe('last');
+  expect(q(el, '.receipt .rundo')).toBeTruthy();
+  expect(q(el, '.receipt')!.getAttribute('data-act')).toBe('restore');
+  // the verdict stays pinned to its referent: swatch and pairs still show the GRADED digits
+  expect(q(el, '.receipt .rswatch')!.getAttribute('style')).toContain('#000000');
+  const pairTexts = [...el.shadowRoot!.querySelectorAll('.rpair .id')].map((n) => n.textContent);
+  expect(pairTexts).toEqual(['00', '00', '00']);
+});
+
+test('<c0ffee-crossword> receipt: clearing a graded Cell (empty != graded) also reads as diverged', () => {
+  const el = mount();
+  commitFirstSlot(el);
+  // the cursor sits on the filled first Cell after the commit: delete clears it in place
+  pressDelete(el); // the Cell empties — no digit is not the graded digit
+  expect(receiptCaption(el)).toBe('last');
+  expect(q(el, '.receipt .rundo')).toBeTruthy();
+});
+
+test('<c0ffee-crossword> receipt: tap-to-restore returns every unlocked Cell to its graded digit', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+  commitFirstSlot(el);
+  // cursor is on cells[0] after the commit: rewrite it (auto-advance to cells[1]),
+  // then delete cells[1] in place — two kinds of divergence, no taps (a cursor-Cell
+  // re-tap would toggle direction on the crossing first Cell)
+  pressKey(el, '1'); // one Cell rewritten...
+  pressDelete(el); // ...and one emptied
+  expect(glyphAt(el, cells[0])).toBe('1');
+  expect(glyphAt(el, cells[1])).toBeNull();
+  expect(receiptCaption(el)).toBe('last');
+
+  click(q(el, '.receipt')); // tap the receipt while diverged
+  expect(glyphAt(el, cells[0])).toBe('0');
+  expect(glyphAt(el, cells[1])).toBe('0');
+  // input == referent again: the caption returns and the affordance leaves
+  expect(receiptCaption(el)).toBe('now');
+  expect(q(el, '.receipt .rundo')).toBeNull();
+  expect(q(el, '.receipt')!.getAttribute('data-act')).toBeNull();
+});
+
+test('<c0ffee-crossword> receipt: restore skips locked Cells (they already hold their graded digits)', () => {
+  const p = puzzle();
+  const slot = firstSlot();
+  const target = p.targets[slotKey(slot)]; // 83BEF1
+  const cells = slot.cells.map(cellKey);
+  // red + green digits correct (those four Cells lock on commit), blue byte wrong
+  const graded = target.slice(0, 4) + '0' + target[5];
+  const el = mount();
+  cells.forEach((k, i) => {
+    tapCell(el, k);
+    pressKey(el, graded[i].toUpperCase());
+  });
+  pressCheck(el);
+  expect(lockedAt(el, cells[0])).toBe(true); // red locked
+  expect(lockedAt(el, cells[4])).toBe(false); // blue editable
+
+  // the cursor re-inits to the first NON-LOCKED Cell after the commit — cells[4]
+  pressKey(el, 'F'); // diverge on the unlocked blue Cell
+  expect(receiptCaption(el)).toBe('last');
+  click(q(el, '.receipt'));
+  // the unlocked Cell returns to the graded (wrong) digit — not the answer
+  expect(glyphAt(el, cells[4])).toBe('0');
+  // locked Cells kept their graded digits throughout
+  expect(glyphAt(el, cells[0])).toBe(target[0].toUpperCase());
+  expect(receiptCaption(el)).toBe('now');
+});
+
+test('<c0ffee-crossword> receipt: inert while current — a tap changes nothing', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+  commitFirstSlot(el);
+  click(q(el, '.receipt'));
+  expect(receiptCaption(el)).toBe('now');
+  cells.forEach((k) => expect(glyphAt(el, k)).toBe('0'));
+});
+
+test('<c0ffee-crossword> receipt: is per-Slot — another Slot shows none until ITS Guess is graded', () => {
+  const p = puzzle();
+  const down = p.layout.slots.find((s) => s.direction === 'down')!;
+  const el = mount();
+  commitFirstSlot(el);
+  expect(q(el, '.receipt')).toBeTruthy();
+  tapClue(el, slotKey(down)); // select an ungraded Slot
+  expect(q(el, '.receipt')).toBeNull();
+  tapClue(el, slotKey(firstSlot())); // back to the graded one
+  expect(q(el, '.receipt')).toBeTruthy();
+});
+
+test('<c0ffee-crossword> receipt: a tap on the open "?" popover closes it without restoring', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+  commitFirstSlot(el);
+  pressKey(el, '1'); // diverge — the receipt is now the restore control
+  act(el, 'legend'); // open the "?" popover, which is nested inside the receipt
+  expect(q(el, '.legend')).toBeTruthy();
+  // the dismiss-tap reflex on the popover body must never route to the receipt's
+  // restore (the popover is inside the data-act="restore" subtree)
+  click(q(el, '.legendrow'));
+  expect(q(el, '.legend')).toBeNull(); // the tap closed the popover...
+  expect(glyphAt(el, cells[0])).toBe('1'); // ...and the solver's edit survived
+  expect(receiptCaption(el)).toBe('last');
+});
+
+test('<c0ffee-crossword> receipt: no restore affordance when the graded digits are unreachable', () => {
+  // A crossing Cell this Slot graded WRONG can later lock at the TRUE digit via the
+  // perpendicular Slot. The graded Guess then can never be fully reinstated (locks are
+  // permanent): the caption stays honestly "last", but the restore glyph/action
+  // — the affordance — must not render for a control that cannot do its job.
+  const p = puzzle();
+  const across = firstSlot();
+  const target = p.targets[slotKey(across)]; // 83BEF1
+  const cells = across.cells.map(cellKey);
+  // cells[0] ("0,0") is the crossing with 1-down; grade the across with ONLY that
+  // red digit wrong, so cells[0]+cells[1] stay unlocked and green/blue lock
+  const wrong0 = target[0] === '0' ? '1' : '0';
+  const graded = wrong0 + target.slice(1);
+  const el = mount();
+  cells.forEach((k, i) => {
+    tapCell(el, k);
+    pressKey(el, graded[i].toUpperCase());
+  });
+  pressCheck(el);
+  expect(lockedAt(el, cells[0])).toBe(false); // red graded wrong — still editable
+
+  // solve the perpendicular 1-down: its commit locks the shared Cell at the TRUE digit
+  const down = p.layout.slots.find((s) => s.number === 1 && s.direction === 'down')!;
+  tapClue(el, slotKey(down));
+  const downTarget = p.targets[slotKey(down)];
+  down.cells.forEach((c, i) => {
+    tapCell(el, cellKey(c));
+    pressKey(el, downTarget[i].toUpperCase());
+  });
+  pressCheck(el);
+  expect(lockedAt(el, cells[0])).toBe(true); // the crossing Cell locked via 1-down
+
+  // back on the across: locked-at-true != graded -> stale, but nothing is restorable
+  tapClue(el, slotKey(across));
+  expect(receiptCaption(el)).toBe('last');
+  expect(q(el, '.receipt .rundo')).toBeNull();
+  expect(q(el, '.receipt')!.getAttribute('data-act')).toBeNull();
+});
+
+test('<c0ffee-crossword> receipt: a solved Slot retires it and the meta count leaves with it', () => {
+  const p = puzzle();
+  const S = firstSlot();
+  const el = mount();
+  solveSelected(el, p.targets[slotKey(S)]);
+  expect(q(el, '.receipt')).toBeNull(); // the bar's centered check carries the news
+  expect(q(el, '.barcheck')).toBeTruthy();
+  expect(q(el, '.count')).toBeNull(); // no count on a Slot that is no longer editable
 });
 
 test('<c0ffee-crossword> the legend dismisses via a second "?" tap, the backdrop, and Escape', () => {
@@ -634,7 +822,9 @@ test('<c0ffee-crossword> keyboard: hex digits fill cells (auto-advance) and Ente
   target.split('').forEach((d) => pressPhysical(el, d));
   cells.forEach((k, i) => expect(glyphAt(el, k)).toBe(target[i].toUpperCase())); // all six landed
   pressPhysical(el, 'Enter'); // commit -> grades + locks (a correct, generator-derived Guess)
-  expect(el.shadowRoot!.querySelectorAll('.chip').length).toBe(3); // per-Channel verdict chips
+  // a fully-solved Slot retires the receipt — the bar's centered check carries it (§6b)
+  expect(el.shadowRoot!.querySelector('.receipt')).toBeNull();
+  expect(el.shadowRoot!.querySelector('.barcheck')).toBeTruthy();
   cells.forEach((k) => expect(lockedAt(el, k)).toBe(true));
 });
 
