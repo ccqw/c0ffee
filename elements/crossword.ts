@@ -2021,7 +2021,8 @@ class C0ffeeCrossword extends HTMLElement {
     return this.legendOpen ? '<div class="legendback" data-act="legend-close"></div>' : '';
   }
 
-  // The input dock: a transient commit toast (contract #4) above the hex keypad. The
+  // The input dock: a transient commit toast (contract #4) floating over the hex keypad
+  // (not above the dock — the receipt lives there since C0FFEE-71). The
   // keypad is the crossword's OWN hex entry (the console is slider-driven and owns no
   // keypad). 0-9 / A-F digit keys, then a delete + Check row.
   private _inputDock(): string {
@@ -2238,9 +2239,13 @@ const STYLE = `
   .barcheck { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
               pointer-events:none; line-height:0; }
 
-  /* the input dock — toast above the hex keypad */
+  /* the input dock — the transient toast floats centered OVER the keypad. It used to sit
+     above the dock, but the receipt (C0FFEE-71) now lives exactly there — and the wrong
+     toast says "read the channel hints", so it must never cover them. The keypad is the
+     one surface that is momentarily idle after a Check; the wrap is pointer-transparent
+     and any keypress dismisses the toast, so typing is never blocked. */
   .inputdock { position:relative; display:flex; flex-direction:column; gap:6px; }
-  .toastwrap { position:absolute; left:0; right:0; bottom:100%; margin-bottom:10px; display:flex;
+  .toastwrap { position:absolute; inset:0; display:flex; align-items:center;
                justify-content:center; pointer-events:none; z-index:5; }
   .toast { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px;
            font:400 11.5px/1.3 var(--c0ffee-font, monospace); white-space:nowrap; }
