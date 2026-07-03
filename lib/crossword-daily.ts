@@ -2,8 +2,8 @@
 // A hash-less crossword load opens "today's puzzle": the same board for everyone on a
 // given LOCAL calendar day (Wordle convention — it rolls at the solver's midnight, so
 // the puzzle never changes mid-evening), a fresh board the next day. The date is
-// INJECTED — the shell passes `new Date()` once on mount; this module never reads a
-// clock, so the derivation stays a pure (Date) -> seed function.
+// INJECTED — the shell passes `new Date()` once at construction; this module never
+// reads a clock, so the derivation stays a pure (Date) -> seed function.
 //
 // A Puzzle link is untouched by any of this: a shared (shapeId, seed) token still
 // reproduces its exact board regardless of the day (ADR-0009 — the daily seed only
@@ -23,8 +23,10 @@ const EPOCH_UTC_MS = Date.UTC(2026, 0, 1);
 /** The seed a token-less load starts from: the injected moment's LOCAL calendar day,
  *  numbered from the epoch, times the stride. The local Y/M/D are re-anchored through
  *  Date.UTC before dividing, so DST's 23h/25h days can never skew the day count —
- *  every local calendar day is exactly one step. */
+ *  every local calendar day is exactly one step. A pre-epoch date (a device clock set
+ *  before 2026) clamps to day 0: the Puzzle-link codec rejects negative seeds, so a
+ *  wrong clock must never mint a seed the solver's own Share control cannot encode. */
 export function dailySeed(now: Date): number {
   const dayUtcMs = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  return ((dayUtcMs - EPOCH_UTC_MS) / 86_400_000) * DAY_STRIDE;
+  return Math.max(0, (dayUtcMs - EPOCH_UTC_MS) / 86_400_000) * DAY_STRIDE;
 }

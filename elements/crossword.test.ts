@@ -1535,26 +1535,35 @@ test('<c0ffee-crossword> a valid Puzzle-link hash reproduces that exact puzzle',
 });
 
 test('<c0ffee-crossword> a malformed Puzzle-link hash quietly opens the default puzzle', () => {
-  window.location.hash = 'not-a-puzzle-token';
-  const el = mount(); // must not throw on a junk hash
-  expect(q(el, '.board')).toBeTruthy(); // a real board, never a broken render
-  // the fallback is the daily puzzle (C0FFEE-86) — the same board a token-less load opens
-  expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date()))}`);
+  vi.useFakeTimers(); // pin the day, so mount and expectation can't straddle midnight
+  try {
+    vi.setSystemTime(new Date(2026, 6, 3, 9, 0, 0));
+    window.location.hash = 'not-a-puzzle-token';
+    const el = mount(); // must not throw on a junk hash
+    expect(q(el, '.board')).toBeTruthy(); // a real board, never a broken render
+    // the fallback is the daily puzzle (C0FFEE-86) — the same board a token-less load opens
+    expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date(2026, 6, 3)))}`);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test('<c0ffee-crossword> a well-formed token for an unknown shape falls back to the default puzzle, quietly', () => {
   // a valid-SHAPE token shape but an id no SHAPES entry has: decode succeeds, generatePuzzle
   // would throw, and the shell must catch and open a fresh puzzle rather than crash.
   const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.useFakeTimers(); // pin the day, so mount and expectation can't straddle midnight
   try {
+    vi.setSystemTime(new Date(2026, 6, 3, 9, 0, 0));
     window.location.hash = encodePuzzleToken({ shapeId: 'no-such-shape', seed: 3 });
     const el = mount();
     expect(q(el, '.board')).toBeTruthy();
-    expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date()))}`);
+    expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date(2026, 6, 3)))}`);
     // a routine stale/tampered link is the EXPECTED bad-link case — it must stay quiet, not
     // escalate to console.error (which RUM collects), so a bad link never spams telemetry.
     expect(errSpy).not.toHaveBeenCalled();
   } finally {
+    vi.useRealTimers();
     errSpy.mockRestore();
   }
 });

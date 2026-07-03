@@ -39,6 +39,13 @@ test('every day of a full year steps exactly one stride, across DST transitions'
   }
 });
 
+test('a pre-epoch date clamps to day 0, never a negative seed', () => {
+  // a device clock set before 2026 must still deal a shareable board — the Puzzle-link
+  // codec (encodePuzzleToken) rejects negative seeds, so Share would throw on one
+  expect(dailySeed(new Date(2025, 11, 31, 23, 59, 59))).toBe(0);
+  expect(dailySeed(new Date(1999, 0, 1))).toBe(0);
+});
+
 test('the derivation is a pure function of its injected date', () => {
   const at = new Date(2026, 6, 3, 9, 30, 0);
   expect(dailySeed(at)).toBe(dailySeed(new Date(at.getTime())));
