@@ -9,6 +9,7 @@ import { generatePuzzle } from '../lib/crossword-generator.ts';
 import { initCrossword, cellKey, slotKey } from '../lib/crossword-state.ts';
 import { gradeGuess } from '../lib/crossword-guess.ts';
 import { encodePuzzleToken, decodePuzzleToken } from '../lib/crossword-link.ts';
+import { dailySeed } from '../lib/crossword-daily.ts';
 import { datadogRum } from '@datadog/browser-rum-slim';
 
 // happy-dom v20 does not provide localStorage, but the element uses it for the one
@@ -47,10 +48,12 @@ const COACH_SEEN_KEY = 'c0ffee:crossword:coach-seen';
 beforeEach(() => {
   window.localStorage.clear();
   window.localStorage.setItem(COACH_SEEN_KEY, '1');
-  // The element reads location.hash on connect (C0FFEE-78 Puzzle link). Reset it to empty
-  // so every test that does not opt into a Puzzle-link hash opens the default puzzle; the
-  // hash-load tests set it explicitly before mounting.
-  window.location.hash = '';
+  // The element reads location.hash on connect (C0FFEE-78 Puzzle link). The token-less
+  // default board rolls DAILY since C0FFEE-86, so the suite's stable (lattice-6, 1) board
+  // is pinned through the existing Puzzle-link hash path — the C0FFEE-78 seam, no
+  // test-only attribute. The daily-seed tests below reset the hash to exercise the
+  // token-less path themselves.
+  window.location.hash = encodePuzzleToken({ shapeId: SHAPE, seed: SEED });
 });
 
 // The element generates its own puzzle from a fixed shape + seed; the tests regenerate
@@ -1535,7 +1538,8 @@ test('<c0ffee-crossword> a malformed Puzzle-link hash quietly opens the default 
   window.location.hash = 'not-a-puzzle-token';
   const el = mount(); // must not throw on a junk hash
   expect(q(el, '.board')).toBeTruthy(); // a real board, never a broken render
-  expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SEED)}`); // the fresh default puzzle
+  // the fallback is the daily puzzle (C0FFEE-86) — the same board a token-less load opens
+  expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date()))}`);
 });
 
 test('<c0ffee-crossword> a well-formed token for an unknown shape falls back to the default puzzle, quietly', () => {
@@ -1546,13 +1550,65 @@ test('<c0ffee-crossword> a well-formed token for an unknown shape falls back to 
     window.location.hash = encodePuzzleToken({ shapeId: 'no-such-shape', seed: 3 });
     const el = mount();
     expect(q(el, '.board')).toBeTruthy();
-    expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SEED)}`);
+    expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date()))}`);
     // a routine stale/tampered link is the EXPECTED bad-link case — it must stay quiet, not
     // escalate to console.error (which RUM collects), so a bad link never spams telemetry.
     expect(errSpy).not.toHaveBeenCalled();
   } finally {
     errSpy.mockRestore();
   }
+});
+
+// C0FFEE-86 — daily seed. A token-less load opens "today's puzzle": the starting seed is
+// derived from the LOCAL calendar day (lib/crossword-daily.ts — the derivation itself is
+// unit-tested there), so the same day always deals the same board and the next day rolls
+// a fresh one. The faked system time drives the element's own `new Date()` on mount; the
+// expectations regenerate through the SAME lib derivation (the ticket's approved seam).
+
+test('<c0ffee-crossword> token-less mounts share one board per day and roll it the next day', () => {
+  vi.useFakeTimers();
+  try {
+    window.location.hash = ''; // the token-less daily path, not the pinned suite board
+    const todays = firstTargetForSeed(dailySeed(new Date(2026, 6, 3)));
+    vi.setSystemTime(new Date(2026, 6, 3, 9, 0, 0));
+    const morning = mount();
+    vi.setSystemTime(new Date(2026, 6, 3, 21, 30, 0));
+    const evening = mount();
+    // one shared "today's puzzle" — the whole point: comparable Solve times
+    expect(clueColorOf(morning)).toContain(`#${todays}`);
+    expect(clueColorOf(evening)).toContain(`#${todays}`);
+
+    vi.setSystemTime(new Date(2026, 6, 4, 9, 0, 0));
+    const tomorrows = firstTargetForSeed(dailySeed(new Date(2026, 6, 4)));
+    expect(tomorrows).not.toBe(todays); // consecutive days really deal different boards
+    expect(clueColorOf(mount())).toContain(`#${tomorrows}`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-crossword> New advances from the daily base, never dealing another day\'s board', () => {
+  vi.useFakeTimers();
+  try {
+    window.location.hash = '';
+    vi.setSystemTime(new Date(2026, 6, 3, 9, 0, 0));
+    const el = mount();
+    act(el, 'menu');
+    act(el, 'new');
+    act(el, 'confirm-ok');
+    // the fresh board is the daily's +1 neighbour — inside the day's private stride range
+    expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date(2026, 6, 3)) + 1)}`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('<c0ffee-crossword> a token-less load never writes the hash', () => {
+  // Share mints the Puzzle link on demand; the daily load must stay silent — a hash
+  // write on load would spam RUM with route_change views (C0FFEE-86, ADR-0008)
+  window.location.hash = '';
+  mount();
+  expect(window.location.hash).toBe('');
 });
 
 // C0FFEE-79 — Solve time: the accurate accumulator wiring. The pure pause math is unit-tested

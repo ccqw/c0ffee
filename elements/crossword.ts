@@ -68,13 +68,15 @@ import {
   elapsedMs,
   type SolveTimer,
 } from '../lib/crossword-timer.ts';
+import { dailySeed } from '../lib/crossword-daily.ts';
 
-// The default puzzle when no Puzzle link is present: a fixed shape + seed, deterministic
-// so the smoke test asserts stable counts and the design eyeball reviews the same board.
-// A varying seed now enters from two places — "New" advances it (C0FFEE-67), and a
-// Puzzle-link hash supplies a shared (shapeId, seed) on load (C0FFEE-78, _initialPuzzle).
+// The default puzzle when no Puzzle link is present: the DAILY puzzle (C0FFEE-86) — a
+// fixed shape, seeded from the local calendar day (lib/crossword-daily.ts), so everyone's
+// token-less load deals the same board on a given day (comparable Solve times) and a
+// fresh one the next. A varying seed enters from three places — the day on mount, "New"
+// advancing it (C0FFEE-67), and a Puzzle-link hash supplying a shared (shapeId, seed) on
+// load (C0FFEE-78, _initialPuzzle). Tests pin a stable board through the hash path.
 const DEFAULT_SHAPE = 'lattice-6';
-const DEFAULT_SEED = 1;
 
 // Natural px per Cell — caps the board's max-width (cols * CELL_PX) and sets its
 // aspect ratio. Every Cell is then positioned as a percentage, so the board is fluid
@@ -211,10 +213,6 @@ const CLOCK_SHOWN_KEY = 'c0ffee:crossword:clock-shown';
 // How long the one-shot lock callout lingers before it auto-dismisses (a transient
 // teaching beat, C0FFEE-62 decision 4 — like the toast, it is never chased).
 const LOCK_CALLOUT_MS = 4200;
-
-// The default starting seed (C0FFEE-64). "New" advances it for a freshly-generated
-// puzzle; "Restart" reuses the current Puzzle object (same grid + targets).
-const START_SEED = DEFAULT_SEED;
 
 // The m:ss Solve-time formatter now lives in the share core (fmtSolveTime,
 // lib/crossword-share.ts) as the ONE source of truth — the topbar readout, the
@@ -370,7 +368,12 @@ class C0ffeeCrossword extends HTMLElement {
   // The current Puzzle object — kept so Restart can reuse it (newPuzzle(same Puzzle)
   // wipes entries/verdicts/locks but keeps the grid + targets); New advances the seed.
   private puzzle!: Puzzle;
-  private seed = START_SEED;
+  // Starts at today's daily seed — read ONCE at construction (the one `new Date()` the
+  // daily feature reads; the derivation itself is pure, ADR-0003). A session straddling
+  // midnight deliberately keeps its board — the roll applies to the next load. "New"
+  // advances +1 through the day's private stride range; a Puzzle-link hash overwrites
+  // this with the shared seed in _initialPuzzle.
+  private seed = dailySeed(new Date());
   // The current puzzle's shape id, tracked beside the seed so the share control can mint
   // the (shapeId, seed) Puzzle link for the EXACT board just solved (C0FFEE-80): adopted
   // from a shared token on load, back to the default when "New" regenerates.
