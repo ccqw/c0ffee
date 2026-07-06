@@ -112,7 +112,10 @@ const CHIP_TINT: Record<'red' | 'green' | 'blue', string> = {
 };
 
 // A neutral padlock (lifted from the prototype): top-right, stroke off --c0ffee-fg,
-// muted by opacity (contract #6 — status chrome stays achromatic).
+// muted by opacity (contract #6 — status chrome stays achromatic). Shown on locked
+// CROSSING Cells only (C0FFEE-68, handoff 2 §5a): the icon explains "you can't change
+// this from THIS Slot"; a matched pair in the solver's own Slot is already explained
+// by its verdict feedback. Lock behavior itself is engine truth on every locked Cell.
 const LOCK_SVG =
   '<span class="lock"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" ' +
   'stroke="var(--c0ffee-fg, #ededed)" stroke-width="2.4">' +
@@ -1794,7 +1797,7 @@ class C0ffeeCrossword extends HTMLElement {
           ${!solved && g.corner ? `<div style="${g.corner}"></div>` : ''}
           ${isCursor ? '<div class="caret"></div>' : ''}
           ${st.digit ? `<span class="glyph">${st.digit}</span>` : ''}
-          ${st.locked && !solved ? LOCK_SVG : ''}
+          ${st.locked && !solved && this.crossings.has(key) ? LOCK_SVG : ''}
         </div>`;
       })
       .join('');
