@@ -225,6 +225,47 @@ test('<c0ffee-crossword> delete on a filled cursor Cell clears it in place (curs
   expect(cursorKey(el)).toBe(cells[0]);
 });
 
+// C0FFEE-84 — the caret traces the weave geometry (handoff 2 §4a, the spotlight-ring
+// precedent): a woven Cell has asymmetric insets (0 on open sides) and per-corner
+// radii (0 where an edge is open), so a constant-inset ring drifts off the Cell's
+// drawn box and sits over the join. The caret must carry the Cell's OWN inset + radii
+// — i.e. exactly the geometry its .base is drawn with.
+test('<c0ffee-crossword> the caret hugs the cursor Cell\'s woven box — inset and radii from the weave geometry', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+
+  const pick = (style: string | null, prop: string): string | null =>
+    new RegExp(`(?:^|;)\\s*${prop}:([^;]+)`).exec(style ?? '')?.[1]?.trim() ?? null;
+  const geom = () => {
+    const cur = el.shadowRoot!.querySelector('.cell.cur')!;
+    const caret = cur.querySelector('.caret')!.getAttribute('style');
+    const base = cur.querySelector('.base')!.getAttribute('style');
+    return {
+      caretInset: pick(caret, 'inset'),
+      baseInset: pick(base, 'inset'),
+      caretRadius: pick(caret, 'border-radius'),
+      baseRadius: pick(base, 'border-radius'),
+    };
+  };
+
+  // the opening cursor Cell starts an across pair (open right) and meets its down
+  // Slot (open down) — a genuinely asymmetric box, so the equality below can't pass
+  // on uniform constants
+  const g0 = geom();
+  expect(g0.baseInset).toMatch(/(^|\s)0px/);
+  expect(g0.caretInset).toBe(g0.baseInset);
+  expect(g0.caretRadius).toBe(g0.baseRadius);
+
+  // step within the Slot: the pair-closing Cell opens LEFT instead — the caret
+  // re-derives per Cell rather than freezing the first geometry
+  pressKey(el, '0'); // fill + auto-advance to cells[1]
+  expect(cursorKey(el)).toBe(cells[1]);
+  const g1 = geom();
+  expect(g1.baseInset).not.toBe(g0.baseInset);
+  expect(g1.caretInset).toBe(g1.baseInset);
+  expect(g1.caretRadius).toBe(g1.baseRadius);
+});
+
 test('<c0ffee-crossword> re-tapping the active crossing Cell toggles direction', () => {
   const p = puzzle();
   const crossingKeys = p.layout.crossings.map((x) => cellKey(x.cell));

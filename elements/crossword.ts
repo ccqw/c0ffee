@@ -1792,7 +1792,7 @@ class C0ffeeCrossword extends HTMLElement {
         return `<div class="cell${isCursor ? ' cur' : ''}${solved ? ' solved' : ''}" data-cell="${key}" style="${wrap}">
           <div class="base" style="${base}"></div>
           ${!solved && g.corner ? `<div style="${g.corner}"></div>` : ''}
-          ${isCursor ? '<div class="caret"></div>' : ''}
+          ${isCursor ? `<div class="caret" style="inset:${g.inset};border-radius:${g.radius};"></div>` : ''}
           ${st.digit ? `<span class="glyph">${st.digit}</span>` : ''}
           ${st.locked && !solved ? LOCK_SVG : ''}
         </div>`;
@@ -2143,8 +2143,10 @@ const STYLE = `
   .board { position:relative; }
   .cell { position:absolute; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .cell .glyph { position:relative; z-index:3; font:400 21px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
-  /* the within-slot cursor: an accent caret ring over the active Cell (contract: accent = "you") */
-  .cell .caret { position:absolute; inset:2px; border-radius:6px; z-index:4; pointer-events:none;
+  /* the within-slot cursor: an accent caret ring over the active Cell (contract: accent = "you").
+     inset + border-radius are inline per Cell — the caret traces the same weave geometry its
+     .base is drawn with (C0FFEE-84, the spotlight-ring precedent), never a uniform box. */
+  .cell .caret { position:absolute; z-index:4; pointer-events:none;
                  box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
   .cell .lock { position:absolute; top:3px; right:4px; line-height:0; opacity:.65; z-index:5; }
   .num { position:absolute; font:400 10px/1 var(--c0ffee-font, monospace); color:rgba(255,255,255,.74); z-index:6; pointer-events:none; }
