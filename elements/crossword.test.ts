@@ -183,6 +183,9 @@ const cursorKey = (el: HTMLElement): string | null =>
   el.shadowRoot!.querySelector('.cell.cur')?.getAttribute('data-cell') ?? null;
 const glyphAt = (el: HTMLElement, key: string): string | null =>
   cellEl(el, key).querySelector('.glyph')?.textContent ?? null;
+// Whether the Cell SHOWS a padlock. Since C0FFEE-68 the icon is a crossing-cell
+// signifier, so this is an engine-lock proxy only on crossing Cells; a locked
+// non-crossing Cell renders bare (its lock shows up as rejected input instead).
 const lockedAt = (el: HTMLElement, key: string): boolean => !!cellEl(el, key).querySelector('.lock');
 
 test('<c0ffee-crossword> renders a hex keypad — 16 digit keys plus delete and check', () => {
@@ -490,6 +493,46 @@ test('<c0ffee-crossword> receipt: restore skips locked Cells (they already hold 
   // locked Cells kept their graded digits throughout
   expect(glyphAt(el, cells[0])).toBe(target[0].toUpperCase());
   expect(receiptCaption(el)).toBe('now');
+});
+
+// C0FFEE-68 — padlock density (handoff 2 §5a): lock BEHAVIOR is engine truth and
+// unchanged (a commit locks both Cells of every correct Channel), but the padlock
+// ICON is the crossing-cell signifier — it explains "you can't change this from THIS
+// Slot". A matched pair in the solver's own Slot is already explained by its verdict
+// feedback, so it renders bare.
+test('<c0ffee-crossword> padlock shows on locked crossing Cells only; own-Slot matched pairs render bare but stay locked', () => {
+  const p = puzzle();
+  const slot = firstSlot();
+  const target = p.targets[slotKey(slot)]; // 83BEF1
+  const cells = slot.cells.map(cellKey);
+  const crossingKeys = new Set(p.layout.crossings.map((x) => cellKey(x.cell)));
+  // red + green digits correct (cells[0..3] lock on commit), blue byte wrong (editable)
+  const graded = target.slice(0, 4) + '0' + target[5];
+  const el = mount();
+  cells.forEach((k, i) => {
+    tapCell(el, k);
+    pressKey(el, graded[i].toUpperCase());
+  });
+  pressCheck(el);
+
+  // the pinned board must exercise BOTH kinds of locked Cell or this proves nothing
+  const locked = cells.slice(0, 4);
+  const crossing = locked.filter((k) => crossingKeys.has(k));
+  const plain = locked.filter((k) => !crossingKeys.has(k));
+  expect(crossing.length).toBeGreaterThan(0);
+  expect(plain.length).toBeGreaterThan(0);
+
+  // the icon is reserved for the dual-role crossing Cells...
+  crossing.forEach((k) => expect(lockedAt(el, k)).toBe(true));
+  plain.forEach((k) => expect(lockedAt(el, k)).toBe(false));
+
+  // ...while a bare locked Cell still rejects input — behavior untouched. The tap
+  // cannot seat the cursor on it and the keypress lands elsewhere.
+  const i = cells.indexOf(plain[0]);
+  const wrong = target[i].toUpperCase() === 'F' ? '0' : 'F';
+  tapCell(el, plain[0]);
+  pressKey(el, wrong);
+  expect(glyphAt(el, plain[0])).toBe(target[i].toUpperCase());
 });
 
 test('<c0ffee-crossword> receipt: inert while current — a tap changes nothing', () => {
@@ -828,7 +871,12 @@ test('<c0ffee-crossword> keyboard: hex digits fill cells (auto-advance) and Ente
   // a fully-solved Slot retires the receipt — the bar's centered check carries it (§6b)
   expect(el.shadowRoot!.querySelector('.receipt')).toBeNull();
   expect(el.shadowRoot!.querySelector('.barcheck')).toBeTruthy();
-  cells.forEach((k) => expect(lockedAt(el, k)).toBe(true));
+  // the commit locked the Slot: its crossing Cells stamp the padlock (C0FFEE-68 —
+  // the Slot's own matched pairs lock bare)
+  const crossingKeys = new Set(p.layout.crossings.map((x) => cellKey(x.cell)));
+  const crossing = cells.filter((k) => crossingKeys.has(k));
+  expect(crossing.length).toBeGreaterThan(0);
+  crossing.forEach((k) => expect(lockedAt(el, k)).toBe(true));
 });
 
 test('<c0ffee-crossword> keyboard: lowercase hex is accepted (uppercased like the keypad)', () => {
@@ -887,7 +935,12 @@ test('<c0ffee-crossword> prev/next walks layout.slots and SKIPS a fully-locked S
   const S = firstSlot(); // lock this one fully
   const el = mount();
   solveSelected(el, p.targets[slotKey(S)]);
-  expect(S.cells.every((c) => lockedAt(el, cellKey(c)))).toBe(true); // S is fully locked
+  // S is fully locked — projected as padlocks on its crossing Cells (C0FFEE-68; the
+  // nav skip below is the behavioral proof the whole Slot is locked)
+  const crossingKeys = new Set(p.layout.crossings.map((x) => cellKey(x.cell)));
+  const sCrossings = S.cells.map(cellKey).filter((k) => crossingKeys.has(k));
+  expect(sCrossings.length).toBeGreaterThan(0);
+  expect(sCrossings.every((k) => lockedAt(el, k))).toBe(true);
 
   // from EVERY other Slot, pressing next never lands on the locked S (it is skipped)
   for (const e of p.layout.slots) {
@@ -1181,9 +1234,13 @@ test('<c0ffee-crossword> the solved board is pure color tiles: ring + answer dig
   const p = puzzle();
   const el = mount();
 
-  // mid-play the padlock earns its keep: one solved Slot stamps its six locked Cells
+  // mid-play the padlock earns its keep: one solved Slot stamps its CROSSING Cells
+  // (C0FFEE-68 — the crossing-only signifier; its own pairs lock bare)
   solveSlot(el, p, p.layout.slots[0]);
-  expect(el.shadowRoot!.querySelectorAll('.lock').length).toBe(p.layout.slots[0].cells.length);
+  const slot0Keys = new Set(p.layout.slots[0].cells.map(cellKey));
+  const slot0Crossings = p.layout.crossings.filter((x) => slot0Keys.has(cellKey(x.cell)));
+  expect(slot0Crossings.length).toBeGreaterThan(0);
+  expect(el.shadowRoot!.querySelectorAll('.lock').length).toBe(slot0Crossings.length);
 
   for (const slot of p.layout.slots) {
     if (q(el, '.completion')) break;
