@@ -1816,9 +1816,11 @@ class C0ffeeCrossword extends HTMLElement {
 
     // The width cap derives from available viewport height (ADR-0010): each Cell gets
     // (100svh - the rest of the stack) / rows, clamped between the 32px floor and the
-    // natural 38px. Tall viewports resolve to exactly cols*CELL_PX (unchanged look);
-    // short ones shrink the board before the page scrolls. --cw-cell inherits to the
-    // Cells so the glyphs scale with them (stylesheet).
+    // natural 38px. Only genuinely tall viewports (svh >= ~878px for 6 rows) resolve to
+    // the natural cols*CELL_PX; the 844-class tall tier rides near the floor - that is
+    // the trade that buys its strict receipt-visible fit. Below the floor the short
+    // tier accepts residual scroll instead. --cw-cell inherits to the Cells so the
+    // glyphs scale with them (stylesheet).
     const cellSize = `clamp(${CELL_MIN_PX}px, (100svh - ${STACK_SANS_BOARD_PX}px) / ${rows}, ${CELL_PX}px)`;
     const boardStyle = `position:relative;--cw-cell:${cellSize};width:100%;max-width:calc(${cols} * var(--cw-cell));aspect-ratio:${cols} / ${rows};margin:0 auto;`;
     return `<div class="board${solved ? ' solved' : ''}" style="${boardStyle}">
