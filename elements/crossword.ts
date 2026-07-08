@@ -83,6 +83,18 @@ const DEFAULT_SHAPE = 'lattice-6';
 // and scales with its container (the prototype's geometry).
 const CELL_PX = 38;
 
+// The board's height-budget lever (ADR-0010): on short viewports Cells shrink fluidly
+// from CELL_PX toward this floor, then stop — below the floor the short tier accepts a
+// residual page scroll instead of squeezing further.
+const CELL_MIN_PX = 32;
+
+// Everything in the play stack EXCEPT the board, at its worst-case height: checked
+// receipt visible, compare bar at its 52px floor (measured 390x844 on v0.37.0, the
+// ADR-0010 ledger). (100svh - this) / rows is the Cell size that makes the whole game
+// fit one viewport; the clamp above/below decides whether that budget is honoured
+// strictly (tall tier) or bottoms out at the floor (short tier).
+const STACK_SANS_BOARD_PX = 650;
+
 // How long a commit toast stays before it fades (transient teaching beat, contract #4).
 const TOAST_MS = 2600;
 
@@ -1802,7 +1814,15 @@ class C0ffeeCrossword extends HTMLElement {
       })
       .join('');
 
-    const boardStyle = `position:relative;width:100%;max-width:${cols * CELL_PX}px;aspect-ratio:${cols} / ${rows};margin:0 auto;`;
+    // The width cap derives from available viewport height (ADR-0010): each Cell gets
+    // (100svh - the rest of the stack) / rows, clamped between the 32px floor and the
+    // natural 38px. Only genuinely tall viewports (svh >= ~878px for 6 rows) resolve to
+    // the natural cols*CELL_PX; the 844-class tall tier rides near the floor - that is
+    // the trade that buys its strict receipt-visible fit. Below the floor the short
+    // tier accepts residual scroll instead. --cw-cell inherits to the Cells so the
+    // glyphs scale with them (stylesheet).
+    const cellSize = `clamp(${CELL_MIN_PX}px, (100svh - ${STACK_SANS_BOARD_PX}px) / ${rows}, ${CELL_PX}px)`;
+    const boardStyle = `position:relative;--cw-cell:${cellSize};width:100%;max-width:calc(${cols} * var(--cw-cell));aspect-ratio:${cols} / ${rows};margin:0 auto;`;
     return `<div class="board${solved ? ' solved' : ''}" style="${boardStyle}">
       ${cells}
       ${solved ? '' : this._outlines(cols, rows)}
@@ -2145,7 +2165,10 @@ const STYLE = `
   .boardwrap { flex:none; padding:14px 22px; }
   .board { position:relative; }
   .cell { position:absolute; display:flex; align-items:center; justify-content:center; cursor:pointer; }
-  .cell .glyph { position:relative; z-index:3; font:400 21px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed); }
+  .cell .glyph { position:relative; z-index:3; font:400 21px/1 var(--c0ffee-font, monospace); color:var(--c0ffee-fg, #ededed);
+                 /* glyphs scale with the fluid Cell (ADR-0010): 21px at the natural 38px Cell,
+                    proportionally smaller toward the 32px floor. --cw-cell is set on .board. */
+                 font-size:calc(var(--cw-cell, 38px) * 21 / 38); }
   /* the within-slot cursor: an accent caret ring over the active Cell (contract: accent = "you") */
   .cell .caret { position:absolute; inset:2px; border-radius:6px; z-index:4; pointer-events:none;
                  box-shadow:inset 0 0 0 2px var(--c0ffee-accent, #C0FFEE); }
@@ -2227,7 +2250,10 @@ const STYLE = `
   .caps { display:flex; }
   .caps span { flex:1; text-align:center; font:400 9.5px/1 var(--c0ffee-font, monospace);
                letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.74); }
-  .splitbar { position:relative; display:flex; height:72px; border-radius:12px; overflow:hidden; }
+  /* the bar spends its decided 52-110 window DOWNWARD on short viewports (ADR-0010,
+     handoff 2 §6's reserved height knob): natural 72px, fluid toward the 52px floor as
+     the viewport shrinks below the height where the full stack (receipt visible) fits. */
+  .splitbar { position:relative; display:flex; height:clamp(52px, 100svh - 826px, 72px); border-radius:12px; overflow:hidden; }
   .half { flex:1; }
   /* the fills MUST touch: at fractional half-widths (e.g. 138.75px) the flex boundary
      leaves a subpixel gap where the dark page bg reads as a phantom divider — overlap
@@ -2451,6 +2477,23 @@ const STYLE = `
      placed AFTER the rules it silences — the equal-specificity cascade decides */
   @media (prefers-reduced-motion: reduce) {
     .board.solved .cell .base, .coach.sheet, .lockcallout { animation:none; }
+  }
+
+  /* === viewport budget (C0FFEE-87, ADR-0010) === */
+  /* width: below the column's 430px clamp the three side-chrome layers collapse to one —
+     the page keeps a fixed 12px padding (crossword.html), the dock-level margins go to
+     zero, the panel's own padding/surface recipe stays. The compare column gains ~40px
+     at 375 (277.5 -> 319). .cluepanel and .completion swap into the dock's slot
+     (C0FFEE-73 panes), so all three collapse together or widths would jump per pane. */
+  @media (max-width: 430px) {
+    .dock, .cluepanel, .completion { margin-left:0; margin-right:0; }
+  }
+  /* height: stepped chrome trims on short viewports. One step (the fluid board + bar
+     levers are continuous, so neighbouring device heights see no cliff); 44px keys,
+     keypad structure and the 52px topbar are held (handoff 2 §3a). */
+  @media (max-height: 740px) {
+    .screen { gap:8px; }
+    .dock { padding-top:10px; padding-bottom:10px; }
   }
 `;
 
