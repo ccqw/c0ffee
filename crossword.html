@@ -36,6 +36,12 @@
       min-height: 0; /* let flex:1 bound <main> to the viewport remainder, not its content */
       padding: 0.6vh 5vw 0.8vh; /* tight: the old generous 2vh/6vh was for the scroll layout */
     }
+    /* below the crossword column's 430px clamp, 5vw side padding collapses to a fixed
+       12px — one width-chrome layer instead of three (C0FFEE-87, ADR-0010); the dock's
+       own margins collapse in the element's stylesheet */
+    @media (max-width: 430px) {
+      main { padding-left: 12px; padding-right: 12px; }
+    }
     c0ffee-crossword { display: block; max-width: 430px; margin: 0 auto; }
   </style>
 </head>

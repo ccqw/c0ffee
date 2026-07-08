@@ -120,6 +120,10 @@ _Avoid_: share link (too generic); seed (that is the payload the link carries, n
 The elapsed time from the solver's first **Cell** entry to the final **Slot** solved, paused while the tab is hidden. The crossword is otherwise **unscored**, so the Solve time is its only score-like signal - and because binary-search costs wall-clock seconds, the clock gently rewards hex intuition without needing guess-limits. Optional and opt-in: it rides in the shared message ("solved in 4:15 - can you beat me?") only if the solver includes it, and whether the running clock is shown during play is a **remembered preference** (a timer-less, zen solve is a first-class choice).
 _Avoid_: timer (that is the on-screen widget, not the measured value); score; par.
 
+**One-viewport play**:
+The Hex Color crossword's layout promise, **two-tiered by device height** (ADR-0010): on roomy phones (the 844-class and up) the whole game — board, dock, and any visible receipt — fits one viewport with no page scroll during play; on short phones (the 667-class) the game stays fully playable, the non-sticky **Site banner** scrolls off on the first flick, and a modest residual scroll remains. The promise is a **budget**: anything that adds height to the play stack spends from it and must account for the spend.
+_Avoid_: "fits on every phone" (the short tier scrolls by design); full-screen, fullscreen (that's a browser API, not this promise).
+
 ### Styling
 
 **Design tokens**:
