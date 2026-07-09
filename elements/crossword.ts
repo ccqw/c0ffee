@@ -76,7 +76,10 @@ import { dailySeed } from '../lib/crossword-daily.ts';
 // fresh one the next. A varying seed enters from three places — the day on mount, "New"
 // advancing it (C0FFEE-67), and a Puzzle-link hash supplying a shared (shapeId, seed) on
 // load (C0FFEE-78, _initialPuzzle). Tests pin a stable board through the hash path.
-const DEFAULT_SHAPE = 'lattice-6';
+// The shape every default path deals — token-less (daily) load, New, bad-link fallback.
+// loom-6 since C0FFEE-85 (the balanced 3-across / 3-down grid); lattice-6 stays authored
+// in SHAPES but is reachable only through old Puzzle links (ADR-0009 frozen ids).
+const DEFAULT_SHAPE = 'loom-6';
 
 // Natural px per Cell — caps the board's max-width (cols * CELL_PX) and sets its
 // aspect ratio. Every Cell is then positioned as a percentage, so the board is fluid
@@ -504,8 +507,10 @@ class C0ffeeCrossword extends HTMLElement {
   // (it would wipe progress); WRITING the link is the share slice (C0FFEE-80).
   //
   // On a shared seed we adopt it as `this.seed` so a later "New" advances from it. New
-  // still regenerates on DEFAULT_SHAPE; with a single authored shape that is always the
-  // shared shape, so carrying ref.shapeId into New is a future seam (when SHAPES grows).
+  // regenerates on DEFAULT_SHAPE even when the shared shape differs — settled policy
+  // (C0FFEE-85 decision 2, not a seam): a friend's lattice-6 link replays ITS board
+  // (Restart covers replaying it again), but fresh boards are always the current
+  // default shape.
   private _initialPuzzle(): Puzzle {
     const ref = decodePuzzleToken(window.location?.hash);
     if (ref) {
@@ -559,7 +564,7 @@ class C0ffeeCrossword extends HTMLElement {
   private _restartOrNew(fresh: boolean): void {
     if (fresh) {
       this.seed += 1;
-      this.shapeId = DEFAULT_SHAPE; // New regenerates on the default shape (the seam above)
+      this.shapeId = DEFAULT_SHAPE; // New always deals the default shape (C0FFEE-85 decision 2)
     }
     this._loadPuzzle(fresh ? generatePuzzle(DEFAULT_SHAPE, this.seed) : this.puzzle);
     this._closeOverlays();

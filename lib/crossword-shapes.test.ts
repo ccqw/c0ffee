@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { SHAPES } from './crossword-shapes.ts';
+import { SHAPES, SHAPE_BOUNDS } from './crossword-shapes.ts';
 import { deriveLayout, SLOT_LENGTH } from './crossword-layout.ts';
 
 // The data v1 shapes must each be a valid, COMPACT Hex Color crossword: derive without
@@ -42,6 +42,33 @@ test.each(SHAPES.map((s) => [s.id, s] as const))(
     }
   },
 );
+
+// C0FFEE-85 — loom-6 balances the grid: a third across rung along the bottom row, so
+// the shape reads 3 across / 3 down and every rail's last Cell is an L-shaped join
+// (the same weave language as the middle rung). The generic guards above cover it via
+// test.each; these pin the balance itself.
+test('loom-6 balances the grid: three across rungs, three down rails, nine crossings', () => {
+  const loom = SHAPES.find((s) => s.id === 'loom-6');
+  expect(loom).toBeDefined();
+  const { slots, crossings } = deriveLayout(loom!.grid);
+  expect(slots.filter((s) => s.direction === 'across').length).toBe(3);
+  expect(slots.filter((s) => s.direction === 'down').length).toBe(3);
+  expect(crossings.length).toBe(9);
+});
+
+// C0FFEE-85 / ADR-0009 amendment — a shape's aesthetic acceptance bounds live with its
+// id and freeze with it. loom-6's nine crossings pin every across Slot's high nibbles in
+// all three Channels, so some seeds realize a muddy palette; its declared bounds make
+// the generator throw those boards back. lattice-6 shipped before bounds existed and is
+// grandfathered bound-less — enforcing bounds on it would silently rewrite already-shared
+// boards, exactly what ADR-0009 forbids.
+test('acceptance bounds are declared with the shape id, loom-6 bounded, lattice-6 grandfathered', () => {
+  expect(SHAPE_BOUNDS['loom-6']).toEqual({ maxHueGapDeg: 185, minVSpan: 0.15 });
+  expect(SHAPE_BOUNDS['lattice-6']).toBeUndefined();
+  // every declared bound names an authored shape (no orphan bounds)
+  const ids = SHAPES.map((s) => s.id);
+  for (const id of Object.keys(SHAPE_BOUNDS)) expect(ids).toContain(id);
+});
 
 test.each(SHAPES.map((s) => [s.id, s] as const))(
   'shape %s: every crossing is one across Slot meeting one down Slot at a shared Cell',
