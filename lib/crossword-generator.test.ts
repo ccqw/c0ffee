@@ -132,8 +132,10 @@ test('golden: (lattice-6, 1) reproduces its shipped board byte-identically', () 
 // which collapses some realized palettes (measured unbounded: 15.6% of seeds over the
 // 185-degree hue-gap bound, 1.3% under 0.15 V span, over a 2,400-seed sweep). The
 // generator's attempt loop re-plans boards outside the shape's declared bounds, so
-// every dealt board must meet them. The math here is written out independently of the
-// generator's own acceptance check, so a bug in that check cannot pass both sides.
+// every dealt board must meet them. This proves the filter is WIRED IN and rejecting
+// (unfiltered, >15% of these seeds violate the hue bound, so dropping the meetsBounds
+// call fails this sweep); the metric formula itself mirrors the generator's, so the
+// corpus aesthetic tests above stay the independent guard on what the bounds mean.
 test('every dealt loom-6 board meets its declared bounds across a seed sweep', () => {
   const bounds = SHAPE_BOUNDS['loom-6'];
   expect(bounds).toBeDefined();

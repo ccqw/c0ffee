@@ -82,6 +82,6 @@ export interface ShapeBounds {
 // seeds over a 185-degree hue gap, 1.3% under 0.15 V span; lattice-6 baseline 0.2%/0%).
 // lattice-6 shipped before bounds existed and is GRANDFATHERED bound-less — no entry —
 // so every already-shared board stays byte-identical.
-export const SHAPE_BOUNDS: Readonly<Record<string, ShapeBounds>> = {
+export const SHAPE_BOUNDS: Readonly<Record<string, ShapeBounds | undefined>> = {
   'loom-6': { maxHueGapDeg: 185, minVSpan: 0.15 },
 };
