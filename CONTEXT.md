@@ -120,6 +120,14 @@ _Avoid_: share link (too generic); seed (that is the payload the link carries, n
 The elapsed time from the solver's first **Cell** entry to the final **Slot** solved, paused while the tab is hidden. The crossword is otherwise **unscored**, so the Solve time is its only score-like signal - and because binary-search costs wall-clock seconds, the clock gently rewards hex intuition without needing guess-limits. Optional and opt-in: it rides in the shared message ("solved in 4:15 - can you beat me?") only if the solver includes it, and whether the running clock is shown during play is a **remembered preference** (a timer-less, zen solve is a first-class choice).
 _Avoid_: timer (that is the on-screen widget, not the measured value); score; par.
 
+**Undo**:
+Stepping the solver's digit edits back, one edit at a time — and **Redo** re-applies what Undo stepped back, until a fresh edit forks the timeline and the redoable steps drop. A receipt **restore** counts as **one** step (its whole Slot comes back together, and Undo takes it back out together). Undo never crosses a **commit**: a **lock** is earned knowledge and a verdict stands, so steps whose Cells have since locked age out of history rather than becoming un-lockers. Undoing a step returns the solver to where it happened (that Slot re-selects). Restart/New start fresh — no history survives them. On a solved board there is, by construction, nothing left to undo.
+_Avoid_: rewind, back, time-travel; "undo the Guess" (a commit is not undoable — **restore**, not Undo, is how graded digits come back).
+
+**Restore**:
+Putting a **Slot**'s last *graded* digits back into its unlocked **Cells** — the diverged receipt's one-tap affordance (C0FFEE-71). Not the same act as **Undo**: restore jumps to a known-good referent (the digits the verdict graded); Undo walks the edit history one step at a time. A restore is itself a single undoable step.
+_Avoid_: reset (that's Restart's family), revert (informally).
+
 **One-viewport play**:
 The Hex Color crossword's layout promise, **two-tiered by device height** (ADR-0010): on roomy phones (the 844-class and up) the whole game — board, dock, and any visible receipt — fits one viewport with no page scroll during play; on short phones (the 667-class) the game stays fully playable, the non-sticky **Site banner** scrolls off on the first flick, and a modest residual scroll remains. The promise is a **budget**: anything that adds height to the play stack spends from it and must account for the spend.
 _Avoid_: "fits on every phone" (the short tier scrolls by design); full-screen, fullscreen (that's a browser API, not this promise).
