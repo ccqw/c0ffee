@@ -64,6 +64,12 @@ const SHAPE = 'lattice-6';
 const SEED = 1;
 const puzzle = () => generatePuzzle(SHAPE, SEED);
 
+// The shape the element deals on every default path — token-less (daily) load, New,
+// bad-link fallback (C0FFEE-85: loom-6 balances the grid at 3 across / 3 down).
+// lattice-6 stays authored but is reachable only through old Puzzle links (ADR-0009
+// frozen ids), which is exactly how the suite's stable board above pins it.
+const DEFAULT_SHAPE = 'loom-6';
+
 function mount(): HTMLElement {
   const el = document.createElement('c0ffee-crossword');
   document.body.appendChild(el);
@@ -1142,11 +1148,15 @@ test('<c0ffee-crossword> Restart asks for confirmation, then wipes every entry a
   expect(q(el, '.confirm')).toBeNull(); // dialog closed
 });
 
-test('<c0ffee-crossword> Restart keeps the same puzzle; New generates a fresh one', () => {
+test('<c0ffee-crossword> Restart keeps the same puzzle; New deals a fresh DEFAULT_SHAPE board', () => {
   const p = puzzle();
   const firstClue = slotKey(firstSlot());
   const targetSame = p.targets[firstClue];
-  const targetFresh = generatePuzzle(SHAPE, SEED + 1).targets[firstClue];
+  // The suite board was opened from a lattice-6 Puzzle link (the beforeEach pin), and New
+  // STILL deals the loom-6 default (C0FFEE-85 decision 2: New always regenerates on
+  // DEFAULT_SHAPE, even after a friend's link on another shape — Restart replays the
+  // shared board). The seed advances from the adopted one.
+  const targetFresh = firstTargetForSeed(SEED + 1);
 
   const a = mount();
   // the entry pane's clue half is painted the selected Slot's target (contract #1)
@@ -1571,9 +1581,11 @@ test('<c0ffee-crossword> overlays still mount over the constrained screen', () =
 // which puzzle loaded, so the deterministic seam is what the assertion reads.
 
 // The selected (first) Slot's target Color address for a given seed — what the clue half
-// paints. Mirrors firstSlot() but for an arbitrary seed.
-const firstTargetForSeed = (seed: number): string => {
-  const p = generatePuzzle(SHAPE, seed);
+// paints. Mirrors firstSlot() but for an arbitrary seed. Defaults to DEFAULT_SHAPE (the
+// board every token-less/fallback/New path deals since C0FFEE-85); the Puzzle-link tests
+// pass SHAPE explicitly because a link reproduces its own shape.
+const firstTargetForSeed = (seed: number, shape: string = DEFAULT_SHAPE): string => {
+  const p = generatePuzzle(shape, seed);
   const first = [...p.layout.slots].sort(
     (a, b) => a.number - b.number || (a.direction < b.direction ? -1 : 1),
   )[0];
@@ -1586,9 +1598,10 @@ test('<c0ffee-crossword> a valid Puzzle-link hash reproduces that exact puzzle',
   const SHARED = 7; // a seed distinct from the default, so the boards differ
   window.location.hash = encodePuzzleToken({ shapeId: SHAPE, seed: SHARED });
   const el = mount();
-  // the clue half paints the SHARED seed's first-Slot target, not the default seed's
-  expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SHARED)}`);
-  expect(clueColorOf(el)).not.toContain(`#${firstTargetForSeed(SEED)}`);
+  // the clue half paints the SHARED seed's first-Slot target, not the default seed's —
+  // and on the LINK's shape (lattice-6): a friend's old link keeps reproducing its board
+  expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(SHARED, SHAPE)}`);
+  expect(clueColorOf(el)).not.toContain(`#${firstTargetForSeed(SEED, SHAPE)}`);
 });
 
 test('<c0ffee-crossword> a malformed Puzzle-link hash quietly opens the default puzzle', () => {
@@ -1664,6 +1677,24 @@ test('<c0ffee-crossword> New advances from the daily base, never dealing another
     act(el, 'confirm-ok');
     // the fresh board is the daily's +1 neighbour — inside the day's private stride range
     expect(clueColorOf(el)).toContain(`#${firstTargetForSeed(dailySeed(new Date(2026, 6, 3)) + 1)}`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// C0FFEE-85 — the balanced grid. A token-less load deals loom-6: as many Across clues
+// as Down (3 / 3, six Slots), the third rung along the bottom row. The daily tests above
+// pin WHICH loom-6 board (seed via clue color); this pins the balance a player sees.
+test('<c0ffee-crossword> the default board balances the clue list at three Across, three Down', () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date(2026, 6, 3, 9, 0, 0));
+    window.location.hash = ''; // the token-less default path
+    const el = mount();
+    openClues(el);
+    const groups = el.shadowRoot!.querySelectorAll('.cluegroup');
+    expect(groups[0].querySelectorAll('.cluerow').length).toBe(3);
+    expect(groups[1].querySelectorAll('.cluerow').length).toBe(3);
   } finally {
     vi.useRealTimers();
   }

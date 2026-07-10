@@ -19,9 +19,9 @@
 // pin its crossing Slot reads (the same trick the C0FFEE-61 reducer uses). Crossing
 // agreement is therefore automatic.
 
-import { formatHex, hsvToRgb, rgbToHsv, type Hsv, type Rgb } from './color.ts';
+import { formatHex, hsvToRgb, parseHex, rgbToHsv, type Hsv, type Rgb } from './color.ts';
 import { deriveLayout, type Layout, type Puzzle, type Slot } from './crossword-layout.ts';
-import { SHAPES } from './crossword-shapes.ts';
+import { SHAPES, SHAPE_BOUNDS, type ShapeBounds } from './crossword-shapes.ts';
 
 // --- tuning constants (named + conservative; easy to tighten later) ---
 
@@ -272,23 +272,45 @@ function fillSlots(layout: Layout, plan: Map<string, Hsv>): Record<string, strin
   return recurse(0) ? chosen : null;
 }
 
+// meetsBounds(targets, bounds) -> does the realized board clear its shape's aesthetic
+// acceptance bounds (C0FFEE-85)? A shape with no declared bounds accepts everything —
+// the grandfather clause (ADR-0009 amendment): bound-less shapes shipped their outputs
+// before bounds existed, and this arm must not perturb them. The check is pure
+// arithmetic over the chosen targets — it consumes NO RNG, so a passing fill costs the
+// seeded stream exactly what it did pre-bounds and old boards stay byte-identical.
+function meetsBounds(targets: Record<string, string>, bounds: ShapeBounds | undefined): boolean {
+  if (!bounds) return true;
+  const hsvs = Object.values(targets).map((hex) => rgbToHsv(parseHex(hex)!));
+  const hues = hsvs.map((c) => c.h).sort((a, b) => a - b);
+  let maxGap = 360 - (hues[hues.length - 1] - hues[0]); // the wrap-around arc
+  for (let i = 1; i < hues.length; i++) maxGap = Math.max(maxGap, hues[i] - hues[i - 1]);
+  const vs = hsvs.map((c) => c.v);
+  const vSpan = Math.max(...vs) - Math.min(...vs);
+  return maxGap <= bounds.maxHueGapDeg && vSpan >= bounds.minVSpan;
+}
+
 // generatePuzzle(shapeId, seed) -> Puzzle. Look up the shape (throw on an unknown
 // id, fail-loud like the sibling cores), derive its layout, then run the attempt
 // loop: each attempt re-plans the palette (advancing the single seeded stream, so
-// attempts differ) and fills; the first success returns. The CAP backstop throws
-// — a test proves it is unreachable for the shipped shapes.
+// attempts differ) and fills; the first success that also clears the shape's
+// acceptance bounds returns — a muddy board is thrown back and re-planned through
+// the same loop that handles fill failure (measured: ~83% of loom-6 seeds accept on
+// attempt 1, a retry costs ~2 ms, so the CAP stays unreachable by orders of
+// magnitude). The CAP backstop throws — a test proves it is unreachable for the
+// shipped shapes.
 export function generatePuzzle(shapeId: string, seed: number): Puzzle {
   const shape = SHAPES.find((s) => s.id === shapeId);
   if (!shape) {
     throw new Error(`crossword-generator: no shape with id '${shapeId}'`);
   }
   const layout = deriveLayout(shape.grid);
+  const bounds = SHAPE_BOUNDS[shapeId];
   const rng = makeRng(seed);
 
   for (let attempt = 0; attempt < ATTEMPT_CAP; attempt++) {
     const plan = planPalette(layout.slots, rng);
     const targets = fillSlots(layout, plan);
-    if (targets) return { layout, targets };
+    if (targets && meetsBounds(targets, bounds)) return { layout, targets };
   }
   throw new Error(
     `crossword-generator: no fill for shape '${shapeId}' seed ${seed} within ${ATTEMPT_CAP} attempts`,

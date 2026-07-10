@@ -30,3 +30,23 @@ This is forward-looking: it is recorded now, while the crossword (Linear C0FFEE-
 - **`?p=<seed>` query string.** Off-convention (the Color link is hash-only), and it round-trips the seed to the CDN for no benefit a static site can use. Rejected for the hash.
 - **Full-puzzle link (all target colors in the URL).** Self-describing but puts the answers in plain sight and makes the puzzle trivially cheatable. Rejected.
 - **Daily-puzzle seed (Wordle's model).** Everyone gets the same puzzle each day. Heaviest - it needs a date-to-seed scheme and an authored/rotating cadence (a product, not a feature). Deferred; the deterministic generator leaves the door open.
+
+## Amendment (2026-07-09, C0FFEE-85): a shape's acceptance bounds freeze with its id
+
+The generator's attempt loop now also rejects a *filled* board that falls outside its
+shape's declared aesthetic acceptance bounds (`SHAPE_BOUNDS`, lib/crossword-shapes.ts:
+max hue gap / min lightness span), re-planning through the same loop that handles fill
+failure. Because `(shape-id, seed) -> Puzzle` is a shipped contract (decision 1), the
+bounds change *which* board a seed yields - so a shape's bounds, **including their
+absence, are part of its frozen identity**: decided the day the shape ships, never
+revised after.
+
+- Shapes shipped before bounds existed are **grandfathered bound-less** (`lattice-6`
+  has no entry). Enforcing bounds on one retroactively would silently rewrite a slice
+  of already-shared boards - exactly what this ADR forbids. A golden regression test
+  pins a shipped `lattice-6` board byte-for-byte through generator changes.
+- `loom-6` (C0FFEE-85, the first bounded shape) declares max hue gap 185 degrees, min
+  V span 0.15: its nine crossings pin every across Slot's high nibble in all three
+  Channels, and unbounded that realizes a muddy palette on a measurable share of seeds
+  (15.6% / 1.3% over a 2,400-seed sweep). Totality holds with bounds on: 0 attempt-cap
+  failures over the same sweep, ~83% of seeds accepting on the first attempt.

@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import { generatePuzzle, colorDistance, MIN_DISTANCE } from './crossword-generator.ts';
-import { SHAPES } from './crossword-shapes.ts';
+import { SHAPES, SHAPE_BOUNDS } from './crossword-shapes.ts';
 import { initCrossword, type Puzzle } from './crossword-state.ts';
 import { parseHex, rgbToHsv } from './color.ts';
 
@@ -107,6 +107,50 @@ test('the chosen hues are spread around the wheel (no large empty arc)', () => {
     expect(maxGap, `${id}#${seed} max hue gap`).toBeLessThanOrEqual(185);
   }
 });
+
+// --- the grandfather clause (C0FFEE-85 / ADR-0009 amendment) ---
+
+// Golden regression: one shipped lattice-6 board pinned byte-for-byte, captured on
+// v0.37.1 BEFORE the acceptance loop landed. lattice-6 declares no bounds, so the
+// bounds check must not consume RNG or alter control flow for it — any drift here
+// means an already-shared Puzzle link now opens a different board, which ADR-0009
+// forbids. (This is the suite's stable (lattice-6, 1) board; the first-Slot target
+// 83BEF1 is the same one the element tests pin through the hash path.)
+test('golden: (lattice-6, 1) reproduces its shipped board byte-identically', () => {
+  expect(generatePuzzle('lattice-6', 1).targets).toEqual({
+    '1-across': '83BEF1',
+    '4-across': 'BD39BE',
+    '1-down': '804B13',
+    '2-down': 'B0F387',
+    '3-down': 'F3CB72',
+  });
+});
+
+// --- per-shape acceptance bounds (C0FFEE-85): muddy boards are thrown back ---
+
+// loom-6's nine crossings pin every across Slot's high nibble in all three Channels,
+// which collapses some realized palettes (measured unbounded: 15.6% of seeds over the
+// 185-degree hue-gap bound, 1.3% under 0.15 V span, over a 2,400-seed sweep). The
+// generator's attempt loop re-plans boards outside the shape's declared bounds, so
+// every dealt board must meet them. This proves the filter is WIRED IN and rejecting
+// (unfiltered, >15% of these seeds violate the hue bound, so dropping the meetsBounds
+// call fails this sweep); the metric formula itself mirrors the generator's, so the
+// corpus aesthetic tests above stay the independent guard on what the bounds mean.
+test('every dealt loom-6 board meets its declared bounds across a seed sweep', () => {
+  const bounds = SHAPE_BOUNDS['loom-6'];
+  expect(bounds).toBeDefined();
+  for (let seed = 0; seed < 64; seed++) {
+    const hsvs = targetsOf(generatePuzzle('loom-6', seed)).map((h) => rgbToHsv(parseHex(h)!));
+    const hues = hsvs.map((c) => c.h).sort((a, b) => a - b);
+    let maxGap = 360 - (hues[hues.length - 1] - hues[0]);
+    for (let i = 1; i < hues.length; i++) maxGap = Math.max(maxGap, hues[i] - hues[i - 1]);
+    const vs = hsvs.map((c) => c.v);
+    expect(maxGap, `loom-6#${seed} max hue gap`).toBeLessThanOrEqual(bounds!.maxHueGapDeg);
+    expect(Math.max(...vs) - Math.min(...vs), `loom-6#${seed} V span`).toBeGreaterThanOrEqual(
+      bounds!.minVSpan,
+    );
+  }
+}, 30000);
 
 // --- well-formed output: drops straight into the reducer ---
 
