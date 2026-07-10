@@ -19,6 +19,7 @@ import {
   lockedAt,
   commitFirstSlot,
   solveSelected,
+  openClues,
   clabel,
   labelOf,
   q,
@@ -137,6 +138,30 @@ test('<c0ffee-crossword> receipt captions stay honest through undo: diverge, und
   act(el, 'undo'); // digits move back TO the graded referent
   expect(q(el, '.receipt .rcaption')!.textContent!.trim()).toBe('now');
   expect(q(el, '.receipt .rundo')).toBeNull(); // the restore affordance left with it
+});
+
+test('<c0ffee-crossword> receipt captions stay honest through redo: re-diverging back to "last"', () => {
+  const el = mount();
+  commitFirstSlot(el);
+  pressKey(el, '1'); // diverge
+  act(el, 'undo'); // back at the referent — 'now'
+  act(el, 'redo'); // the edit re-applies — diverged again
+  expect(q(el, '.receipt .rcaption')!.textContent!.trim()).toBe('last');
+  expect(q(el, '.receipt .rundo')).toBeTruthy(); // the restore affordance returned with it
+});
+
+test('<c0ffee-crossword> Cmd+Z is inert under an overlay and in the clue pane', () => {
+  const cells = firstSlot().cells.map(cellKey);
+  const el = mount();
+  pressKey(el, 'A');
+  act(el, 'menu');
+  act(el, 'restart'); // the destructive confirm is up — the board is inert beneath it
+  pressPhysical(el, 'z', { metaKey: true });
+  expect(glyphAt(el, cells[0])).toBe('A'); // the chord never reached the board
+  act(el, 'confirm-cancel');
+  openClues(el); // the clue pane is a review surface — game keys are entry-pane only
+  pressPhysical(el, 'z', { metaKey: true });
+  expect(glyphAt(el, cells[0])).toBe('A'); // still standing (the board renders passively)
 });
 
 test('<c0ffee-crossword> locks survive undo: solving a Slot prunes its history, keys disable', () => {

@@ -1328,17 +1328,18 @@ class C0ffeeCrossword extends HTMLElement {
   // visible. Peeked BEFORE dispatching: the applied Step moves to the opposite stack.
   // An empty stack means the key was disabled — a synthetic tap falls out harmlessly.
   private _undo(): void {
-    this._applyHistory(this.state.undo);
+    this._applyHistory('undo');
   }
 
   private _redo(): void {
-    this._applyHistory(this.state.redo);
+    this._applyHistory('redo');
   }
 
-  private _applyHistory(stack: CrosswordState['undo']): void {
+  private _applyHistory(dir: 'undo' | 'redo'): void {
+    const stack = this.state[dir];
     const step = stack[stack.length - 1];
     if (!step) return;
-    this._dispatch(stack === this.state.undo ? { type: 'undo' } : { type: 'redo' });
+    this._dispatch({ type: dir });
     this.cursorKey = cellKey(step.patches[step.patches.length - 1].cell);
     this._dismissToast();
     this._render();

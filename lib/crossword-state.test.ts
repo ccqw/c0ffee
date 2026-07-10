@@ -333,6 +333,17 @@ describe('undo / redo history (C0FFEE-70)', () => {
     expect(s.redo).toEqual([]);
   });
 
+  test('redo survives a commit (pruned like undo, never wholesale cleared)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = fill(s, ONE_ACROSS, '3A0000');
+    s = crosswordReducer(s, { type: 'setDigit', cell: slotOf(ONE_ACROSS).cells[2], digit: '7' });
+    s = undo(s); // the '7' is redoable; the board is back at the full 3A0000
+    s = commit(s); // red 3A locks — a commit edits no digits, so the fork survives
+    expect(s.redo.length).toBe(1);
+    s = redo(s); // the abandoned '7' is still reachable after checking
+    expect(s.cells['0,2'].digit).toBe('7');
+  });
+
   test('undo never crosses a commit: locking prunes history on the locked Cells', () => {
     let s = select(initCrossword(PUZZLE), ONE_ACROSS);
     s = commit(fill(s, ONE_ACROSS, '3A0000')); // red 3A correct -> (0,0),(0,1) lock

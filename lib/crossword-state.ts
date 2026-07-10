@@ -253,7 +253,7 @@ export function crosswordReducer(state: CrosswordState, action: CrosswordAction)
       // Lock-death pruning (C0FFEE-70): a commit is not undoable, so history that the
       // new locks have overtaken quietly ages out. Locks never unlock, so pruning once
       // is final — every surviving Step stays fully applicable. Commit clears nothing
-      // else (it edits no digits), so redo survives a commit.
+      // else (it edits no digits), so redo survives a commit — pruned, like undo.
       const lockedNow = (p: CellPatch): boolean => cells[cellKey(p.cell)].locked;
       const prune = (steps: Step[]): Step[] =>
         steps
@@ -281,16 +281,24 @@ function pushStep(state: CrosswordState, cells: Record<string, CellState>, step:
 // Pop the top Step off one history stack, write its `before` (undo) / `after` (redo)
 // digits back, and move it to the opposite stack. Re-selects the Step's Slot so the
 // solver returns to where the edit happened; the shell parks the cursor on the changed
-// Cell. Pruning-at-commit guarantees every stacked patch's Cell is unlocked, so the
-// writes always land. Empty stack -> the same reference (the no-op convention).
+// Cell. Pruning-at-commit guarantees every stacked patch's Cell is unlocked — but that
+// is a proof obligation on every future action, so it is enforced here fail-loud (the
+// cellAt convention) rather than trusted: a locked target means some action locked
+// Cells without pruning, and silently overwriting an earned digit is the one thing
+// this feature must never do. Empty stack -> the same reference (the no-op convention).
 function applyStep(state: CrosswordState, dir: 'undo' | 'redo'): CrosswordState {
   const from = state[dir];
   const step = from[from.length - 1];
   if (!step) return state;
   const cells = { ...state.cells };
   for (const p of step.patches) {
-    const key = cellKey(p.cell);
-    cells[key] = { ...cells[key], digit: dir === 'undo' ? p.before : p.after };
+    const cs = cellAt(state, p.cell); // fail-loud on an off-grid Cell, like setDigit
+    if (cs.locked) {
+      throw new Error(
+        `crossword-state: ${dir} Step targets locked Cell (${p.cell.row},${p.cell.col}) — history was not pruned at commit`,
+      );
+    }
+    cells[cellKey(p.cell)] = { ...cs, digit: dir === 'undo' ? p.before : p.after };
   }
   const rest = from.slice(0, -1);
   const onto = [...state[dir === 'undo' ? 'redo' : 'undo'], step];
