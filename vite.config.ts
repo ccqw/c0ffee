@@ -33,12 +33,12 @@ export default defineConfig({
     // Web Component shells get real DOM tests now (ADR-0006 supersedes ADR-0003's
     // no-build half); the pure color core needs no DOM but happy-dom is harmless.
     environment: 'happy-dom',
-    // happy-dom retains DOM allocations across a file's tests (measured 2026-07-01,
-    // C0FFEE-80: crossword.test.ts heap grows ~15MB per test from test #1; element
-    // remove() frees nothing, so it is environment retention, not element code — the
-    // browser plays the same interactions with a flat heap). At ~90 tests the file
-    // crossed V8's default ~2GB old space and OOM'd the fork worker. Give workers
-    // honest headroom; the real fix (happy-dom upgrade or a file split) is a follow-up.
-    execArgv: ['--max-old-space-size=4096'],
+    // happy-dom retains DOM allocations across a FILE's tests (measured on C0FFEE-80
+    // and re-measured on C0FFEE-81: ~15-25MB per test; element remove() frees nothing,
+    // so it is environment retention, not element code). The crossword shell suite is
+    // split into per-seam files (C0FFEE-81) so each fork worker's heap stays well under
+    // V8's default ~2GB old space — worst file measured ~690MB. Keep new shell test
+    // files at roughly <=20 mount-heavy tests each; if a worker OOMs again, split the
+    // grown file rather than restoring the old --max-old-space-size band-aid.
   },
 });
