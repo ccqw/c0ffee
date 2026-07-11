@@ -210,6 +210,196 @@ describe('no-op guards', () => {
   });
 });
 
+describe('undo / redo history (C0FFEE-70)', () => {
+  const undo = (s: ReturnType<typeof initCrossword>) => crosswordReducer(s, { type: 'undo' });
+  const redo = (s: ReturnType<typeof initCrossword>) => crosswordReducer(s, { type: 'redo' });
+  const restore = (s: ReturnType<typeof initCrossword>) => crosswordReducer(s, { type: 'restore' });
+
+  test('undo steps a setDigit back to what the Cell held before', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 0 }, digit: '3' });
+    s = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 0 }, digit: '9' });
+    s = undo(s);
+    expect(s.cells['0,0'].digit).toBe('3'); // back to the typed-over hypothesis
+    s = undo(s);
+    expect(s.cells['0,0'].digit).toBe(null); // and back to empty
+  });
+
+  test('undo steps a clearDigit back (the cleared digit returns)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 0 }, digit: 'A' });
+    s = crosswordReducer(s, { type: 'clearDigit', cell: { row: 0, col: 0 } });
+    expect(s.cells['0,0'].digit).toBe(null);
+    s = undo(s);
+    expect(s.cells['0,0'].digit).toBe('A');
+  });
+
+  test('repeated undo walks a whole typed-over hypothesis back in reverse order', () => {
+    let s = fill(select(initCrossword(PUZZLE), ONE_ACROSS), ONE_ACROSS, '3A7BD5');
+    s = fill(s, ONE_ACROSS, 'FFFFFF'); // type over all six
+    for (let i = 0; i < 6; i++) s = undo(s);
+    slotOf(ONE_ACROSS).cells.forEach((cell, i) => {
+      expect(s.cells[`${cell.row},${cell.col}`].digit).toBe('3A7BD5'[i]);
+    });
+  });
+
+  test('redo re-applies what undo stepped back', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 0 }, digit: 'A' });
+    s = redo(undo(s));
+    expect(s.cells['0,0'].digit).toBe('A');
+  });
+
+  test('a fresh edit after undo drops the redoable steps (the fork is abandoned)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 0 }, digit: 'A' });
+    s = undo(s);
+    s = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 1 }, digit: 'B' });
+    expect(s.redo).toEqual([]);
+    expect(redo(s)).toBe(s); // nothing to redo — same reference, the no-op convention
+  });
+
+  test('empty-stack undo and redo return the same state reference', () => {
+    const s = initCrossword(PUZZLE);
+    expect(s.undo).toEqual([]);
+    expect(s.redo).toEqual([]);
+    expect(undo(s)).toBe(s);
+    expect(redo(s)).toBe(s);
+  });
+
+  test('setDigit writing the digit the Cell already holds is a no-op (no phantom step)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 0 }, digit: 'A' });
+    const again = crosswordReducer(s, { type: 'setDigit', cell: { row: 0, col: 0 }, digit: 'a' });
+    expect(again).toBe(s); // same reference: an enabled undo key must always visibly act
+  });
+
+  test('undo re-selects the Slot where the edit happened (cross-Slot recovery)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_DOWN);
+    s = crosswordReducer(s, { type: 'setDigit', cell: slotOf(ONE_DOWN).cells[2], digit: '9' });
+    s = select(s, TWO_ACROSS); // wander off to another Slot
+    s = undo(s);
+    expect(s.selected).toEqual(ONE_DOWN);
+    expect(s.cells[`${slotOf(ONE_DOWN).cells[2].row},${slotOf(ONE_DOWN).cells[2].col}`].digit).toBe(null);
+  });
+
+  test('redo re-selects the Slot too, and selection alone never clears redo', () => {
+    let s = select(initCrossword(PUZZLE), ONE_DOWN);
+    s = crosswordReducer(s, { type: 'setDigit', cell: slotOf(ONE_DOWN).cells[2], digit: '9' });
+    s = undo(s);
+    s = select(s, TWO_ACROSS); // selecting is not an edit — the fork survives
+    s = redo(s);
+    expect(s.selected).toEqual(ONE_DOWN);
+    expect(s.cells[`${slotOf(ONE_DOWN).cells[2].row},${slotOf(ONE_DOWN).cells[2].col}`].digit).toBe('9');
+  });
+
+  test('commit records the graded digits in state.graded (the receipt referent)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = commit(fill(s, ONE_ACROSS, '3A0000'));
+    expect(s.graded['1-across']).toBe('3A0000');
+  });
+
+  test('restore puts the graded digits back into unlocked Cells as ONE undoable step', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = commit(fill(s, ONE_ACROSS, '3A0000')); // red 3A locks (0,0),(0,1); green/blue wrong
+    s = fill(s, ONE_ACROSS, '3A1234'); // type over the graded Guess (locked Cells ignore)
+    const undoDepth = s.undo.length;
+    s = restore(s);
+    slotOf(ONE_ACROSS).cells.forEach((cell, i) => {
+      expect(s.cells[`${cell.row},${cell.col}`].digit).toBe('3A0000'[i]);
+    });
+    expect(s.undo.length).toBe(undoDepth + 1); // one grouped step, not four
+    s = undo(s); // ...and one undo takes the whole restore back out
+    slotOf(ONE_ACROSS).cells.forEach((cell, i) => {
+      expect(s.cells[`${cell.row},${cell.col}`].digit).toBe('3A1234'[i]);
+    });
+  });
+
+  test('restore with nothing to restore is a no-op (same reference)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    expect(restore(s)).toBe(s); // nothing graded yet
+    s = commit(fill(s, ONE_ACROSS, '3A0000'));
+    expect(restore(s)).toBe(s); // digits already match the referent
+  });
+
+  test('restore is an edit: it drops the redoable steps', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = commit(fill(s, ONE_ACROSS, '3A0000'));
+    s = crosswordReducer(s, { type: 'setDigit', cell: slotOf(ONE_ACROSS).cells[2], digit: 'F' });
+    s = undo(s); // something redoable
+    expect(s.redo.length).toBe(1);
+    s = crosswordReducer(s, { type: 'setDigit', cell: slotOf(ONE_ACROSS).cells[2], digit: '1' });
+    s = restore(s);
+    expect(s.redo).toEqual([]);
+  });
+
+  test('redo survives a commit (pruned like undo, never wholesale cleared)', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = fill(s, ONE_ACROSS, '3A0000');
+    s = crosswordReducer(s, { type: 'setDigit', cell: slotOf(ONE_ACROSS).cells[2], digit: '7' });
+    s = undo(s); // the '7' is redoable; the board is back at the full 3A0000
+    s = commit(s); // red 3A locks — a commit edits no digits, so the fork survives
+    expect(s.redo.length).toBe(1);
+    s = redo(s); // the abandoned '7' is still reachable after checking
+    expect(s.cells['0,2'].digit).toBe('7');
+  });
+
+  test('undo never crosses a commit: locking prunes history on the locked Cells', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = commit(fill(s, ONE_ACROSS, '3A0000')); // red 3A correct -> (0,0),(0,1) lock
+    // Every pre-commit edit on the now-locked red Cells has aged out; the surviving
+    // steps (green/blue edits) must all still be fully applicable.
+    for (const step of s.undo) {
+      for (const patch of step.patches) {
+        expect(s.cells[`${patch.cell.row},${patch.cell.col}`].locked).toBe(false);
+      }
+    }
+    // Draining the whole stack leaves the locked digits standing.
+    while (s.undo.length > 0) s = undo(s);
+    expect(s.cells['0,0'].digit).toBe('3');
+    expect(s.cells['0,1'].digit).toBe('A');
+  });
+
+  test('a grouped restore step whose Cells partially lock later survives pruned, still applicable', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = commit(fill(s, ONE_ACROSS, '007B00')); // green 7B locks (0,2),(0,3)
+    s = fill(s, ONE_ACROSS, '3A0000'); // retype the four unlocked digits
+    s = restore(s); // grouped step patches the four unlocked diverged Cells back to 0
+    s = fill(s, ONE_ACROSS, '3A00D5'); // now solve red + blue
+    s = commit(s); // locks (0,0),(0,1),(0,4),(0,5) — the restore step is partially dead
+    for (const step of s.undo) {
+      expect(step.patches.length).toBeGreaterThan(0); // emptied steps are dropped
+      for (const patch of step.patches) {
+        expect(s.cells[`${patch.cell.row},${patch.cell.col}`].locked).toBe(false);
+      }
+    }
+    while (s.undo.length > 0) s = undo(s); // every survivor applies cleanly
+    expect(s.complete).toBe(false);
+    expect(s.cells['0,0'].digit).toBe('3'); // locked digits stand
+  });
+
+  test('a solved board has nothing left to undo or redo', () => {
+    let s = initCrossword(PUZZLE);
+    s = commit(fill(select(s, ONE_ACROSS), ONE_ACROSS, '3A7BD5'));
+    s = commit(fill(select(s, ONE_DOWN), ONE_DOWN, '3C9F6E'));
+    s = commit(fill(select(s, TWO_ACROSS), TWO_ACROSS, 'FA8C00'));
+    expect(s.complete).toBe(true);
+    expect(s.undo).toEqual([]);
+    expect(s.redo).toEqual([]);
+  });
+
+  test('newPuzzle starts with a clean history and no graded referents', () => {
+    let s = select(initCrossword(PUZZLE), ONE_ACROSS);
+    s = commit(fill(s, ONE_ACROSS, '3A0000'));
+    s = crosswordReducer(s, { type: 'setDigit', cell: slotOf(ONE_ACROSS).cells[2], digit: '7' });
+    s = undo(s);
+    s = crosswordReducer(s, { type: 'newPuzzle', puzzle: PUZZLE });
+    expect(s.undo).toEqual([]);
+    expect(s.redo).toEqual([]);
+    expect(s.graded).toEqual({});
+  });
+});
+
 describe('fail-loud on programmer error', () => {
   test('setDigit rejects a non-hex digit', () => {
     const s = initCrossword(PUZZLE);

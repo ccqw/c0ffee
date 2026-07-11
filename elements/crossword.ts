@@ -153,6 +153,14 @@ const VERDICT_GLYPH: Record<ChannelVerdict, string> = {
 const UNDO_SVG =
   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>';
 
+// The keyrow's Undo/Redo icon keys (C0FFEE-70): the same arc-arrow family as the
+// receipt's restore glyph above (a restore literally IS one undo step, so the visual
+// family is shared by design), sized up to the keyrow's icon scale. Redo is the mirror.
+const KEY_UNDO_SVG =
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>';
+const KEY_REDO_SVG =
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5 5.5 5.5 0 0 0 9.5 20H13"/></svg>';
+
 const DELETE_SVG =
   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="m18 9-6 6M12 9l6 6"/></svg>';
 const CHECK_SVG =
@@ -365,13 +373,6 @@ class C0ffeeCrossword extends HTMLElement {
   // advance), so the cursor is the FACE's job (C0FFEE-62 decision 2). null when the
   // selected Slot has no editable Cell (e.g. fully locked).
   private cursorKey: string | null = null;
-  // The six digits each Slot's verdict actually graded, keyed by slotKey (C0FFEE-71,
-  // §6b). The core's GuessResult carries verdicts but not the digits they graded, and
-  // the receipt's promise — feedback pinned to its referent — needs those digits to
-  // stay put while the solver retypes. The face is the only dispatcher of `commit`, so
-  // it snapshots here at that moment; cleared with the verdicts in _loadPuzzle so the
-  // two can never drift (no reducer/CrosswordState change — the slice is face-only).
-  private gradedDigits: Record<string, string> = {};
   // The transient commit toast (contract #4); null when none is showing.
   private toast: { kind: ToastKind; text: string } | null = null;
   private toastTimer: number | null = null;
@@ -550,7 +551,6 @@ class C0ffeeCrossword extends HTMLElement {
     });
     this.cursorKey = this._firstCursor();
     this.activePane = 'entry'; // a fresh puzzle opens in the entry pane (C0FFEE-73)
-    this.gradedDigits = {}; // the fresh state has no verdicts, so no graded referents
     this.lockCallout = null;
     this.lockCalloutFired = false; // re-armed for the new puzzle
     this._clearLockCalloutTimer();
@@ -1058,6 +1058,8 @@ class C0ffeeCrossword extends HTMLElement {
       return;
     }
     if (act === 'pane-clues') return this._showCluePane();
+    if (act === 'undo') return this._undo();
+    if (act === 'redo') return this._redo();
     if (act === 'delete') return this._delete();
     if (act === 'check') return this._check();
     if (act === 'restore') return this._restore();
@@ -1112,6 +1114,14 @@ class C0ffeeCrossword extends HTMLElement {
   // Tab from moving DOM focus and arrows/Backspace from scrolling or going back — the
   // puzzle owns the keyboard while focused. Unhandled keys fall through untouched.
   private _handleKey(e: KeyboardEvent): void {
+    // Cmd/Ctrl+Z undoes and Shift+Cmd/Ctrl+Z redoes (C0FFEE-70) — the one modifier
+    // chord the puzzle claims, checked BEFORE the leave-chords-alone bail below. Same
+    // guards as the icon keys: inert under an overlay / completion / in the clue pane.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+      if (this._overlayUp() || this.activePane === 'clues') return;
+      e.preventDefault();
+      return e.shiftKey ? this._redo() : this._undo();
+    }
     // Leave browser/OS chords alone — Cmd/Ctrl/Alt + a hex letter (Cmd+C, Cmd+R, Ctrl+F…)
     // must reach copy/paste/reload/find, not get typed as a digit. Shift is intentionally
     // NOT excluded: Shift+Tab is the prev-Slot binding.
@@ -1269,10 +1279,9 @@ class C0ffeeCrossword extends HTMLElement {
       this._showToast('warn', 'Fill in all six digits before checking.');
       return;
     }
-    // Pin the receipt's referent: these six digits are what the commit below grades
-    // (C0FFEE-71). Captured at the only place a commit is dispatched, after the
-    // completeness check above, so the snapshot is always a full six-digit Guess.
-    this.gradedDigits[slotKey(slot)] = digits.join('');
+    // The receipt referent (the six digits this commit grades, C0FFEE-71) is recorded
+    // by the reducer itself into state.graded — one source of truth for the receipt's
+    // diverged predicate and the restore action (C0FFEE-70 moved it into the core).
     // Snapshot which Cells were locked BEFORE the commit, so the lock callout can tell a
     // freshly-locked crossing Cell from one a prior commit already locked (decision 4).
     const lockedBefore = new Set(
@@ -1301,23 +1310,37 @@ class C0ffeeCrossword extends HTMLElement {
     else this._showToast('wrong', 'Not quite — read the channel hints.');
   }
 
-  // A tap on the diverged receipt (C0FFEE-71): put the graded Guess back. Each unlocked
-  // Cell returns to its graded digit via the existing setDigit — locked Cells already
-  // hold theirs (a Cell only locks when its Channel graded correct), and the reducer
-  // ignores them anyway. The row only carries data-act="restore" while diverged, so a
+  // A tap on the diverged receipt (C0FFEE-71): put the graded Guess back. One reducer
+  // action since C0FFEE-70 — the core writes every unlocked diverged Cell back to the
+  // graded referent as ONE grouped history Step, so a single undo takes the whole
+  // restore back out. The row only carries data-act="restore" while diverged, so a
   // tap on the current receipt never lands here; restoring makes input == referent
-  // again, which is exactly what flips the caption back to `checked now`.
+  // again, which is exactly what flips the caption back to `now`.
   private _restore(): void {
-    const slot = this._selectedSlot();
-    if (!slot) return;
-    const graded = this.gradedDigits[slotKey(slot)];
-    if (!graded) return; // nothing graded — nothing to restore (defensive; row absent)
-    slot.cells.forEach((c, i) => {
-      const cs = this._cellState(cellKey(c));
-      if (!cs.locked && cs.digit !== graded[i]) {
-        this._dispatch({ type: 'setDigit', cell: c, digit: graded[i] });
-      }
-    });
+    this._dispatch({ type: 'restore' });
+    this._dismissToast();
+    this._render();
+  }
+
+  // The undo/redo keys and their hardware chords (C0FFEE-70). The reducer owns the
+  // history (undo re-selects the Step's Slot); the face's share is the cursor — park
+  // it on the changed Cell (the Step's last patch), so cross-Slot recovery is always
+  // visible. Peeked BEFORE dispatching: the applied Step moves to the opposite stack.
+  // An empty stack means the key was disabled — a synthetic tap falls out harmlessly.
+  private _undo(): void {
+    this._applyHistory('undo');
+  }
+
+  private _redo(): void {
+    this._applyHistory('redo');
+  }
+
+  private _applyHistory(dir: 'undo' | 'redo'): void {
+    const stack = this.state[dir];
+    const step = stack[stack.length - 1];
+    if (!step) return;
+    this._dispatch({ type: dir });
+    this.cursorKey = cellKey(step.patches[step.patches.length - 1].cell);
     this._dismissToast();
     this._render();
   }
@@ -1977,7 +2000,7 @@ class C0ffeeCrossword extends HTMLElement {
   // glyphs appear; its popover/backdrop/Escape mechanics are unchanged.
   private _receipt(slot: Slot, verdict: GuessResult): string {
     const key = slotKey(slot);
-    const graded = this.gradedDigits[key];
+    const graded = this.state.graded[key];
     // A verdict only exists via _check, which snapshots first — a miss is a face bug.
     if (!graded) throw new Error(`c0ffee-crossword: no graded digits for verdict on ${key}`);
     // Diverged = any Cell no longer holds the digit the verdict graded (an emptied Cell
@@ -2065,6 +2088,8 @@ class C0ffeeCrossword extends HTMLElement {
       ${this._toastEl()}
       <div class="keypad">${digitKeys}</div>
       <div class="keyrow">
+        <button type="button" class="key hist" data-act="undo" aria-label="Undo"${this.state.undo.length === 0 ? ' disabled' : ''}>${KEY_UNDO_SVG}</button>
+        <button type="button" class="key hist" data-act="redo" aria-label="Redo"${this.state.redo.length === 0 ? ' disabled' : ''}>${KEY_REDO_SVG}</button>
         <button type="button" class="key del" data-act="delete" aria-label="Delete">${DELETE_SVG}</button>
         <button type="button" class="key check" data-act="check">${CHECK_SVG}<span>Check guess</span></button>
       </div>
@@ -2292,7 +2317,7 @@ const STYLE = `
   .toast.wrong { background:#2a1212; box-shadow:inset 0 0 0 1px rgba(255,80,80,.5), 0 10px 24px -10px rgba(0,0,0,.7); color:#ff8b8b; }
 
   .keypad { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
-  .keyrow { display:grid; grid-template-columns:1fr 2fr; gap:5px; }
+  .keyrow { display:grid; grid-template-columns:1fr 1fr 1fr 2fr; gap:5px; }
   /* 44px = the touch-target floor, deliberate on the game's most-tapped controls
      (handoff 2 §3a — restored from the 40px one-viewport squeeze by C0FFEE-72) */
   .key { min-height:44px; border:none; border-radius:9px; background:var(--c0ffee-bg, #0a0a0b);
@@ -2301,6 +2326,9 @@ const STYLE = `
          display:flex; align-items:center; justify-content:center; gap:7px; }
   .key.hex { box-shadow:inset 0 0 0 1px rgba(192,255,238,.28); color:var(--c0ffee-accent, #C0FFEE); }
   .key.del { color:rgba(255,255,255,.78); }
+  .key.hist { color:rgba(255,255,255,.78); }
+  /* enabled exactly when the tap visibly acts (C0FFEE-70): an empty stack dims its key */
+  .key.hist:disabled { color:rgba(255,255,255,.25); cursor:default; }
   .key.check { box-shadow:inset 0 0 0 1px rgba(192,255,238,.4); color:var(--c0ffee-accent, #C0FFEE);
                font:400 14px/1 var(--c0ffee-font, monospace); letter-spacing:.04em; }
   .key:focus-visible { outline:2px solid var(--c0ffee-accent, #C0FFEE); outline-offset:2px; }
